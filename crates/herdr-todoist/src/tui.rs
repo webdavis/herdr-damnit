@@ -7,7 +7,7 @@ use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
-use todoist::{Client, DEFAULT_BASE_URL};
+use todoist::Client;
 
 use crate::config::Config;
 
@@ -24,8 +24,8 @@ impl Status {
     }
 }
 
-pub async fn run(config: &Config) -> Result<(), String> {
-    let mut status = Status(connect(config).await);
+pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
+    let mut status = Status(connect(config, base_url).await);
     let mut terminal = ratatui::init();
     let outcome = loop {
         if let Err(error) = terminal.draw(|frame| draw(frame, &status)) {
@@ -34,7 +34,7 @@ pub async fn run(config: &Config) -> Result<(), String> {
         match next_key().map_err(|error| error.to_string()) {
             Err(error) => break Err(error),
             Ok(Some(KeyCode::Char('q') | KeyCode::Esc)) => break Ok(()),
-            Ok(Some(KeyCode::Char('r'))) => status = Status(connect(config).await),
+            Ok(Some(KeyCode::Char('r'))) => status = Status(connect(config, base_url).await),
             Ok(_) => {}
         }
     };
@@ -43,19 +43,19 @@ pub async fn run(config: &Config) -> Result<(), String> {
 }
 
 /// Resolve the token and make one request, so the pane opens either connected or showing why not.
-async fn connect(config: &Config) -> String {
-    match try_connect(config).await {
+async fn connect(config: &Config, base_url: &str) -> String {
+    match try_connect(config, base_url).await {
         Ok(()) => "connected".to_string(),
         Err(error) => error,
     }
 }
 
-async fn try_connect(config: &Config) -> Result<(), String> {
+async fn try_connect(config: &Config, base_url: &str) -> Result<(), String> {
     let source = config.token_source()?;
     let token = todoist::resolve(&source)
         .await
         .map_err(|error| error.to_string())?;
-    let client = Client::new(DEFAULT_BASE_URL, token).map_err(|error| error.to_string())?;
+    let client = Client::new(base_url, token).map_err(|error| error.to_string())?;
     client.user().await.map_err(|error| error.to_string())?;
     Ok(())
 }

@@ -23,7 +23,7 @@ async fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.as_slice() {
         [] => match Config::load() {
-            Ok(config) => match tui::run(&config).await {
+            Ok(config) => match tui::run(&config, todoist::DEFAULT_BASE_URL).await {
                 Ok(()) => std::process::ExitCode::SUCCESS,
                 Err(error) => fail(&error),
             },
@@ -35,7 +35,7 @@ async fn main() -> std::process::ExitCode {
                 std::process::ExitCode::SUCCESS
             }
             "doctor" => match Config::load() {
-                Ok(config) => report(doctor::run(&config).await),
+                Ok(config) => report(doctor::run(&config, todoist::DEFAULT_BASE_URL).await),
                 Err(error) => fail(&error),
             },
             "open" => with_config(|config| pane::run(Mode::Open, config)),
