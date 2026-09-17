@@ -1,0 +1,135 @@
+use std::path::PathBuf;
+
+use serde::Deserialize;
+use todoist::TokenSource;
+
+/// The plugin's configuration, read from `config.toml` in the herdr plugin config directory. A
+/// missing file is the default configuration; the token keys have no default, so the plugin
+/// refuses to guess where a token lives.
+#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Config {
+    /// Argv of a command whose standard output is the token, for example a vault CLI call.
+    pub token_command: Option<Vec<String>>,
+    /// The name of an environment variable holding the token.
+    pub token_env: Option<String>,
+    /// How the `open` and `toggle` actions place the pane: `split`, `tab`, `zoomed` or `overlay`.
+    #[serde(default = "default_placement")]
+    pub placement: String,
+    /// Which way a `split` placement splits: `right` or `down`.
+    #[serde(default = "default_direction")]
+    pub direction: String,
+}
+
+fn default_placement() -> String {
+    "split".to_string()
+}
+
+fn default_direction() -> String {
+    "right".to_string()
+}
+
+impl Config {
+    /// Read the configuration file, or the defaults when there is none.
+    pub fn load() -> Result<Self, String> {
+        let path = config_path();
+        match std::fs::read_to_string(&path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(error) => Err(format!("{}: {error}", path.display())),
+            Ok(text) => Self::parse(&text).map_err(|error| format!("{}: {error}", path.display())),
+        }
+    }
+
+    pub fn parse(text: &str) -> Result<Self, toml::de::Error> {
+        toml::from_str(text)
+    }
+
+    /// Where the token comes from. `token_command` wins when both keys are set.
+    pub fn token_source(&self) -> Result<TokenSource, String> {
+        match (&self.token_command, &self.token_env) {
+            (Some(argv), _) => Ok(TokenSource::Command(argv.clone())),
+            (None, Some(name)) => Ok(TokenSource::Env(name.clone())),
+            (None, None) => Err(
+                "no token source: set token_command (a command printing the token) or token_env \
+                 (the name of an environment variable holding it) in the plugin config"
+                    .to_string(),
+            ),
+        }
+    }
+}
+
+/// herdr hands the plugin its own config directory; the documented path is the fallback for a run
+/// outside herdr, such as `herdr-todoist doctor` from a shell.
+fn config_path() -> PathBuf {
+    let dir = match std::env::var_os("HERDR_PLUGIN_CONFIG_DIR") {
+        Some(dir) => PathBuf::from(dir),
+        None => base_config_dir().join("herdr/plugins/config/herdr-todoist"),
+    };
+    dir.join("config.toml")
+}
+
+fn base_config_dir() -> PathBuf {
+    match std::env::var_os("XDG_CONFIG_HOME") {
+        Some(dir) => PathBuf::from(dir),
+        None => PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_empty_file_is_the_default_placement() {
+        let config = Config::parse("").expect("parses");
+        assert_eq!(config.placement, "split");
+        assert_eq!(config.direction, "right");
+    }
+
+    #[test]
+    fn a_command_is_read_as_argv() {
+        let config =
+            Config::parse(r#"token_command = ["vault", "read", "todoist"]"#).expect("parses");
+        assert_eq!(
+            config.token_source().expect("a source"),
+            TokenSource::Command(vec![
+                "vault".to_string(),
+                "read".to_string(),
+                "todoist".to_string()
+            ])
+        );
+    }
+
+    #[test]
+    fn a_command_wins_over_an_environment_variable() {
+        let config =
+            Config::parse("token_command = [\"vault\"]\ntoken_env = \"TODOIST_API_TOKEN\"")
+                .expect("parses");
+        assert_eq!(
+            config.token_source().expect("a source"),
+            TokenSource::Command(vec!["vault".to_string()])
+        );
+    }
+
+    #[test]
+    fn an_environment_variable_name_is_read() {
+        let config = Config::parse(r#"token_env = "TODOIST_API_TOKEN""#).expect("parses");
+        assert_eq!(
+            config.token_source().expect("a source"),
+            TokenSource::Env("TODOIST_API_TOKEN".to_string())
+        );
+    }
+
+    #[test]
+    fn no_token_key_names_both_keys_and_guesses_nothing() {
+        let error = Config::default().token_source().expect_err("refuses");
+        assert!(error.contains("token_command"), "{error}");
+        assert!(error.contains("token_env"), "{error}");
+    }
+
+    #[test]
+    fn a_token_value_in_the_file_is_refused() {
+        let error = Config::parse(r#"token = "a-secret""#).expect_err("refuses");
+        assert!(error.to_string().contains("unknown field"), "{error}");
+    }
+}

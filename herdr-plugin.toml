@@ -1,0 +1,48 @@
+id = "herdr-todoist"
+name = "Todoist"
+version = "0.1.0"
+# `herdr plugin pane open --entrypoint` and the plugin pane registry this plugin's actions drive
+# are present from 0.7.0.
+min_herdr_version = "0.7.0"
+platforms = ["macos", "linux"]
+description = "A Todoist pane: the terminal UI, and a doctor check for the API token."
+
+# Compiled at install time into bin/, which every entry point below runs by absolute path: a pane's
+# working directory is the project, not the plugin root, and the binary is not on PATH.
+# `herdr plugin link` skips this step, so a local checkout runs the same two commands by hand.
+[[build]]
+command = [
+  "sh",
+  "-c",
+  "cargo build --release --locked && mkdir -p bin && cp target/release/herdr-todoist bin/herdr-todoist",
+]
+
+[[panes]]
+id = "pane"
+title = "todoist"
+placement = "split"
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\""]
+
+[[actions]]
+id = "open"
+title = "todoist: open pane"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" open"]
+
+[[actions]]
+id = "toggle"
+title = "todoist: toggle pane"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" toggle"]
+
+[[actions]]
+id = "focus"
+title = "todoist: focus pane"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" focus"]
+
+[[actions]]
+id = "doctor"
+title = "todoist: check the token and the API"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" doctor"]
