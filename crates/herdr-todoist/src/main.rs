@@ -21,28 +21,36 @@ usage: herdr-todoist [<command>]
 #[tokio::main]
 async fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let config = match Config::load() {
-        Ok(config) => config,
-        Err(error) => return fail(&error),
-    };
     match args.as_slice() {
-        [] => match tui::run(&config).await {
-            Ok(()) => std::process::ExitCode::SUCCESS,
+        [] => match Config::load() {
+            Ok(config) => match tui::run(&config).await {
+                Ok(()) => std::process::ExitCode::SUCCESS,
+                Err(error) => fail(&error),
+            },
             Err(error) => fail(&error),
         },
         [command] => match command.as_str() {
-            "doctor" => report(doctor::run(&config).await),
-            "open" => report(pane::run(Mode::Open, &config)),
-            "toggle" => report(pane::run(Mode::Toggle, &config)),
-            "focus" => report(pane::run(Mode::Focus, &config)),
             "--help" | "-h" | "help" => {
                 print!("{USAGE}");
                 std::process::ExitCode::SUCCESS
             }
+            "doctor" => match Config::load() {
+                Ok(config) => report(doctor::run(&config).await),
+                Err(error) => fail(&error),
+            },
+            "open" => with_config(|config| pane::run(Mode::Open, config)),
+            "toggle" => with_config(|config| pane::run(Mode::Toggle, config)),
+            "focus" => with_config(|config| pane::run(Mode::Focus, config)),
             other => fail(&format!("unknown command '{other}'\n{USAGE}")),
         },
         _ => fail(&format!("too many arguments\n{USAGE}")),
     }
+}
+
+/// Load the config and run a synchronous action against it, so a bad config only breaks the
+/// commands that actually need one.
+fn with_config(run: impl FnOnce(&Config) -> Result<String, String>) -> std::process::ExitCode {
+    report(Config::load().and_then(|config| run(&config)))
 }
 
 fn report(outcome: Result<String, String>) -> std::process::ExitCode {
