@@ -1,7 +1,7 @@
 //! The `open`, `toggle` and `focus` actions. Each one resolves the plugin's pane in the current
 //! workspace, then drives the `herdr` CLI.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::config::{Config, Placement};
@@ -94,9 +94,24 @@ pub fn view(argument: &str, config: &Config) -> Result<String, String> {
             views.len()
         )
     })?;
-    request_view(name);
-    let outcome = run(Mode::Open, config)?;
-    Ok(format!("{outcome}, showing {name}"))
+    note_then_open(name, &view_request_path(), || run(Mode::Open, config))
+}
+
+/// Note the view the pane is to show, then open the pane. A failed open takes the note back, so a
+/// later unrelated `open` or `toggle` does not jump to a view nobody asked for.
+fn note_then_open(
+    name: &str,
+    path: &Path,
+    open: impl FnOnce() -> Result<String, String>,
+) -> Result<String, String> {
+    write_request(path, name);
+    match open() {
+        Ok(outcome) => Ok(format!("{outcome}, showing {name}")),
+        Err(error) => {
+            let _ = std::fs::remove_file(path);
+            Err(error)
+        }
+    }
 }
 
 fn open_and_remember(workspace: &str, config: &Config) -> Result<String, String> {
@@ -192,10 +207,6 @@ fn state_dir() -> PathBuf {
 /// first draw and a pane already open reads on its next tick.
 fn view_request_path() -> PathBuf {
     state_dir().join("requested-view")
-}
-
-pub fn request_view(name: &str) {
-    write_request(&view_request_path(), name);
 }
 
 /// The requested view, which is consumed by the read so the pane does not pull itself back to it
@@ -330,6 +341,36 @@ mod tests {
         write_request(&path, "today");
         assert_eq!(take_request(&path), Some("today".to_string()));
         assert_eq!(take_request(&path), None, "the request outlived its read");
+    }
+
+    #[test]
+    fn a_failed_view_open_clears_its_own_request() {
+        let path =
+            std::env::temp_dir().join(format!("herdr-todoist-failed-view-{}", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+
+        let error = note_then_open("today", &path, || Err("herdr is not there".to_string()))
+            .expect_err("the open failed");
+
+        assert_eq!(error, "herdr is not there");
+        assert_eq!(
+            take_request(&path),
+            None,
+            "a failed open must clear its request"
+        );
+    }
+
+    #[test]
+    fn a_view_that_opened_leaves_its_note_for_the_pane_and_says_what_it_shows() {
+        let path =
+            std::env::temp_dir().join(format!("herdr-todoist-opened-view-{}", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+
+        let outcome = note_then_open("today", &path, || Ok("opened w:p3".to_string()))
+            .expect("the open succeeded");
+
+        assert_eq!(outcome, "opened w:p3, showing today");
+        assert_eq!(take_request(&path), Some("today".to_string()));
     }
 
     #[test]
