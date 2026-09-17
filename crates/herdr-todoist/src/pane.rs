@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use crate::config::{Config, Placement};
+use crate::views::Views;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -78,6 +79,24 @@ pub fn run(mode: Mode, config: &Config) -> Result<String, String> {
         Decision::NothingToFocus => Ok(format!("no todoist pane in {workspace}")),
         Decision::Open => open_and_remember(&workspace, config),
     }
+}
+
+/// The `view <n>` action: note which view was asked for, then make sure the pane is open, which
+/// is where that note is read.
+pub fn view(argument: &str, config: &Config) -> Result<String, String> {
+    let number: usize = argument
+        .parse()
+        .map_err(|_| format!("'{argument}' is not a view number"))?;
+    let views = Views::new(&config.views);
+    let name = views.name_of_number(number).ok_or_else(|| {
+        format!(
+            "no view {number}: this config has {} views, 1 being the unfiltered list",
+            views.len()
+        )
+    })?;
+    request_view(name);
+    let outcome = run(Mode::Open, config)?;
+    Ok(format!("{outcome}, showing {name}"))
 }
 
 fn open_and_remember(workspace: &str, config: &Config) -> Result<String, String> {
@@ -154,15 +173,49 @@ fn herdr(args: &[&str]) -> Result<String, String> {
 }
 
 /// The pane this plugin last opened in a workspace, one file per workspace so two workspaces never
-/// overwrite each other. herdr hands the plugin its own state directory; the documented path is the
-/// fallback for a run outside herdr.
+/// overwrite each other.
 fn pane_state_path(workspace: &str) -> PathBuf {
+    state_dir().join("panes").join(workspace)
+}
+
+/// herdr hands the plugin its own state directory; the documented path is the fallback for a run
+/// outside herdr.
+fn state_dir() -> PathBuf {
     match std::env::var_os("HERDR_PLUGIN_STATE_DIR") {
-        Some(dir) => PathBuf::from(dir).join("panes").join(workspace),
-        None => state_home()
-            .join("herdr/plugins/state/herdr-todoist/panes")
-            .join(workspace),
+        Some(dir) => PathBuf::from(dir),
+        None => state_home().join("herdr/plugins/state/herdr-todoist"),
     }
+}
+
+/// The view a `view` action asked for. herdr runs an action as its own process, so the name
+/// travels through a file: one file for the plugin, which a pane about to start reads on its
+/// first draw and a pane already open reads on its next tick.
+fn view_request_path() -> PathBuf {
+    state_dir().join("requested-view")
+}
+
+pub fn request_view(name: &str) {
+    write_request(&view_request_path(), name);
+}
+
+/// The requested view, which is consumed by the read so the pane does not pull itself back to it
+/// after the operator has moved on.
+pub fn take_requested_view() -> Option<String> {
+    take_request(&view_request_path())
+}
+
+fn write_request(path: &std::path::Path, name: &str) {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(path, name);
+}
+
+fn take_request(path: &std::path::Path) -> Option<String> {
+    let name = std::fs::read_to_string(path).ok()?;
+    let _ = std::fs::remove_file(path);
+    let name = name.trim().to_string();
+    (!name.is_empty()).then_some(name)
 }
 
 fn state_home() -> PathBuf {
@@ -248,6 +301,35 @@ mod tests {
         assert!(matches!(recover(Mode::Open), Recovery::RetryOpen));
         assert!(matches!(recover(Mode::Toggle), Recovery::RetryOpen));
         assert!(matches!(recover(Mode::Focus), Recovery::ReportGone));
+    }
+
+    #[test]
+    fn a_view_number_past_the_end_names_how_many_views_there_are() {
+        let error = view("4", &Config::default()).expect_err("refuses");
+
+        assert!(error.contains("no view 4"), "{error}");
+        assert!(error.contains("1 views"), "{error}");
+    }
+
+    #[test]
+    fn a_view_argument_that_is_not_a_number_is_refused() {
+        let error = view("today", &Config::default()).expect_err("refuses");
+
+        assert!(error.contains("not a view number"), "{error}");
+    }
+
+    #[test]
+    fn a_requested_view_is_read_once_and_then_gone() {
+        let path = std::env::temp_dir().join(format!(
+            "herdr-todoist-requested-view-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(take_request(&path), None);
+        write_request(&path, "today");
+        assert_eq!(take_request(&path), Some("today".to_string()));
+        assert_eq!(take_request(&path), None, "the request outlived its read");
     }
 
     #[test]

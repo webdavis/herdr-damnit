@@ -41,6 +41,66 @@ title = "todoist: focus pane"
 contexts = ["pane", "workspace"]
 command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" focus"]
 
+# One action per view number. herdr states that actions are manifest-only ("runtime action
+# registration ... not part of plugin v1") and a `plugin_action` keybinding passes its action name
+# and nothing else, so a `view:<name>` action per configured view cannot exist: the views are the
+# operator's config, the manifest is not. The numbers are the pane's own view numbers, 1 being the
+# unfiltered list and 2 onwards the `[[views]]` entries in the order they are written. A number
+# the config has no view for exits non-zero saying how many views there are.
+[[actions]]
+id = "view:1"
+title = "todoist: show view 1"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 1"]
+
+[[actions]]
+id = "view:2"
+title = "todoist: show view 2"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 2"]
+
+[[actions]]
+id = "view:3"
+title = "todoist: show view 3"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 3"]
+
+[[actions]]
+id = "view:4"
+title = "todoist: show view 4"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 4"]
+
+[[actions]]
+id = "view:5"
+title = "todoist: show view 5"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 5"]
+
+[[actions]]
+id = "view:6"
+title = "todoist: show view 6"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 6"]
+
+[[actions]]
+id = "view:7"
+title = "todoist: show view 7"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 7"]
+
+[[actions]]
+id = "view:8"
+title = "todoist: show view 8"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 8"]
+
+[[actions]]
+id = "view:9"
+title = "todoist: show view 9"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 9"]
+
 [[actions]]
 id = "doctor"
 title = "todoist: check the token and the API"
