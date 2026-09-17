@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
-use crate::{Error, Token};
+use crate::model::Page;
+use crate::{Error, Project, Section, Task, Token};
 
 /// The authenticated user, as much of it as the pane needs.
 #[derive(Debug, Deserialize)]
@@ -37,13 +38,54 @@ impl Client {
 
     /// The authenticated user. This is the request `doctor` makes to prove the token works.
     pub async fn user(&self) -> Result<User, Error> {
-        self.get("/user").await
+        self.get("/user", &[]).await
     }
 
-    async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, Error> {
+    /// Every open task. The endpoint lists active tasks, so a completed one never arrives here.
+    pub async fn tasks(&self) -> Result<Vec<Task>, Error> {
+        self.collect("/tasks").await
+    }
+
+    pub async fn projects(&self) -> Result<Vec<Project>, Error> {
+        self.collect("/projects").await
+    }
+
+    pub async fn sections(&self) -> Result<Vec<Section>, Error> {
+        self.collect("/sections").await
+    }
+
+    /// Read a list endpoint to its end, following `next_cursor`. A repeated cursor ends the walk
+    /// rather than looping forever.
+    async fn collect<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<Vec<T>, Error> {
+        let mut collected = Vec::new();
+        let mut cursor: Option<String> = None;
+        loop {
+            let mut query = vec![("limit", PAGE_LIMIT.to_string())];
+            if let Some(cursor) = &cursor {
+                query.push(("cursor", cursor.clone()));
+            }
+            let page: Page<T> = self.get(path, &query).await?;
+            collected.extend(page.results);
+            match page.next_cursor {
+                Some(next) if Some(&next) != cursor.as_ref() => cursor = Some(next),
+                _ => return Ok(collected),
+            }
+        }
+    }
+
+    async fn get<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        query: &[(&str, String)],
+    ) -> Result<T, Error> {
+        let mut url = reqwest::Url::parse(&format!("{}{path}", self.base_url))
+            .map_err(|error| Error::Network(error.to_string()))?;
+        if !query.is_empty() {
+            url.query_pairs_mut().extend_pairs(query);
+        }
         let response = self
             .http
-            .get(format!("{}{path}", self.base_url))
+            .get(url)
             .header(reqwest::header::AUTHORIZATION, self.token.header_value())
             .send()
             .await
@@ -63,6 +105,9 @@ impl Client {
             .map_err(|error| Error::Malformed(strip_url(&error.to_string())))
     }
 }
+
+/// Pages are read at the API's documented maximum, so a few hundred open tasks is one request.
+const PAGE_LIMIT: u16 = 200;
 
 /// reqwest appends the request URL to its messages; the status line has no room for it and the
 /// base URL says nothing a reader needs.

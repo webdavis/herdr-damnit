@@ -4,9 +4,9 @@ A Todoist pane for the [herdr](https://herdr.dev) terminal multiplexer: a
 [ratatui](https://ratatui.rs) terminal user interface in a plugin-owned pane, talking to the
 [Todoist API v1](https://developer.todoist.com/api/v1) directly.
 
-This first version opens the pane, proves the connection and shows any API failure (a rejected
-token, a rate limit with its retry delay, a network outage) in the status line. The task list, the
-named filter views and the editing keys follow.
+The pane lists every open task grouped by project and section, and shows any API failure (a
+rejected token, a rate limit with its retry delay, a network outage) in the status line while the
+last good list stays on screen. The named filter views and the editing keys follow.
 
 ## Install
 
@@ -74,9 +74,25 @@ herdr plugin action invoke doctor --plugin herdr-todoist
 
 An unrecognized `placement` or `direction` is a config parse error naming the values above.
 
+## The list
+
+Open tasks, grouped by project and then by section, with subtasks folded under their parent one
+level of indentation deeper. Each line carries the task's content, its due date, its priority as
+the `p1` to `p4` the app shows, its labels, and the number of subtasks under it. A project or
+section with no open task of its own is left out.
+
 ## Keys in the pane
 
-`r` refreshes, `q` closes the pane.
+| Key             | What it does                  |
+| --------------- | ----------------------------- |
+| `j`, `<Down>`   | move down one task            |
+| `k`, `<Up>`     | move up one task              |
+| `R`, `r`        | refresh the list              |
+| `q`, `<Esc>`    | close the pane                |
+
+A refresh keeps the cursor on the same task rather than on the same row, so a task added, removed
+or reordered above it does not move the highlight. When the task under the cursor is gone, the
+cursor takes the next task below it, or the one above when it was the last.
 
 ## Development
 
