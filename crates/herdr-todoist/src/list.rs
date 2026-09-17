@@ -43,8 +43,9 @@ impl Row {
 }
 
 /// Build the rows. A project or section with no open task of its own gets no heading. A task whose
-/// project is missing from `projects` is grouped under its project id rather than dropped, and a
-/// task whose section_id names no section in `sections` is treated as unfiled rather than dropped.
+/// project is missing from `projects` is grouped under its project id rather than dropped, a task
+/// with no project_id at all is grouped under a literal "(no project)" heading, and a task whose
+/// section_id names no section in `sections` is treated as unfiled rather than dropped.
 pub fn build(tasks: &[Task], projects: &[Project], sections: &[Section]) -> Vec<Row> {
     let visible: HashSet<&str> = tasks.iter().map(|task| task.id.as_str()).collect();
     let mut children: HashMap<&str, Vec<&Task>> = HashMap::new();
@@ -122,7 +123,14 @@ fn project_order(roots: &[&Task], projects: &[Project]) -> Vec<(String, String)>
         .collect();
     unknown.sort();
     unknown.dedup();
-    order.extend(unknown.into_iter().map(|id| (id.clone(), id)));
+    order.extend(unknown.into_iter().map(|id| {
+        let name = if id.is_empty() {
+            "(no project)".to_string()
+        } else {
+            id.clone()
+        };
+        (id, name)
+    }));
     order
 }
 
@@ -338,6 +346,13 @@ pub(crate) mod tests {
         );
 
         assert_eq!(texts(&rows), vec!["First", "  hidden"]);
+    }
+
+    #[test]
+    fn a_task_with_no_project_id_is_grouped_under_a_named_heading() {
+        let rows = build(&[task(r#"{"id":"1","content":"bare"}"#)], &[], &[]);
+
+        assert_eq!(texts(&rows), vec!["(no project)", "  bare"]);
     }
 
     #[test]
