@@ -1,0 +1,21 @@
+[package]
+name = "herdr-todoist"
+description = "A Todoist pane plugin for the herdr terminal multiplexer."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "herdr-todoist"
+path = "src/main.rs"
+
+[dependencies]
+todoist = { path = "../todoist" }
+crossterm = "0.29"
+ratatui = "0.29"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+toml = "0.9"
