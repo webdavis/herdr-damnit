@@ -42,8 +42,9 @@ impl Row {
     }
 }
 
-/// Build the rows. A project or section with no open task of its own gets no heading, and a task
-/// whose project is missing from `projects` is grouped under its project id rather than dropped.
+/// Build the rows. A project or section with no open task of its own gets no heading. A task whose
+/// project is missing from `projects` is grouped under its project id rather than dropped, and a
+/// task whose section_id names no section in `sections` is treated as unfiled rather than dropped.
 pub fn build(tasks: &[Task], projects: &[Project], sections: &[Section]) -> Vec<Row> {
     let visible: HashSet<&str> = tasks.iter().map(|task| task.id.as_str()).collect();
     let mut children: HashMap<&str, Vec<&Task>> = HashMap::new();
@@ -70,12 +71,18 @@ pub fn build(tasks: &[Task], projects: &[Project], sections: &[Section]) -> Vec<
             continue;
         }
         rows.push(Row::Header(project_name));
+        let known_sections: HashSet<&str> = sections
+            .iter()
+            .filter(|section| section.project_id == project_id)
+            .map(|section| section.id.as_str())
+            .collect();
         emit(
             &mut rows,
-            in_project
-                .iter()
-                .copied()
-                .filter(|task| task.section_id.is_none()),
+            in_project.iter().copied().filter(|task| {
+                task.section_id
+                    .as_deref()
+                    .is_none_or(|id| !known_sections.contains(id))
+            }),
             1,
             &children,
         );
@@ -318,6 +325,19 @@ pub(crate) mod tests {
         );
 
         assert_eq!(texts(&rows), vec!["First", "  someday"]);
+    }
+
+    #[test]
+    fn a_task_whose_section_is_unknown_is_treated_as_unfiled() {
+        let rows = build(
+            &[task(
+                r#"{"id":"1","content":"hidden","project_id":"p1","section_id":"s9"}"#,
+            )],
+            &[project(r#"{"id":"p1","name":"First"}"#)],
+            &[],
+        );
+
+        assert_eq!(texts(&rows), vec!["First", "  hidden"]);
     }
 
     #[test]
