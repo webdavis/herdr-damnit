@@ -182,3 +182,75 @@ async fn a_repeated_cursor_ends_the_walk_instead_of_looping() {
         "the repeated cursor is followed exactly once"
     );
 }
+
+/// Two pages of one filter query's results, the first pointing at the second.
+const FILTER_PAGES: &[(&str, &str)] = &[
+    (
+        "cursor=second-page",
+        r#"{"results":[{"id":"2","content":"overdue one","project_id":"p1"}],"next_cursor":null}"#,
+    ),
+    (
+        "/tasks/filter",
+        r#"{"results":[{"id":"1","content":"today one","project_id":"p1"}],
+             "next_cursor":"second-page"}"#,
+    ),
+];
+
+#[tokio::test]
+async fn a_filter_query_goes_to_the_filter_endpoint_and_is_read_to_the_last_page() {
+    let double = support::serve_routes(FILTER_PAGES).await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    let tasks = client
+        .tasks_matching("today | overdue")
+        .await
+        .expect("request succeeds");
+
+    assert_eq!(tasks.len(), 2);
+    let targets = double.targets.lock().expect("lock").clone();
+    assert!(targets[0].starts_with("/tasks/filter?"), "{targets:?}");
+    assert!(
+        targets[0].contains("query=today+%7C+overdue"),
+        "{targets:?}"
+    );
+    assert!(targets[0].contains("limit=200"), "{targets:?}");
+    assert!(targets[1].contains("cursor=second-page"), "{targets:?}");
+}
+
+#[tokio::test]
+async fn a_refused_filter_reports_the_message_the_api_sent() {
+    let double = support::serve_once(
+        "400 Bad Request",
+        &["Content-Type: application/json"],
+        r#"{"error_tag":"INVALID_ARGUMENT_VALUE","error_code":20,"error":"Invalid argument value",
+            "http_code":400,"error_extra":{"argument":"filter",
+            "explanation":"Unable to parse the filter query"}}"#,
+    )
+    .await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    let error = client.tasks_matching("#Work &").await.unwrap_err();
+
+    assert_eq!(
+        error,
+        Error::Refused("Invalid argument value: Unable to parse the filter query".to_string())
+    );
+}
+
+#[tokio::test]
+async fn a_filter_matching_nothing_is_an_empty_list_rather_than_an_error() {
+    let double = support::serve_once(
+        "200 OK",
+        &["Content-Type: application/json"],
+        r#"{"results":[],"next_cursor":null}"#,
+    )
+    .await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    let tasks = client
+        .tasks_matching("today & @nobody")
+        .await
+        .expect("request succeeds");
+
+    assert!(tasks.is_empty());
+}

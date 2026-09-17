@@ -11,6 +11,10 @@ pub enum Error {
     RateLimited,
     #[error("the API answered {0}")]
     Status(u16),
+    /// The API refused the request and said why. A malformed filter query arrives here, carrying
+    /// Todoist's own explanation of what it rejected.
+    #[error("{0}")]
+    Refused(String),
     #[error("network error: {0}")]
     Network(String),
     #[error("unreadable response: {0}")]
@@ -35,6 +39,40 @@ impl Error {
             ),
             other => Some(Self::Status(other)),
         }
+    }
+
+    /// Replace a bare status with the message the API sent with it, when it sent one. The named
+    /// failures keep their own wording, which reads better than the body they arrive with.
+    pub fn with_api_message(self, body: &str) -> Self {
+        match (&self, api_message(body)) {
+            (Self::Status(_), Some(message)) => Self::Refused(message),
+            _ => self,
+        }
+    }
+}
+
+/// The API's own error document. Every field is optional, so a body in some other shape is read
+/// as carrying no message rather than as a parse failure.
+#[derive(serde::Deserialize)]
+struct ApiError {
+    error: Option<String>,
+    error_extra: Option<ErrorExtra>,
+}
+
+#[derive(serde::Deserialize)]
+struct ErrorExtra {
+    explanation: Option<String>,
+}
+
+/// What the API said, as one line: its error name and, when it named one, the explanation of the
+/// argument it rejected.
+fn api_message(body: &str) -> Option<String> {
+    let parsed: ApiError = serde_json::from_str(body).ok()?;
+    let explanation = parsed.error_extra.and_then(|extra| extra.explanation);
+    match (parsed.error, explanation) {
+        (Some(error), Some(explanation)) => Some(format!("{error}: {explanation}")),
+        (Some(message), None) | (None, Some(message)) => Some(message),
+        (None, None) => None,
     }
 }
 
@@ -71,6 +109,43 @@ mod tests {
         assert_eq!(
             Error::from_status(429, Some("Wed, 21 Oct 2026 07:28:00 GMT")),
             Some(Error::RateLimited)
+        );
+    }
+
+    /// The document Todoist answers a malformed filter query with.
+    const REFUSED_FILTER: &str = r#"{"error_tag":"INVALID_ARGUMENT_VALUE","error_code":20,
+        "error":"Invalid argument value","http_code":400,
+        "error_extra":{"argument":"filter","explanation":"Unable to parse the filter query"}}"#;
+
+    #[test]
+    fn a_refused_request_carries_the_api_s_own_message() {
+        let error = Error::from_status(400, None)
+            .expect("an error")
+            .with_api_message(REFUSED_FILTER);
+
+        assert_eq!(
+            error.to_string(),
+            "Invalid argument value: Unable to parse the filter query"
+        );
+    }
+
+    #[test]
+    fn a_refusal_with_no_readable_message_keeps_its_status() {
+        assert_eq!(
+            Error::from_status(400, None)
+                .expect("an error")
+                .with_api_message("<html>gateway</html>"),
+            Error::Status(400)
+        );
+    }
+
+    #[test]
+    fn a_named_failure_keeps_its_own_wording() {
+        assert_eq!(
+            Error::from_status(401, None)
+                .expect("an error")
+                .with_api_message(REFUSED_FILTER),
+            Error::Unauthorized
         );
     }
 

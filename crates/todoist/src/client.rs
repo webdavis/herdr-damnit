@@ -43,24 +43,36 @@ impl Client {
 
     /// Every open task. The endpoint lists active tasks, so a completed one never arrives here.
     pub async fn tasks(&self) -> Result<Vec<Task>, Error> {
-        self.collect("/tasks").await
+        self.collect("/tasks", &[]).await
+    }
+
+    /// The open tasks a filter query selects, in Todoist's own filter language, the one the app's
+    /// Filters feature uses. A malformed query is refused by the API with its own message.
+    pub async fn tasks_matching(&self, query: &str) -> Result<Vec<Task>, Error> {
+        self.collect("/tasks/filter", &[("query", query.to_string())])
+            .await
     }
 
     pub async fn projects(&self) -> Result<Vec<Project>, Error> {
-        self.collect("/projects").await
+        self.collect("/projects", &[]).await
     }
 
     pub async fn sections(&self) -> Result<Vec<Section>, Error> {
-        self.collect("/sections").await
+        self.collect("/sections", &[]).await
     }
 
     /// Read a list endpoint to its end, following `next_cursor`. A repeated cursor ends the walk
     /// rather than looping forever.
-    async fn collect<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<Vec<T>, Error> {
+    async fn collect<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        extra: &[(&str, String)],
+    ) -> Result<Vec<T>, Error> {
         let mut collected = Vec::new();
         let mut cursor: Option<String> = None;
         loop {
             let mut query = vec![("limit", PAGE_LIMIT.to_string())];
+            query.extend(extra.iter().map(|(key, value)| (*key, value.clone())));
             if let Some(cursor) = &cursor {
                 query.push(("cursor", cursor.clone()));
             }
@@ -97,7 +109,8 @@ impl Client {
             .map(str::to_string);
         if let Some(error) = Error::from_status(response.status().as_u16(), retry_after.as_deref())
         {
-            return Err(error);
+            let body = response.text().await.unwrap_or_default();
+            return Err(error.with_api_message(&body));
         }
         response
             .json()
