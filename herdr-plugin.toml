@@ -7,9 +7,9 @@ min_herdr_version = "0.7.0"
 platforms = ["macos", "linux"]
 description = "A Todoist pane: the terminal UI, and a doctor check for the API token."
 
-# Compiled at install time into bin/, which every entry point below runs by absolute path: a pane's
-# working directory is the project, not the plugin root, and the binary is not on PATH.
-# `herdr plugin link` skips this step, so a local checkout runs the same two commands by hand.
+# Compiled at install time into bin/, which every entry point below runs by absolute path since the
+# binary is not on PATH. `herdr plugin link` skips this step, so a local checkout runs the same two
+# commands by hand.
 [[build]]
 command = [
   "sh",
