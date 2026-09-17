@@ -65,12 +65,14 @@ herdr plugin action invoke doctor --plugin herdr-todoist
 
 ## Configuration
 
-| Key             | Default   | Meaning                                                      |
-| --------------- | --------- | ------------------------------------------------------------ |
-| `token_command` | none      | argv of a command whose standard output is the token         |
-| `token_env`     | none      | name of an environment variable holding the token            |
-| `placement`     | `"split"` | how `open` and `toggle` place the pane                       |
-| `direction`     | `"right"` | which way a `split` placement splits                         |
+| Key             | Default   | Allowed values                            | Meaning                                               |
+| --------------- | --------- | ------------------------------------------ | ------------------------------------------------------ |
+| `token_command` | none      | any command                               | argv of a command whose standard output is the token  |
+| `token_env`     | none      | any variable name                         | name of an environment variable holding the token     |
+| `placement`     | `"split"` | `overlay`, `split`, `tab`, `zoomed`       | how `open` and `toggle` place the pane                |
+| `direction`     | `"right"` | `right`, `down`                           | which way a `split` placement splits                  |
+
+An unrecognized `placement` or `direction` is a config parse error naming the values above.
 
 ## Keys in the pane
 

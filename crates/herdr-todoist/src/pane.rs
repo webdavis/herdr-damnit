@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::config::Config;
+use crate::config::{Config, Placement};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -97,16 +97,16 @@ fn open_pane(workspace: &str, config: &Config) -> Result<String, String> {
         "--entrypoint",
         "pane",
         "--placement",
-        &config.placement,
+        config.placement.as_str(),
         "--focus",
     ];
     // A split or zoomed pane attaches to a pane; a tab or overlay one belongs to the workspace.
     let target = std::env::var("HERDR_PANE_ID").unwrap_or_default();
-    match config.placement.as_str() {
-        "split" | "zoomed" if !target.is_empty() => {
+    match config.placement {
+        Placement::Split | Placement::Zoomed if !target.is_empty() => {
             args.extend_from_slice(&["--target-pane", &target]);
-            if config.placement == "split" {
-                args.extend_from_slice(&["--direction", &config.direction]);
+            if config.placement == Placement::Split {
+                args.extend_from_slice(&["--direction", config.direction.as_str()]);
             }
         }
         _ => args.extend_from_slice(&["--workspace", workspace]),

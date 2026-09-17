@@ -13,20 +13,53 @@ pub struct Config {
     pub token_command: Option<Vec<String>>,
     /// The name of an environment variable holding the token.
     pub token_env: Option<String>,
-    /// How the `open` and `toggle` actions place the pane: `split`, `tab`, `zoomed` or `overlay`.
-    #[serde(default = "default_placement")]
-    pub placement: String,
-    /// Which way a `split` placement splits: `right` or `down`.
-    #[serde(default = "default_direction")]
-    pub direction: String,
+    /// How the `open` and `toggle` actions place the pane.
+    #[serde(default)]
+    pub placement: Placement,
+    /// Which way a `split` placement splits.
+    #[serde(default)]
+    pub direction: Direction,
 }
 
-fn default_placement() -> String {
-    "split".to_string()
+/// The pane placements `herdr plugin pane open --placement` accepts. An unrecognized value is a
+/// config parse error naming these, rather than a raw error from `herdr` at action time.
+#[derive(Debug, Default, Deserialize, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub enum Placement {
+    Overlay,
+    #[default]
+    Split,
+    Tab,
+    Zoomed,
 }
 
-fn default_direction() -> String {
-    "right".to_string()
+impl Placement {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Overlay => "overlay",
+            Self::Split => "split",
+            Self::Tab => "tab",
+            Self::Zoomed => "zoomed",
+        }
+    }
+}
+
+/// The split directions `herdr plugin pane open --direction` accepts.
+#[derive(Debug, Default, Deserialize, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub enum Direction {
+    #[default]
+    Right,
+    Down,
+}
+
+impl Direction {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Right => "right",
+            Self::Down => "down",
+        }
+    }
 }
 
 impl Config {
@@ -82,8 +115,28 @@ mod tests {
     #[test]
     fn an_empty_file_is_the_default_placement() {
         let config = Config::parse("").expect("parses");
-        assert_eq!(config.placement, "split");
-        assert_eq!(config.direction, "right");
+        assert_eq!(config.placement, Placement::Split);
+        assert_eq!(config.direction, Direction::Right);
+    }
+
+    #[test]
+    fn an_unrecognized_placement_is_a_parse_error_naming_the_alternatives() {
+        let error = Config::parse(r#"placement = "popup""#)
+            .expect_err("refuses")
+            .to_string();
+        assert!(error.contains("overlay"), "{error}");
+        assert!(error.contains("split"), "{error}");
+        assert!(error.contains("tab"), "{error}");
+        assert!(error.contains("zoomed"), "{error}");
+    }
+
+    #[test]
+    fn an_unrecognized_direction_is_a_parse_error_naming_the_alternatives() {
+        let error = Config::parse(r#"direction = "sideways""#)
+            .expect_err("refuses")
+            .to_string();
+        assert!(error.contains("right"), "{error}");
+        assert!(error.contains("down"), "{error}");
     }
 
     #[test]
