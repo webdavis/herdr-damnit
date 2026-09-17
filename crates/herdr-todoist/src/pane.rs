@@ -33,6 +33,21 @@ pub fn decide(mode: Mode, remembered: Option<&str>, live: &[String]) -> Decision
     }
 }
 
+/// What to do when a remembered pane turns out not to be this plugin's: `herdr pane list` only
+/// proves a pane id is live in the workspace, not that it belongs to us, so `plugin pane
+/// focus`/`close` is herdr's own registry check and the one that can reject it.
+enum Recovery {
+    RetryOpen,
+    ReportGone,
+}
+
+fn recover(mode: Mode) -> Recovery {
+    match mode {
+        Mode::Focus => Recovery::ReportGone,
+        Mode::Open | Mode::Toggle => Recovery::RetryOpen,
+    }
+}
+
 /// Run one action and report what it did.
 pub fn run(mode: Mode, config: &Config) -> Result<String, String> {
     let workspace = std::env::var("HERDR_WORKSPACE_ID")
@@ -40,22 +55,35 @@ pub fn run(mode: Mode, config: &Config) -> Result<String, String> {
     let live = live_panes(&workspace)?;
     let remembered = remembered_pane(&workspace);
     match decide(mode, remembered.as_deref(), &live) {
-        Decision::Focus(pane) => {
-            herdr(&["plugin", "pane", "focus", &pane])?;
-            Ok(format!("focused {pane}"))
-        }
+        Decision::Focus(pane) => match herdr(&["plugin", "pane", "focus", &pane]) {
+            Ok(_) => Ok(format!("focused {pane}")),
+            Err(_) => {
+                forget_pane(&workspace);
+                match recover(mode) {
+                    Recovery::RetryOpen => open_and_remember(&workspace, config),
+                    Recovery::ReportGone => {
+                        Ok(format!("no todoist pane in {workspace}: {pane} is gone"))
+                    }
+                }
+            }
+        },
         Decision::Close(pane) => {
-            herdr(&["plugin", "pane", "close", &pane])?;
+            let closed = herdr(&["plugin", "pane", "close", &pane]);
             forget_pane(&workspace);
-            Ok(format!("closed {pane}"))
+            match closed {
+                Ok(_) => Ok(format!("closed {pane}")),
+                Err(_) => open_and_remember(&workspace, config),
+            }
         }
         Decision::NothingToFocus => Ok(format!("no todoist pane in {workspace}")),
-        Decision::Open => {
-            let pane = open_pane(&workspace, config)?;
-            remember_pane(&workspace, &pane);
-            Ok(format!("opened {pane}"))
-        }
+        Decision::Open => open_and_remember(&workspace, config),
     }
+}
+
+fn open_and_remember(workspace: &str, config: &Config) -> Result<String, String> {
+    let pane = open_pane(workspace, config)?;
+    remember_pane(workspace, &pane);
+    Ok(format!("opened {pane}"))
 }
 
 fn open_pane(workspace: &str, config: &Config) -> Result<String, String> {
@@ -213,6 +241,13 @@ mod tests {
             decide(Mode::Focus, None, &panes(&["w:p1"])),
             Decision::NothingToFocus
         );
+    }
+
+    #[test]
+    fn a_failed_focus_or_close_retries_as_open_except_in_focus_mode() {
+        assert!(matches!(recover(Mode::Open), Recovery::RetryOpen));
+        assert!(matches!(recover(Mode::Toggle), Recovery::RetryOpen));
+        assert!(matches!(recover(Mode::Focus), Recovery::ReportGone));
     }
 
     #[test]
