@@ -14,7 +14,7 @@ use crate::edit::{self, After};
 use crate::editor;
 use crate::prompt::Prompt;
 use crate::reload::Screen;
-use crate::render::{draw, draw_detail};
+use crate::render::{Chrome, draw, draw_detail};
 use crate::views::Views;
 
 pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
@@ -36,6 +36,7 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
     let mut completed: Option<Completed> = None;
     let mut showing = Showing::Open;
     let mut row = ListState::default();
+    let palette = crate::theme::resolve(config.theme.as_deref());
     let mut terminal = ratatui::init();
     let outcome = loop {
         let drawn = match (&showing, completed.as_ref()) {
@@ -44,11 +45,21 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
         };
         let (drawn_status, drawn_list) = drawn.unwrap_or((status.as_str(), &list));
         let drew = terminal.draw(|frame| match &showing {
-            Showing::Detail(detail) => draw_detail(frame, &views, detail),
+            Showing::Detail(detail) => draw_detail(
+                frame,
+                &Chrome {
+                    views: &views,
+                    palette: &palette,
+                },
+                detail,
+            ),
             Showing::Open | Showing::Completed => draw(
                 frame,
                 drawn_status,
-                &views,
+                &Chrome {
+                    views: &views,
+                    palette: &palette,
+                },
                 drawn_list,
                 &mut row,
                 prompt.as_ref(),
@@ -184,7 +195,7 @@ async fn open_detail(
             config,
             base_url,
             &task.id,
-            &task.text,
+            &task.content,
             &task.description,
         )
         .await,
@@ -365,6 +376,7 @@ mod tests {
             ],
             &[project],
             &[],
+            &crate::list::tests::marks(),
         ));
         list.move_cursor(1);
         let at = list.selected();

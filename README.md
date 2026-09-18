@@ -82,10 +82,13 @@ herdr plugin action invoke doctor --plugin herdr-todoist
 | `default_view`  | none      | a view name                         | the view the pane opens on                              |
 | `auto_open`     | `false`   | `true`, `false`                     | whether focusing a workspace opens the pane there       |
 | `editor`        | `nvim`    | argv, or `[]` for none              | the editor `e` enters on a task, in this pane           |
+| `theme`         | `"catppuccin"` | a herdr theme name             | the palette the pane paints with                        |
+| `icons`         | `"nerd-font"` | `nerd-font`, `ascii`            | which set of marks a task line carries                  |
 | `[[views]]`     | none      | `name` and `filter`                 | the named filter views, in the order they are written   |
 
 An unrecognized `placement` or `side` is a config parse error naming the values above, and so is a
-`width` that is not a share of the tab or a `default_view` no view answers to.
+`width` that is not a share of the tab, a `default_view` no view answers to, or a `theme` name no
+palette answers to.
 
 ## Placement
 
@@ -162,9 +165,42 @@ A number with no view behind it exits non-zero saying how many views the config 
 ## The list
 
 Open tasks, grouped by project and then by section, with subtasks folded under their parent one
-level of indentation deeper. Each line carries the task's content, its due date, its priority as
-the `p1` to `p4` the app shows, its labels, and the number of subtasks under it. A project or
-section with no open task of its own is left out.
+level of indentation deeper. Each line carries its marks, then the task's content, then the number
+of subtasks under it. A project or section with no open task of its own is left out.
+
+The marks lead so that a title too long for the pane is what gets cut, with an ellipsis where it
+was cut; a side pane is about 32 columns wide, and a task can be overdue, urgent, repeating and
+labelled all at once. Labels are counted rather than named for the same reason, and the detail
+screen names them.
+
+| Mark        | Nerd Font   | Plain | Color  | Meaning                                    |
+| ----------- | ----------- | ----- | ------ | ------------------------------------------ |
+| priority p1 | flag        | `!`   | red    | the app's p1, the most urgent              |
+| priority p2 | flag        | `^`   | orange | the app's p2                               |
+| priority p3 | flag        | `-`   | blue   | the app's p3                               |
+| overdue     | warning     | `<`   | red    | due before today, with the date beside it  |
+| today       | clock       | `*`   | yellow | due today, which needs no date beside it   |
+| upcoming    | calendar    | `>`   | blue   | due later, with the date beside it         |
+| recurring   | refresh     | `~`   | green  | the due date repeats                       |
+| labels      | tags        | `@`   | purple | how many labels the task carries           |
+
+The app's p4 is its "no priority" and carries no mark, and neither does a task with no due date. A
+date on another day of this year is shown as its month and day; a date in another year is shown
+whole, so an old one cannot read as a near one.
+
+## Colors
+
+`theme` takes a theme name the way herdr and reviewr take one, and the names resolve to the same
+palettes, so a workspace's panes match: `catppuccin` (the default), `catppuccin-latte`,
+`catppuccin-frappe`, `catppuccin-macchiato`, `dracula`, `github-light`, `gruvbox`, `gruvbox-light`,
+`monokai`, `nord`, `one-dark`, `one-light`, `rose-pine`, `rose-pine-dawn`, `solarized`,
+`solarized-light`, `tokyo-night` and `tokyo-night-day`. The pane paints foregrounds only: the
+background stays the terminal's own.
+
+`icons = "ascii"` draws the plain set instead of the glyphs. A terminal whose font has no Nerd Font
+glyph draws a replacement box that is often two cells wide, which puts every column in the pane out
+by one, and no terminal reports which font it is using, so a pane cannot tell on its own: set this
+key when the glyphs come out as boxes.
 
 ## The completed list
 

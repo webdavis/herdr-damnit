@@ -111,7 +111,10 @@ impl List {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::list::{self, tests::task};
+    use crate::list::{
+        self,
+        tests::{marks, task},
+    };
     use todoist::{Project, Task};
 
     fn project() -> Vec<Project> {
@@ -132,11 +135,11 @@ mod tests {
     }
 
     fn list(contents: &[&str]) -> List {
-        List::new(list::build(&tasks(contents), &project(), &[]))
+        List::new(list::build(&tasks(contents), &project(), &[], &marks()))
     }
 
     fn refresh(list: &mut List, contents: &[&str]) {
-        list.refresh(list::build(&tasks(contents), &project(), &[]));
+        list.refresh(list::build(&tasks(contents), &project(), &[], &marks()));
     }
 
     #[test]
@@ -219,7 +222,7 @@ mod tests {
         let mut list = list(&["a", "b", "c"]);
         list.move_cursor(2);
 
-        list.switch(list::build(&tasks(&["x", "c"]), &project(), &[]));
+        list.switch(list::build(&tasks(&["x", "c"]), &project(), &[], &marks()));
 
         assert_eq!(list.selected_id(), Some("c"));
     }
@@ -229,7 +232,7 @@ mod tests {
         let mut list = list(&["a", "b", "c"]);
         list.move_cursor(1);
 
-        list.switch(list::build(&tasks(&["x", "y"]), &project(), &[]));
+        list.switch(list::build(&tasks(&["x", "y"]), &project(), &[], &marks()));
 
         assert_eq!(list.selected_id(), Some("x"));
     }

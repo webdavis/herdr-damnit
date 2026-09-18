@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use serde::Deserialize;
 use todoist::TokenSource;
 
+use crate::icons::IconSet;
 use crate::placement::Side;
 
 /// The plugin's configuration, read from `config.toml` in the herdr plugin config directory. A
@@ -31,6 +32,13 @@ pub struct Config {
     /// Whether focusing a workspace opens the pane there on its own.
     #[serde(default)]
     pub auto_open: bool,
+    /// The theme the pane paints with, by the name herdr and reviewr know it by, so the panes of
+    /// one workspace match. The default theme when unset.
+    pub theme: Option<String>,
+    /// Which set of marks a task line carries: Nerd Font glyphs, or plain characters for a
+    /// terminal whose font has none.
+    #[serde(default)]
+    pub icons: IconSet,
     /// Named filter views, in the order the pane numbers them.
     #[serde(default)]
     pub views: Vec<View>,
@@ -84,6 +92,7 @@ impl Config {
         config.check_view_names()?;
         config.check_width()?;
         config.check_default_view()?;
+        config.check_theme()?;
         Ok(config)
     }
 
@@ -111,6 +120,18 @@ impl Config {
             seen.push(&view.name);
         }
         Ok(())
+    }
+
+    /// A theme this pane has no palette for would draw half of it in the default colors, so an
+    /// unknown name is a config error listing the names that resolve.
+    fn check_theme(&self) -> Result<(), String> {
+        match &self.theme {
+            Some(name) if !crate::theme::is_known(name) => Err(format!(
+                "unknown theme '{name}': expected one of {}",
+                crate::theme::NAMES.join(", ")
+            )),
+            _ => Ok(()),
+        }
     }
 
     /// A width is a share of the tab, so only a fraction between the two ends of it is a width at
@@ -418,5 +439,27 @@ mod tests {
             error.contains("view 'today' has an empty filter"),
             "{error}"
         );
+    }
+
+    #[test]
+    fn a_theme_is_taken_by_name_and_an_unknown_one_is_refused_with_the_names_that_work() {
+        let config = Config::parse("theme = \"gruvbox\"\n").expect("parses");
+        assert_eq!(config.theme.as_deref(), Some("gruvbox"));
+
+        let error = Config::parse("theme = \"nope\"\n").expect_err("refuses");
+        assert!(error.contains("unknown theme 'nope'"), "{error}");
+        assert!(error.contains("catppuccin"), "{error}");
+    }
+
+    #[test]
+    fn the_marks_are_nerd_font_glyphs_until_the_plain_set_is_asked_for() {
+        assert_eq!(Config::default().icons, IconSet::NerdFont);
+        assert_eq!(
+            Config::parse("icons = \"ascii\"\n").expect("parses").icons,
+            IconSet::Ascii
+        );
+
+        let error = Config::parse("icons = \"emoji\"\n").expect_err("refuses");
+        assert!(error.contains("icons"), "{error}");
     }
 }

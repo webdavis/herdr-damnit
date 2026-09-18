@@ -4,7 +4,8 @@
 
 use todoist::{CompletedPage, CompletedTask};
 
-use crate::list::{Row, TaskRow};
+use crate::list::{Row, Segment, TaskRow};
+use crate::theme::Slot;
 
 /// The API reads completed tasks in a window of at most three months, so the walk steps back one
 /// window at a time. Ninety days is inside that cap for any three consecutive months.
@@ -132,10 +133,13 @@ impl History {
 }
 
 /// A task's line: the completion date first, so the dates line up down the pane.
-fn line(task: &CompletedTask) -> String {
+fn line(task: &CompletedTask) -> Vec<Segment> {
     let completed_at = task.completed_at.as_deref().unwrap_or("");
     let day = completed_at.get(..10).unwrap_or(completed_at);
-    format!("{day:10}  {}", task.content)
+    vec![
+        Segment::new(format!("{day:10}  "), Slot::Dim1),
+        Segment::new(task.content.clone(), Slot::Text),
+    ]
 }
 
 /// Today as a day number since the Unix epoch. A clock before the epoch reads as the epoch, which

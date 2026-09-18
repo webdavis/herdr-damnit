@@ -115,6 +115,7 @@ pub(crate) fn list_of_one(priority: u8, labels: &[&str]) -> List {
         ))],
         &[project],
         &[],
+        &crate::list::tests::marks(),
     ))
 }
 

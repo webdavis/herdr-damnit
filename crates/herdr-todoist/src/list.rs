@@ -6,6 +6,9 @@ use std::collections::{HashMap, HashSet};
 
 use todoist::{Project, Section, Task};
 
+use crate::icons::{self, Marks};
+use crate::theme::Slot;
+
 /// A deeply nested chain stops here. Real task trees are a few levels deep; the limit is what
 /// keeps malformed input from recursing without end.
 const MAX_DEPTH: usize = 8;
@@ -24,10 +27,28 @@ pub enum Row {
     Task(TaskRow),
 }
 
+/// A run of a task line drawn in one color. A line is a list of these, so the marks are painted
+/// by what they mean while the title stays the pane's plain text.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Segment {
+    pub text: String,
+    pub slot: Slot,
+}
+
+impl Segment {
+    pub fn new(text: impl Into<String>, slot: Slot) -> Self {
+        Self {
+            text: text.into(),
+            slot,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct TaskRow {
     pub id: String,
-    pub text: String,
+    /// The drawn line, in the colors it is drawn in.
+    pub text: Vec<Segment>,
     /// The task's own title, without the indentation and the decorations `text` carries, which is
     /// what a brief handed to an agent names the task by.
     pub content: String,
@@ -59,10 +80,12 @@ impl Row {
         }
     }
 
-    pub fn text(&self) -> &str {
+    /// The whole line as plain text, which is what a width is measured over and what a test
+    /// compares.
+    pub fn text(&self) -> String {
         match self {
-            Self::Header(text) => text,
-            Self::Task(task) => &task.text,
+            Self::Header(text) => text.clone(),
+            Self::Task(task) => task.text.iter().map(|part| part.text.as_str()).collect(),
         }
     }
 }
@@ -71,7 +94,12 @@ impl Row {
 /// project is missing from `projects` is grouped under its project id rather than dropped, a task
 /// with no project_id at all is grouped under a literal "(no project)" heading, and a task whose
 /// section_id names no section in `sections` is treated as unfiled rather than dropped.
-pub fn build(tasks: &[Task], projects: &[Project], sections: &[Section]) -> Vec<Row> {
+pub fn build(
+    tasks: &[Task],
+    projects: &[Project],
+    sections: &[Section],
+    marks: &Marks,
+) -> Vec<Row> {
     let visible: HashSet<&str> = tasks.iter().map(|task| task.id.as_str()).collect();
     let mut children: HashMap<&str, Vec<&Task>> = HashMap::new();
     let mut roots: Vec<&Task> = Vec::new();
@@ -111,6 +139,7 @@ pub fn build(tasks: &[Task], projects: &[Project], sections: &[Section]) -> Vec<
             }),
             1,
             &children,
+            marks,
         );
         for section in sorted_sections(sections, &project_id) {
             let in_section: Vec<&Task> = in_project
@@ -122,7 +151,7 @@ pub fn build(tasks: &[Task], projects: &[Project], sections: &[Section]) -> Vec<
                 continue;
             }
             rows.push(Row::Header(format!("{}{}", indent(1), section.name)));
-            emit(&mut rows, in_section.into_iter(), 2, &children);
+            emit(&mut rows, in_section.into_iter(), 2, &children, marks);
         }
     }
     rows
@@ -186,6 +215,7 @@ fn emit<'a>(
     tasks: impl Iterator<Item = &'a Task>,
     depth: usize,
     children: &HashMap<&str, Vec<&'a Task>>,
+    marks: &Marks,
 ) {
     if depth > MAX_DEPTH {
         return;
@@ -194,7 +224,7 @@ fn emit<'a>(
         let subtasks = children.get(task.id.as_str()).map_or(0, Vec::len);
         rows.push(Row::Task(TaskRow {
             id: task.id.clone(),
-            text: task_text(task, depth, subtasks),
+            text: task_line(task, depth, subtasks, marks),
             content: task.content.clone(),
             description: task.description.clone(),
             priority: task.priority.clamp(LOWEST_PRIORITY, HIGHEST_PRIORITY),
@@ -202,7 +232,7 @@ fn emit<'a>(
             due: task.due.as_ref().map(|due| date_of(&due.date)),
         }));
         if let Some(subtasks) = children.get(task.id.as_str()) {
-            emit(rows, subtasks.iter().copied(), depth + 1, children);
+            emit(rows, subtasks.iter().copied(), depth + 1, children, marks);
         }
     }
 }
@@ -212,21 +242,75 @@ fn date_of(due: &str) -> String {
     due.get(..10).unwrap_or(due).to_string()
 }
 
-/// The task's line: its content, then whichever of the due date, the priority, the labels and the
-/// subtask count it has.
-fn task_text(task: &Task, depth: usize, subtasks: usize) -> String {
-    let mut parts = vec![format!("{}{}", indent(depth), task.content)];
-    if let Some(due) = &task.due {
-        parts.push(date_of(&due.date));
+/// The task's line: its marks first, then its title, then its subtask count. The marks lead so
+/// that a title too long for the pane is what the drawing truncates, and the labels are counted
+/// rather than named, which is what keeps the marks inside a side pane's width.
+fn task_line(task: &Task, depth: usize, subtasks: usize, marks: &Marks) -> Vec<Segment> {
+    let icons = &marks.icons;
+    let mut line = vec![Segment::new(indent(depth), Slot::Text)];
+    if let Some(icon) = icons.priority(task.priority) {
+        mark(&mut line, icon.to_string(), priority_slot(task.priority));
     }
-    if task.priority > 1 {
-        parts.push(format!("p{}", 5 - task.priority.min(4)));
+    let due = task.due.as_ref().map(|due| date_of(&due.date));
+    let state = icons::due(due.as_deref(), &marks.today);
+    if let Some(icon) = icons.due(state) {
+        let slot = due_slot(state);
+        let shown = due.as_deref().map_or(String::new(), |date| {
+            when(date, &marks.today, state).to_string()
+        });
+        mark(&mut line, format!("{icon}{shown}"), slot);
     }
-    parts.extend(task.labels.iter().map(|label| format!("@{label}")));
+    if task.due.as_ref().is_some_and(|due| due.is_recurring) {
+        mark(&mut line, icons.recurring.to_string(), Slot::Green);
+    }
+    if !task.labels.is_empty() {
+        let count = task.labels.len();
+        mark(&mut line, format!("{}{count}", icons.labels), Slot::Purple);
+    }
+    if line.len() > 1 {
+        line.push(Segment::new(" ", Slot::Text));
+    }
+    line.push(Segment::new(task.content.clone(), Slot::Text));
     if subtasks > 0 {
-        parts.push(format!("({subtasks})"));
+        line.push(Segment::new(format!("  ({subtasks})"), Slot::Dim1));
     }
-    parts.join("  ")
+    line
+}
+
+/// Add a mark to the line, spaced off whatever is already there.
+fn mark(line: &mut Vec<Segment>, text: String, slot: Slot) {
+    if line.len() > 1 {
+        line.push(Segment::new(" ", Slot::Text));
+    }
+    line.push(Segment::new(text, slot));
+}
+
+/// What the due mark carries beside it: nothing for a task due today, which the mark already
+/// says; the month and day for another day of this year; the whole date when the year differs,
+/// so a date a year old cannot read as one a few days away.
+fn when<'a>(date: &'a str, today: &str, state: icons::Due) -> &'a str {
+    match state {
+        icons::Due::Today | icons::Due::None => "",
+        _ if date.get(..4) == today.get(..4) => date.get(5..).unwrap_or(date),
+        _ => date,
+    }
+}
+
+/// The color a priority mark takes: the app's own red, orange and blue for p1, p2 and p3.
+fn priority_slot(priority: u8) -> Slot {
+    match priority {
+        4 => Slot::Red,
+        3 => Slot::Orange,
+        _ => Slot::Blue,
+    }
+}
+
+fn due_slot(state: icons::Due) -> Slot {
+    match state {
+        icons::Due::Overdue => Slot::Red,
+        icons::Due::Today => Slot::Yellow,
+        _ => Slot::Blue,
+    }
 }
 
 fn indent(depth: usize) -> String {
@@ -234,170 +318,4 @@ fn indent(depth: usize) -> String {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
-    use super::*;
-
-    /// Tasks, projects and sections are built from API-shaped JSON, so these tests pin the field
-    /// names the list reads as well as the layout it produces.
-    pub(crate) fn task(json: &str) -> Task {
-        serde_json::from_str(json).expect("task")
-    }
-
-    fn project(json: &str) -> Project {
-        serde_json::from_str(json).expect("project")
-    }
-
-    fn section(json: &str) -> Section {
-        serde_json::from_str(json).expect("section")
-    }
-
-    fn texts(rows: &[Row]) -> Vec<&str> {
-        rows.iter().map(Row::text).collect()
-    }
-
-    #[test]
-    fn tasks_are_grouped_under_their_project_and_section() {
-        let rows = build(
-            &[
-                task(r#"{"id":"1","content":"loose","project_id":"p1","child_order":1}"#),
-                task(
-                    r#"{"id":"2","content":"filed","project_id":"p1","section_id":"s1","child_order":2}"#,
-                ),
-                task(r#"{"id":"3","content":"later","project_id":"p2","child_order":1}"#),
-            ],
-            &[
-                project(r#"{"id":"p2","name":"Second","child_order":2}"#),
-                project(r#"{"id":"p1","name":"First","child_order":1}"#),
-            ],
-            &[section(
-                r#"{"id":"s1","name":"Doing","project_id":"p1","section_order":1}"#,
-            )],
-        );
-
-        assert_eq!(
-            texts(&rows),
-            vec![
-                "First",
-                "  loose",
-                "  Doing",
-                "    filed",
-                "Second",
-                "  later",
-            ]
-        );
-    }
-
-    #[test]
-    fn a_project_with_no_open_task_gets_no_heading() {
-        let rows = build(
-            &[],
-            &[project(r#"{"id":"p1","name":"Empty"}"#)],
-            &[section(r#"{"id":"s1","name":"Doing","project_id":"p1"}"#)],
-        );
-
-        assert!(rows.is_empty(), "{rows:?}");
-    }
-
-    #[test]
-    fn subtasks_are_folded_under_their_parent_and_counted_on_it() {
-        let rows = build(
-            &[
-                task(r#"{"id":"1","content":"parent","project_id":"p1","child_order":1}"#),
-                task(
-                    r#"{"id":"3","content":"second child","project_id":"p1","parent_id":"1","child_order":2}"#,
-                ),
-                task(
-                    r#"{"id":"2","content":"first child","project_id":"p1","parent_id":"1","child_order":1}"#,
-                ),
-                task(r#"{"id":"4","content":"grandchild","project_id":"p1","parent_id":"2"}"#),
-            ],
-            &[project(r#"{"id":"p1","name":"First"}"#)],
-            &[],
-        );
-
-        assert_eq!(
-            texts(&rows),
-            vec![
-                "First",
-                "  parent  (2)",
-                "    first child  (1)",
-                "      grandchild",
-                "    second child",
-            ]
-        );
-    }
-
-    #[test]
-    fn a_subtask_whose_parent_is_not_open_stands_on_its_own() {
-        let rows = build(
-            &[task(
-                r#"{"id":"2","content":"orphan","project_id":"p1","parent_id":"gone"}"#,
-            )],
-            &[project(r#"{"id":"p1","name":"First"}"#)],
-            &[],
-        );
-
-        assert_eq!(texts(&rows), vec!["First", "  orphan"]);
-    }
-
-    #[test]
-    fn a_line_carries_the_due_date_the_priority_and_the_labels() {
-        let rows = build(
-            &[task(
-                r#"{"id":"1","content":"file taxes","project_id":"p1","priority":4,
-                     "labels":["home","slow"],"due":{"date":"2026-09-18T09:00:00Z"}}"#,
-            )],
-            &[project(r#"{"id":"p1","name":"First"}"#)],
-            &[],
-        );
-
-        assert_eq!(
-            texts(&rows),
-            vec!["First", "  file taxes  2026-09-18  p1  @home  @slow"]
-        );
-    }
-
-    #[test]
-    fn the_lowest_priority_is_left_off_the_line() {
-        let rows = build(
-            &[task(
-                r#"{"id":"1","content":"someday","project_id":"p1","priority":1}"#,
-            )],
-            &[project(r#"{"id":"p1","name":"First"}"#)],
-            &[],
-        );
-
-        assert_eq!(texts(&rows), vec!["First", "  someday"]);
-    }
-
-    #[test]
-    fn a_task_whose_section_is_unknown_is_treated_as_unfiled() {
-        let rows = build(
-            &[task(
-                r#"{"id":"1","content":"hidden","project_id":"p1","section_id":"s9"}"#,
-            )],
-            &[project(r#"{"id":"p1","name":"First"}"#)],
-            &[],
-        );
-
-        assert_eq!(texts(&rows), vec!["First", "  hidden"]);
-    }
-
-    #[test]
-    fn a_task_with_no_project_id_is_grouped_under_a_named_heading() {
-        let rows = build(&[task(r#"{"id":"1","content":"bare"}"#)], &[], &[]);
-
-        assert_eq!(texts(&rows), vec!["(no project)", "  bare"]);
-    }
-
-    #[test]
-    fn a_task_whose_project_is_unknown_is_grouped_under_its_project_id() {
-        let rows = build(
-            &[task(r#"{"id":"1","content":"stray","project_id":"p9"}"#)],
-            &[],
-            &[],
-        );
-
-        assert_eq!(texts(&rows), vec!["p9", "  stray"]);
-    }
-}
+pub(crate) mod tests;

@@ -37,7 +37,7 @@ struct Under {
 fn under_cursor(screen: &Screen<'_>) -> Option<Under> {
     screen.selected().map(|task| Under {
         id: task.id.clone(),
-        content: task.text.clone(),
+        content: task.content.clone(),
         priority: task.priority,
         labels: task.labels.clone(),
     })

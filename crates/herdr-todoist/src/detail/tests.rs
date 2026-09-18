@@ -411,18 +411,18 @@ fn narrow_frame(detail: &Detail, rows: u16) -> Vec<String> {
     let mut terminal =
         ratatui::Terminal::new(ratatui::backend::TestBackend::new(NARROW, rows)).expect("terminal");
     terminal
-        .draw(|frame| crate::render::draw_detail(frame, &crate::views::Views::new(&[]), detail))
-        .expect("draw");
-    let buffer = terminal.backend().buffer().clone();
-    (0..buffer.area.height)
-        .map(|row| {
-            (0..buffer.area.width)
-                .map(|column| buffer[(column, row)].symbol())
-                .collect::<String>()
-                .trim_end()
-                .to_string()
+        .draw(|frame| {
+            crate::render::draw_detail(
+                frame,
+                &crate::render::Chrome {
+                    views: &crate::views::Views::new(&[]),
+                    palette: &crate::theme::resolve(None),
+                },
+                detail,
+            )
         })
-        .collect()
+        .expect("draw");
+    crate::render::tests::lines_of(&terminal)
 }
 
 #[tokio::test]
