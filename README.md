@@ -82,7 +82,7 @@ herdr plugin action invoke doctor --plugin herdr-todoist
 | `default_view`  | none      | a view name                         | the view the pane opens on                              |
 | `auto_open`     | `false`   | `true`, `false`                     | whether focusing a workspace opens the pane there       |
 | `editor`        | `nvim`    | argv, or `[]` for none              | the editor `e` enters on a task, in this pane           |
-| `theme`         | herdr's   | a herdr theme name                  | the palette the pane paints with                        |
+| `theme`         | `"catppuccin"` | a herdr theme name             | the palette the pane paints with                        |
 | `icons`         | `"nerd-font"` | `nerd-font`, `ascii`            | which set of marks a task line carries                  |
 | `[[views]]`     | none      | `name` and `filter`                 | the named filter views, in the order they are written   |
 
