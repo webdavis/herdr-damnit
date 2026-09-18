@@ -56,7 +56,7 @@ impl Connection {
                 match self.once(&request).await {
                     Attempt::Answered(value) => Ok(value),
                     Attempt::Rejected => {
-                        Err(Fault::Refused(TodoistError::Unauthorized.to_string()))
+                        Err(Fault::Unavailable(TodoistError::Unauthorized.to_string()))
                     }
                     Attempt::Failed(fault) => Err(fault),
                 }
@@ -71,8 +71,10 @@ impl Connection {
     {
         match self {
             // A connection that never built failed on the token, not on the network, so a write
-            // is refused rather than queued for a network that is not the problem.
-            Self::Failed(error) => Attempt::Failed(Fault::Refused(error.clone())),
+            // is not queued for a network that is not the problem. It is still worth retrying,
+            // an unlocked password manager or a fixed token_command can resolve it on its own,
+            // so a queued write waits it out rather than being dropped.
+            Self::Failed(error) => Attempt::Failed(Fault::Unavailable(error.clone())),
             Self::Ready(client) => match request(client).await {
                 Ok(value) => Attempt::Answered(value),
                 Err(TodoistError::Unauthorized) => Attempt::Rejected,
@@ -90,11 +92,13 @@ enum Attempt<T> {
     Failed(Fault),
 }
 
-/// Why a request failed: the network was down, or the API answered and said no. Only the first
-/// is worth waiting out, so only the first queues a write.
+/// Why a request failed: the network was down, the API is having a moment but may answer the
+/// same request later, or it answered and said no to this one in particular. The first two are
+/// worth waiting out, so a queued write survives them; only the third drops it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fault {
     Offline(String),
+    Unavailable(String),
     Refused(String),
 }
 
@@ -102,6 +106,12 @@ impl Fault {
     fn of(error: TodoistError) -> Self {
         match error {
             TodoistError::Network(_) => Self::Offline(error.to_string()),
+            TodoistError::RateLimited
+            | TodoistError::RateLimitedAfter(_)
+            | TodoistError::Malformed(_) => Self::Unavailable(error.to_string()),
+            TodoistError::Status(status) if (500..600).contains(&status) => {
+                Self::Unavailable(error.to_string())
+            }
             _ => Self::Refused(error.to_string()),
         }
     }
@@ -109,7 +119,7 @@ impl Fault {
     /// The message the status line shows, whichever kind of failure it was.
     pub fn into_message(self) -> String {
         match self {
-            Self::Offline(message) | Self::Refused(message) => message,
+            Self::Offline(message) | Self::Unavailable(message) | Self::Refused(message) => message,
         }
     }
 }

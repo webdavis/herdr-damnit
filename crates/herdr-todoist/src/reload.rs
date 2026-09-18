@@ -132,7 +132,7 @@ impl Screen<'_> {
                     None => message,
                 }
             }
-            Err(Fault::Refused(message)) => message,
+            Err(Fault::Refused(message) | Fault::Unavailable(message)) => message,
         };
         match replayed.status() {
             Some(replay) => format!("{replay}  {said}"),

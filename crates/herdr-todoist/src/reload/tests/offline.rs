@@ -248,6 +248,66 @@ async fn x_offline_says_the_completion_is_waiting_rather_than_claiming_it_was_ma
 }
 
 #[tokio::test]
+async fn a_rate_limited_replay_keeps_the_whole_queue_for_the_next_try() {
+    let base_url = crate::reload::tests::serve_forever("429 Too Many Requests", "{}").await;
+    let config = config_with_token_command("printf test-token");
+    let mut connection = Connection::build(&config, &base_url).await;
+    let mut list = List::new(Vec::new());
+    let mut views = Views::new(&[]);
+    let (mut cache, mut queue) = stores("rate-limited-replay");
+    queue.push(Write::Close("1".to_string()));
+    queue.push(Write::Delete("2".to_string()));
+
+    let status = screen(
+        &mut connection,
+        &config,
+        &base_url,
+        &mut list,
+        &mut views,
+        &mut cache,
+        &mut queue,
+    )
+    .refresh()
+    .await;
+
+    assert_eq!(status, "rate limited, retry shortly");
+    assert_eq!(
+        queue.task_ids(),
+        vec!["1", "2"],
+        "a rate limit must not drop the queue"
+    );
+}
+
+#[tokio::test]
+async fn a_failed_connection_replay_keeps_the_whole_queue_for_the_next_try() {
+    let mut connection = Connection::Failed("no token source: neither key is set".to_string());
+    let config = Config::default();
+    let mut list = List::new(Vec::new());
+    let mut views = Views::new(&[]);
+    let (mut cache, mut queue) = stores("failed-connection-replay");
+    queue.push(Write::Close("1".to_string()));
+
+    let status = screen(
+        &mut connection,
+        &config,
+        "http://127.0.0.1:1",
+        &mut list,
+        &mut views,
+        &mut cache,
+        &mut queue,
+    )
+    .refresh()
+    .await;
+
+    assert_eq!(status, "no token source: neither key is set");
+    assert_eq!(
+        queue.task_ids(),
+        vec!["1"],
+        "an unresolvable token must not drop the queue"
+    );
+}
+
+#[tokio::test]
 async fn switching_view_offline_draws_that_view_s_own_copy_rather_than_the_one_left_on_screen() {
     let base_url = unreachable().await;
     let config = config_with_token_command("printf test-token");

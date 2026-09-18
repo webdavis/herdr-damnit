@@ -22,6 +22,7 @@ struct Sender {
     seen: RefCell<Vec<String>>,
     refuse: Vec<String>,
     offline: Vec<String>,
+    unavailable: Vec<String>,
 }
 
 impl Sender {
@@ -30,6 +31,7 @@ impl Sender {
             seen: RefCell::new(Vec::new()),
             refuse: Vec::new(),
             offline: Vec::new(),
+            unavailable: Vec::new(),
         }
     }
 
@@ -43,6 +45,11 @@ impl Sender {
         self
     }
 
+    fn unavailable_at(mut self, id: &str) -> Self {
+        self.unavailable.push(id.to_string());
+        self
+    }
+
     fn answer(&self, write: &Write) -> Result<(), Fault> {
         let id = write.task_id().unwrap_or_default().to_string();
         self.seen.borrow_mut().push(id.clone());
@@ -51,6 +58,11 @@ impl Sender {
         }
         if self.offline.contains(&id) {
             return Err(Fault::Offline("network error: dns failure".to_string()));
+        }
+        if self.unavailable.contains(&id) {
+            return Err(Fault::Unavailable(
+                "rate limited, retry shortly".to_string(),
+            ));
         }
         Ok(())
     }
@@ -158,6 +170,34 @@ async fn a_network_that_went_down_again_stops_the_replay_and_keeps_what_is_left_
         "it went past the outage"
     );
     assert_eq!(replayed.sent, 2);
+    assert_eq!(replayed.left, 2);
+    assert_eq!(
+        Queue::open(&path).task_ids(),
+        vec!["3", "4"],
+        "the unsent writes lost their order or their place"
+    );
+}
+
+#[tokio::test]
+async fn a_transient_failure_stops_the_replay_and_keeps_what_is_left_in_order() {
+    let path = scratch("unavailable");
+    let mut queue = Queue::open(&path);
+    for id in ["1", "2", "3", "4"] {
+        queue.push(close(id));
+    }
+    let sender = Sender::new().unavailable_at("3");
+
+    let replayed = queue
+        .replay(async |write: &Write| sender.answer(write))
+        .await;
+
+    assert_eq!(
+        sender.seen(),
+        vec!["1", "2", "3"],
+        "it went past a rate limit or a token failure that may still resolve"
+    );
+    assert_eq!(replayed.sent, 2);
+    assert!(replayed.dropped.is_empty(), "nothing here was refused");
     assert_eq!(replayed.left, 2);
     assert_eq!(
         Queue::open(&path).task_ids(),

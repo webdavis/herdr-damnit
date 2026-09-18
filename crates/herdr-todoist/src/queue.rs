@@ -3,8 +3,8 @@
 //! The queue is a file under the plugin's own state directory, so a task completed on a train is
 //! still waiting to be sent after the pane is closed and opened again. It is replayed one write
 //! at a time, oldest first: a write the API refuses is dropped with its message and the rest go
-//! on, and a write that fails because the network is still down stays at the head with everything
-//! behind it untouched.
+//! on, and a write that only failed for now, the network down, a rate limit, a token trouble that
+//! may resolve itself, stays at the head with everything behind it untouched.
 
 #[cfg(test)]
 use std::path::Path;
@@ -133,9 +133,10 @@ impl Queue {
         self.waiting.iter().filter_map(Write::task_id).collect()
     }
 
-    /// Send the waiting writes, oldest first, stopping at the first one the network refused to
-    /// carry. The file is rewritten after every write, so a pane that exits mid-replay leaves
-    /// exactly what is still unsent.
+    /// Send the waiting writes, oldest first, stopping at the first one that is only transiently
+    /// unsendable: the network is down, or the API answered but not with an answer to that write
+    /// (a rate limit, a 5xx, a token that needs a moment). The file is rewritten after every
+    /// write, so a pane that exits mid-replay leaves exactly what is still unsent.
     pub async fn replay<F>(&mut self, mut send: F) -> Replayed
     where
         F: AsyncFnMut(&Write) -> Result<(), Fault>,
@@ -145,7 +146,7 @@ impl Queue {
             match send(write).await {
                 Ok(()) => replayed.sent += 1,
                 Err(Fault::Refused(message)) => replayed.dropped.push(message),
-                Err(Fault::Offline(_)) => break,
+                Err(Fault::Offline(_) | Fault::Unavailable(_)) => break,
             }
             self.waiting.remove(0);
             self.save();
