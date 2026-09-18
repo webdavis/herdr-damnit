@@ -225,7 +225,7 @@ async fn c_posts_the_lines_typed_and_the_comment_arrives_by_a_re_read() {
         writes,
         [r#"POST /comments {"task_id":"6X","content":"first line\nsecond line"}"#.to_string()]
     );
-    assert_eq!(detail.status(), "posted  1 comments");
+    assert_eq!(detail.status(), "posted  1 comment");
     assert!(
         texts(&detail).contains(&"  first line".to_string()),
         "{:?}",
@@ -339,7 +339,21 @@ async fn the_screen_scrolls_and_esc_goes_back_to_the_list() {
         &mut connection,
         &config,
         &double.base_url,
-        &[KeyCode::Char('k'), KeyCode::Char('k')],
+        &[KeyCode::Char('j'); 20],
+    )
+    .await;
+    assert_eq!(
+        detail.scroll(),
+        detail.lines().len() as u16 - 1,
+        "j past the last line ran into blank space"
+    );
+
+    press(
+        &mut detail,
+        &mut connection,
+        &config,
+        &double.base_url,
+        &[KeyCode::Char('k'); 20],
     )
     .await;
     assert_eq!(detail.scroll(), 0, "the scroll went above the first line");

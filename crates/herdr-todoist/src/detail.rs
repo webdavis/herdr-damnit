@@ -122,7 +122,10 @@ impl Detail {
             KeyCode::Char('q') => After::Quit,
             KeyCode::Esc | KeyCode::Enter | KeyCode::Tab | KeyCode::BackTab => After::Back,
             KeyCode::Char('j') | KeyCode::Down => {
-                self.scroll = self.scroll.saturating_add(1);
+                // Clamped to the screen's own line count, so a short task cannot scroll past its
+                // last line into blank space.
+                let last = self.lines().len().saturating_sub(1) as u16;
+                self.scroll = self.scroll.saturating_add(1).min(last);
                 After::Stay
             }
             KeyCode::Char('k') | KeyCode::Up => {
@@ -221,10 +224,19 @@ impl Detail {
                         .then(left.id.cmp(&right.id))
                 });
                 self.comments = comments;
-                format!("{} comments", self.comments.len())
+                comment_count(self.comments.len())
             }
             Err(error) => error,
         }
+    }
+}
+
+/// The status line's own count, singular for exactly one comment.
+fn comment_count(count: usize) -> String {
+    if count == 1 {
+        "1 comment".to_string()
+    } else {
+        format!("{count} comments")
     }
 }
 
