@@ -24,11 +24,12 @@ const DETAIL_LABEL: &str = "task";
 const COMPLETED_LABEL: &str = "completed";
 
 /// The open list's own keys. A side pane is about 32 columns wide and this line fills it exactly:
-/// the eight edits, `<CR>` into the detail, the view picker and its numbers, and `<Tab>` to the
-/// completed list. j/k, R, `q` and the arrow keys are left unsaid, `q` because `<Esc>` closes the
-/// pane too and both other screens name it.
+/// the eight edits, `S` to hand the task to an agent, `<CR>` into the detail, the view picker and
+/// its numbers, and Tab to the completed list, which is written bare so the line still fits. j/k,
+/// R, `q` and the arrow keys are left unsaid, `q` because `<Esc>` closes the pane too and both
+/// other screens name it.
 fn hints() -> String {
-    format!("x X dd p s l m a <CR> v1-{MAX_NUMBERED_VIEW} <Tab>")
+    format!("x X dd p s l m a S <CR> v1-{MAX_NUMBERED_VIEW} Tab")
 }
 
 /// The status line, naming the showing view. Every failure the client can report (a rejected
@@ -342,6 +343,7 @@ mod tests {
             Prompt::add(),
             Prompt::labels("1", &["home".to_string()], &[]),
             Prompt::move_to("1", &[], &[]),
+            Prompt::note(),
         ];
 
         let expected = hints();
@@ -419,8 +421,8 @@ mod tests {
         let frame = frame_of(&views_of(&[]), &list_of_two(), None);
         let hints = frame.last().expect("a hint line");
 
-        assert!(hints.contains("x X dd p s l m a"), "{frame:?}");
+        assert!(hints.contains("x X dd p s l m a S"), "{frame:?}");
         assert!(hints.contains("<CR>"), "{frame:?}");
-        assert!(hints.contains("<Tab>"), "{frame:?}");
+        assert!(hints.contains("Tab"), "{frame:?}");
     }
 }

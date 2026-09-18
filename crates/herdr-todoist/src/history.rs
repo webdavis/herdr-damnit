@@ -118,11 +118,13 @@ impl History {
                 Row::Task(TaskRow {
                     id: task.id.clone(),
                     text: line(task),
+                    content: task.content.clone(),
                     // The completed endpoint sends none of these, so the completed screen's keys
                     // are the ones that need none of them.
                     description: String::new(),
                     priority: crate::list::LOWEST_PRIORITY,
                     labels: Vec::new(),
+                    due: None,
                 })
             })
             .collect()

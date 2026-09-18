@@ -28,6 +28,9 @@ pub enum Row {
 pub struct TaskRow {
     pub id: String,
     pub text: String,
+    /// The task's own title, without the indentation and the decorations `text` carries, which is
+    /// what a brief handed to an agent names the task by.
+    pub content: String,
     /// The task's own long text, carried on the row so `<CR>` draws the detail without a second
     /// read of a task the list already fetched.
     pub description: String,
@@ -35,6 +38,8 @@ pub struct TaskRow {
     pub priority: u8,
     /// The task's label names, which the label picker marks and an update rewrites whole.
     pub labels: Vec<String>,
+    /// The due date as the API's own first ten characters, absent when the task has none.
+    pub due: Option<String>,
 }
 
 impl Row {
@@ -190,9 +195,11 @@ fn emit<'a>(
         rows.push(Row::Task(TaskRow {
             id: task.id.clone(),
             text: task_text(task, depth, subtasks),
+            content: task.content.clone(),
             description: task.description.clone(),
             priority: task.priority.clamp(LOWEST_PRIORITY, HIGHEST_PRIORITY),
             labels: task.labels.clone(),
+            due: task.due.as_ref().map(|due| date_of(&due.date)),
         }));
         if let Some(subtasks) = children.get(task.id.as_str()) {
             emit(rows, subtasks.iter().copied(), depth + 1, children);
@@ -200,12 +207,17 @@ fn emit<'a>(
     }
 }
 
+/// A due value's date, which is its first ten characters whether it carries a time or not.
+fn date_of(due: &str) -> String {
+    due.get(..10).unwrap_or(due).to_string()
+}
+
 /// The task's line: its content, then whichever of the due date, the priority, the labels and the
 /// subtask count it has.
 fn task_text(task: &Task, depth: usize, subtasks: usize) -> String {
     let mut parts = vec![format!("{}{}", indent(depth), task.content)];
     if let Some(due) = &task.due {
-        parts.push(due.date.get(..10).unwrap_or(&due.date).to_string());
+        parts.push(date_of(&due.date));
     }
     if task.priority > 1 {
         parts.push(format!("p{}", 5 - task.priority.min(4)));

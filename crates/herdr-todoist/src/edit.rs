@@ -9,6 +9,7 @@ use crossterm::event::KeyCode;
 use crate::apply::{self, Ask, Edit};
 use crate::prompt::Prompt;
 use crate::reload::Screen;
+use crate::send;
 use crate::views::Views;
 
 /// What the pane does after a key press.
@@ -48,6 +49,7 @@ pub async fn key(key: KeyCode, screen: &mut Screen<'_>, prompt: &mut Option<Prom
         KeyCode::Char('s') => apply::open(screen, prompt, Ask::Due).await,
         KeyCode::Char('l') => apply::open(screen, prompt, Ask::Labels).await,
         KeyCode::Char('m') => apply::open(screen, prompt, Ask::Move).await,
+        KeyCode::Char('S') => send::ask(screen, prompt),
         KeyCode::Char('a') => {
             *prompt = Some(Prompt::add());
             Outcome::quiet()
@@ -87,6 +89,24 @@ pub async fn prompt_key(
             KeyCode::Enter => apply::send(screen, prompt).await,
             _ => Outcome::quiet(),
         };
+    }
+    if open.draft_mut().is_some() {
+        // The note box is the comment box's widget, so it takes the same keys: `<CR>` opens a
+        // line and SEND hands the brief over.
+        if key == crate::prompt::SEND {
+            return send::send(screen, prompt, &send::Host::from_env(&send::cli)).await;
+        }
+        let Some(draft) = open.draft_mut() else {
+            return Outcome::quiet();
+        };
+        match key {
+            KeyCode::Esc => *prompt = None,
+            KeyCode::Enter => draft.newline(),
+            KeyCode::Backspace => draft.backspace(),
+            KeyCode::Char(character) => draft.push(character),
+            _ => {}
+        }
+        return Outcome::quiet();
     }
     if let Prompt::Delete { .. } = open {
         // Nothing is sent unless the second `d` arrives: every other key is a dismissal, which
