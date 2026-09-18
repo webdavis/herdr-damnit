@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 /// herdr hands the plugin its own state directory; the documented path is the fallback for a run
 /// outside herdr.
-fn state_dir() -> PathBuf {
+pub fn state_dir() -> PathBuf {
     match std::env::var_os("HERDR_PLUGIN_STATE_DIR") {
         Some(dir) => PathBuf::from(dir),
         None => state_home().join("herdr/plugins/state/herdr-todoist"),

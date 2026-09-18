@@ -277,6 +277,30 @@ fn task_line(task: &Task, depth: usize, subtasks: usize, marks: &Marks) -> Vec<S
     line
 }
 
+/// The mark a task with a write waiting carries, ahead of every other mark on its line, and the
+/// same character the status line counts them with.
+pub const WAITING: &str = "+";
+
+/// Mark the rows whose task has a write waiting to be sent, and leave every other row alone. The
+/// row itself still says what the API last said: the mark is what tells a change the operator
+/// made from one the server has confirmed.
+pub fn mark_waiting(rows: &mut [Row], ids: &[&str]) {
+    for row in rows {
+        let Row::Task(task) = row else {
+            continue;
+        };
+        let marked = task
+            .text
+            .get(1)
+            .is_some_and(|segment| segment.text.starts_with(WAITING));
+        if marked || !ids.contains(&task.id.as_str()) {
+            continue;
+        }
+        task.text
+            .insert(1, Segment::new(format!("{WAITING} "), Slot::Orange));
+    }
+}
+
 /// Add a mark to the line, spaced off whatever is already there.
 fn mark(line: &mut Vec<Segment>, text: String, slot: Slot) {
     if line.len() > 1 {

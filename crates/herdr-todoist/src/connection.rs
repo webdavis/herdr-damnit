@@ -33,17 +33,35 @@ impl Connection {
     where
         F: AsyncFn(&Client) -> Result<T, TodoistError>,
     {
+        self.attempt_fault(config, base_url, request)
+            .await
+            .map_err(Fault::into_message)
+    }
+
+    /// The same attempt, keeping whether the failure was the network being down, which is what
+    /// decides between queueing a write and reporting it refused.
+    pub async fn attempt_fault<T, F>(
+        &mut self,
+        config: &Config,
+        base_url: &str,
+        request: F,
+    ) -> Result<T, Fault>
+    where
+        F: AsyncFn(&Client) -> Result<T, TodoistError>,
+    {
         match self.once(&request).await {
             Attempt::Answered(value) => Ok(value),
             Attempt::Rejected => {
                 *self = Self::build(config, base_url).await;
                 match self.once(&request).await {
                     Attempt::Answered(value) => Ok(value),
-                    Attempt::Rejected => Err(TodoistError::Unauthorized.to_string()),
-                    Attempt::Failed(error) => Err(error),
+                    Attempt::Rejected => {
+                        Err(Fault::Refused(TodoistError::Unauthorized.to_string()))
+                    }
+                    Attempt::Failed(fault) => Err(fault),
                 }
             }
-            Attempt::Failed(error) => Err(error),
+            Attempt::Failed(fault) => Err(fault),
         }
     }
 
@@ -52,11 +70,13 @@ impl Connection {
         F: AsyncFn(&Client) -> Result<T, TodoistError>,
     {
         match self {
-            Self::Failed(error) => Attempt::Failed(error.clone()),
+            // A connection that never built failed on the token, not on the network, so a write
+            // is refused rather than queued for a network that is not the problem.
+            Self::Failed(error) => Attempt::Failed(Fault::Refused(error.clone())),
             Self::Ready(client) => match request(client).await {
                 Ok(value) => Attempt::Answered(value),
                 Err(TodoistError::Unauthorized) => Attempt::Rejected,
-                Err(error) => Attempt::Failed(error.to_string()),
+                Err(error) => Attempt::Failed(Fault::of(error)),
             },
         }
     }
@@ -67,7 +87,31 @@ impl Connection {
 enum Attempt<T> {
     Answered(T),
     Rejected,
-    Failed(String),
+    Failed(Fault),
+}
+
+/// Why a request failed: the network was down, or the API answered and said no. Only the first
+/// is worth waiting out, so only the first queues a write.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Fault {
+    Offline(String),
+    Refused(String),
+}
+
+impl Fault {
+    fn of(error: TodoistError) -> Self {
+        match error {
+            TodoistError::Network(_) => Self::Offline(error.to_string()),
+            _ => Self::Refused(error.to_string()),
+        }
+    }
+
+    /// The message the status line shows, whichever kind of failure it was.
+    pub fn into_message(self) -> String {
+        match self {
+            Self::Offline(message) | Self::Refused(message) => message,
+        }
+    }
 }
 
 async fn try_build(config: &Config, base_url: &str) -> Result<Client, String> {

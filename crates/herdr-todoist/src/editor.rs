@@ -142,12 +142,15 @@ mod tests {
         let mut connection = Connection::build(&config, &double.base_url).await;
         let mut list = List::new(Vec::new());
         let mut views = Views::new(&[]);
+        let (mut cache, mut queue) = crate::reload::tests::stores("screen");
         let mut screen = Screen {
             connection: &mut connection,
             config: &config,
             base_url: &double.base_url,
             list: &mut list,
             views: &mut views,
+            cache: &mut cache,
+            queue: &mut queue,
         };
 
         after(outcome, &mut screen).await

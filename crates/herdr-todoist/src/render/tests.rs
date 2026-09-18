@@ -56,17 +56,19 @@ fn frame_of_screen(
     prompt: Option<&Prompt>,
     completed: bool,
 ) -> Vec<String> {
-    frame_of_width(views, list, prompt, completed, 80)
+    frame_of_width(views, list, prompt, completed, 80, "2 open tasks")
 }
 
 /// Draw into an off-screen terminal the width of a real side pane, roughly a third of a
 /// terminal, so a hint or status line too wide to fit shows up truncated.
+#[allow(clippy::too_many_arguments)]
 fn frame_of_width(
     views: &Views,
     list: &List,
     prompt: Option<&Prompt>,
     completed: bool,
     width: u16,
+    status: &str,
 ) -> Vec<String> {
     let mut terminal =
         ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, 8)).expect("terminal");
@@ -75,7 +77,7 @@ fn frame_of_width(
         .draw(|frame| {
             draw(
                 frame,
-                "2 open tasks",
+                status,
                 &Chrome {
                     views,
                     palette: &crate::theme::resolve(None),
@@ -91,6 +93,36 @@ fn frame_of_width(
 }
 
 /// Draw into an off-screen terminal and report which line came out highlighted.
+/// The status line and the rows a pane draws when it is showing what it last read and holds a
+/// write the network has not taken yet.
+#[test]
+fn a_stale_pane_with_a_write_waiting_says_both_inside_a_side_pane_s_columns() {
+    let mut list = list_of_two();
+    crate::list::mark_waiting(list.rows_mut(), &["1"]);
+
+    let frame = frame_of_width(
+        &views_of(&["today"]),
+        &list,
+        None,
+        false,
+        NARROW,
+        "stale 5m +1",
+    );
+
+    assert_eq!(frame[0], "todoist  all  stale 5m +1");
+    assert_eq!(
+        frame[2], "  + first",
+        "the waiting mark leads the task's line"
+    );
+    assert_eq!(frame[3], "  second", "an unwaiting row is untouched");
+    for line in &frame {
+        assert!(
+            line.width() <= NARROW as usize,
+            "{line:?} is wider than the pane"
+        );
+    }
+}
+
 fn highlighted_line(list: &List) -> String {
     let mut terminal =
         ratatui::Terminal::new(ratatui::backend::TestBackend::new(40, 6)).expect("terminal");
@@ -173,7 +205,14 @@ fn the_picker_draws_every_view_by_number_over_the_list() {
 const NARROW: u16 = 32;
 
 fn narrow_frame(prompt: Option<&Prompt>) -> Vec<String> {
-    frame_of_width(&views_of(&["today"]), &list_of_two(), prompt, false, NARROW)
+    frame_of_width(
+        &views_of(&["today"]),
+        &list_of_two(),
+        prompt,
+        false,
+        NARROW,
+        "2 open tasks",
+    )
 }
 
 #[test]
@@ -252,7 +291,7 @@ fn the_completed_list_is_named_in_the_status_line_and_hints_its_own_keys() {
 
     // 32 columns: roughly a third of a normal terminal, the default `width` a side pane
     // opens at, so a hint line too wide for it shows up truncated here.
-    let frame = frame_of_width(&views, &list_of_two(), None, true, 32);
+    let frame = frame_of_width(&views, &list_of_two(), None, true, 32, "2 open tasks");
 
     assert!(frame[0].contains("todoist  completed"), "{frame:?}");
     let hints = frame.last().expect("a hint line");
@@ -279,7 +318,7 @@ const LONGEST: &str = r#"{"id":"1","content":"renew the vehicle registration","p
 fn longest_line(marks: &Marks) -> String {
     let project = serde_json::from_str(r#"{"id":"p1","name":"First"}"#).expect("project");
     let list = List::new(list::build(&[task(LONGEST)], &[project], &[], marks));
-    let frame = frame_of_width(&views_of(&[]), &list, None, false, NARROW);
+    let frame = frame_of_width(&views_of(&[]), &list, None, false, NARROW, "2 open tasks");
     frame[2].clone()
 }
 
@@ -317,7 +356,7 @@ fn a_title_short_enough_for_the_pane_is_drawn_whole() {
             &[],
             &plain_marks(),
         ));
-        frame_of_width(&views_of(&[]), &list, None, false, NARROW)[2].clone()
+        frame_of_width(&views_of(&[]), &list, None, false, NARROW, "2 open tasks")[2].clone()
     };
 
     assert_eq!(short, "  pay rent");
