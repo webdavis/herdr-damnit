@@ -21,7 +21,9 @@ enum Connection {
 
 pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
     let mut views = Views::new(&config.views);
-    if let Some(name) = crate::pane::take_requested_view() {
+    // A `view` action's request outranks the configured opening view: it is the later word, and
+    // the one a key was just pressed for.
+    if let Some(name) = opening_view(config, &crate::state::view_request_path()) {
         views.select_named(&name);
     }
     let mut connection = build(config, base_url).await;
@@ -37,7 +39,7 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
             break Err(error.to_string());
         }
         // A `view` action runs as its own process, so its request arrives here rather than as a key.
-        if let Some(name) = crate::pane::take_requested_view()
+        if let Some(name) = crate::state::take_requested_view(&crate::state::view_request_path())
             && views.select_named(&name)
         {
             status = show(&mut connection, config, base_url, &mut list, &views).await;
@@ -90,6 +92,12 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
     };
     ratatui::restore();
     outcome
+}
+
+/// The view the pane opens on: the one a `view` action asked for, else the configured opening
+/// view, else the unfiltered list.
+fn opening_view(config: &Config, request: &std::path::Path) -> Option<String> {
+    crate::state::take_requested_view(request).or_else(|| config.default_view.clone())
 }
 
 /// Resolve the token and build a client, so the pane opens either connected or showing why not.
@@ -234,6 +242,43 @@ mod tests {
 
     fn config_with_token_command(script: &str) -> Config {
         Config::parse(&format!(r#"token_command = ["sh", "-c", "{script}"]"#)).expect("parses")
+    }
+
+    #[test]
+    fn a_numbered_action_s_request_outranks_the_configured_opening_view() {
+        let config = Config::parse(
+            "default_view = \"today\"\n\
+             [[views]]\nname = \"today\"\nfilter = \"today\"\n\
+             [[views]]\nname = \"work\"\nfilter = \"#Work\"\n",
+        )
+        .expect("parses");
+        let request =
+            std::env::temp_dir().join(format!("herdr-todoist-opening-{}", std::process::id()));
+        let _ = std::fs::remove_file(&request);
+
+        assert_eq!(
+            opening_view(&config, &request),
+            Some("today".to_string()),
+            "with nothing asked for, the pane opens on the configured view"
+        );
+
+        crate::state::request_view(&request, "work");
+        assert_eq!(
+            opening_view(&config, &request),
+            Some("work".to_string()),
+            "a view action's request wins over the configured view"
+        );
+        assert_eq!(
+            opening_view(&config, &request),
+            Some("today".to_string()),
+            "the request is spent once it has been honoured"
+        );
+
+        assert_eq!(
+            opening_view(&Config::default(), &request),
+            None,
+            "with no configured view the pane opens on the unfiltered list"
+        );
     }
 
     fn list_of_one() -> List {

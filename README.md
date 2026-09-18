@@ -54,6 +54,11 @@ Get a token from Todoist under Settings, Integrations, Developer.
 | `view:1` to `view:9` | show that view, opening the pane when it is closed       |
 | `doctor` | check that the token resolves and that one API request succeeds      |
 
+Every action works on the pane in the workspace it runs in, and the plugin remembers one pane per
+workspace: `toggle` in a workspace whose pane is closed opens one there even when another workspace
+already has one, and `focus` reports that there is no pane rather than jumping across workspaces.
+A pane the operator closed by hand counts as no pane.
+
 Bind them in `~/.config/herdr/config.toml` as `plugin_action` keys (the fully qualified name is
 `herdr-todoist.<action>`), or invoke one directly:
 
@@ -67,15 +72,45 @@ herdr plugin action invoke doctor --plugin herdr-todoist
 
 ## Configuration
 
-| Key             | Default   | Allowed values                            | Meaning                                               |
-| --------------- | --------- | ------------------------------------------ | ------------------------------------------------------ |
-| `token_command` | none      | any command                               | argv of a command whose standard output is the token  |
-| `token_env`     | none      | any variable name                         | name of an environment variable holding the token     |
-| `placement`     | `"split"` | `overlay`, `split`, `tab`, `zoomed`       | how `open` and `toggle` place the pane                |
-| `direction`     | `"right"` | `right`, `down`                           | which way a `split` placement splits                  |
-| `[[views]]`     | none      | `name` and `filter`                       | the named filter views, in the order they are written |
+| Key             | Default   | Allowed values                      | Meaning                                                 |
+| --------------- | --------- | ----------------------------------- | ------------------------------------------------------- |
+| `token_command` | none      | any command                         | argv of a command whose standard output is the token    |
+| `token_env`     | none      | any variable name                   | name of an environment variable holding the token       |
+| `placement`     | `"split"` | `overlay`, `split`, `tab`, `zoomed` | how `open` and `toggle` place the pane                  |
+| `side`          | `"right"` | `right`, `down`                     | which side of the calling pane a `split` takes          |
+| `width`         | none      | a fraction above 0 and below 1      | the share of the tab the pane takes                     |
+| `default_view`  | none      | a view name                         | the view the pane opens on                              |
+| `auto_open`     | `false`   | `true`, `false`                     | whether focusing a workspace opens the pane there       |
+| `[[views]]`     | none      | `name` and `filter`                 | the named filter views, in the order they are written   |
 
-An unrecognized `placement` or `direction` is a config parse error naming the values above.
+An unrecognized `placement` or `side` is a config parse error naming the values above, and so is a
+`width` that is not a share of the tab or a `default_view` no view answers to.
+
+## Placement
+
+```toml
+placement = "split"
+side = "down"
+width = 0.3
+```
+
+`herdr` splits rightward or downward at an even ratio and takes no ratio of its own, so `side`
+picks the direction the open itself splits in and a `width` is one `herdr pane resize` right
+after. With no `width`, the open places the pane by itself and no resize is made. A refused resize
+leaves the pane at the even split and says so: a pane at the wrong width still lists tasks.
+
+`width` is the share of the tab the Todoist pane gets, so `0.3` is a third of it and the pane the
+action ran in keeps the rest.
+
+## Opening the pane
+
+`default_view` is the view the pane opens on, the unfiltered list when it is unset. A `view:<n>`
+action outranks it: the action notes the view it was pressed for and the pane reads that note, so
+`view:3` shows view 3 whatever `default_view` says.
+
+`auto_open = true` opens the pane in a workspace as that workspace gains focus, without taking the
+focus off the pane you switched to. It is `false` by default, which keeps the pane closed until
+`open`, `toggle` or a `view` action asks for it.
 
 ## Views
 

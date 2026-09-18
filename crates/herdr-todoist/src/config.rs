@@ -3,10 +3,12 @@ use std::path::PathBuf;
 use serde::Deserialize;
 use todoist::TokenSource;
 
+use crate::placement::Side;
+
 /// The plugin's configuration, read from `config.toml` in the herdr plugin config directory. A
 /// missing file is the default configuration; the token keys have no default, so the plugin
 /// refuses to guess where a token lives.
-#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Default, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     /// Argv of a command whose standard output is the token, for example a vault CLI call.
@@ -16,9 +18,16 @@ pub struct Config {
     /// How the `open` and `toggle` actions place the pane.
     #[serde(default)]
     pub placement: Placement,
-    /// Which way a `split` placement splits.
+    /// Which side of the calling pane a `split` placement takes.
     #[serde(default)]
-    pub direction: Direction,
+    pub side: Side,
+    /// The share of the tab the pane takes, left to herdr's own even split when unset.
+    pub width: Option<f32>,
+    /// The view the pane opens on, the unfiltered list when unset.
+    pub default_view: Option<String>,
+    /// Whether focusing a workspace opens the pane there on its own.
+    #[serde(default)]
+    pub auto_open: bool,
     /// Named filter views, in the order the pane numbers them.
     #[serde(default)]
     pub views: Vec<View>,
@@ -56,24 +65,6 @@ impl Placement {
     }
 }
 
-/// The split directions `herdr plugin pane open --direction` accepts.
-#[derive(Debug, Default, Deserialize, PartialEq, Eq, Clone, Copy)]
-#[serde(rename_all = "lowercase")]
-pub enum Direction {
-    #[default]
-    Right,
-    Down,
-}
-
-impl Direction {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Right => "right",
-            Self::Down => "down",
-        }
-    }
-}
-
 impl Config {
     /// Read the configuration file, or the defaults when there is none.
     pub fn load() -> Result<Self, String> {
@@ -88,6 +79,8 @@ impl Config {
     pub fn parse(text: &str) -> Result<Self, String> {
         let config: Self = toml::from_str(text).map_err(|error| error.to_string())?;
         config.check_view_names()?;
+        config.check_width()?;
+        config.check_default_view()?;
         Ok(config)
     }
 
@@ -115,6 +108,35 @@ impl Config {
             seen.push(&view.name);
         }
         Ok(())
+    }
+
+    /// A width is a share of the tab, so only a fraction between the two ends of it is a width at
+    /// all: a zero, a whole tab or anything outside that says the operator meant something else.
+    fn check_width(&self) -> Result<(), String> {
+        match self.width {
+            Some(width) if !(width > 0.0 && width < 1.0) => Err(format!(
+                "width {width} is not a share of the tab: use a fraction above 0 and below 1"
+            )),
+            _ => Ok(()),
+        }
+    }
+
+    /// The opening view has to be a view that exists, or the pane would open on nothing and say
+    /// nothing about why.
+    fn check_default_view(&self) -> Result<(), String> {
+        let Some(name) = &self.default_view else {
+            return Ok(());
+        };
+        let known = name == crate::views::ALL || self.views.iter().any(|view| &view.name == name);
+        if known {
+            return Ok(());
+        }
+        let mut names = vec![crate::views::ALL.to_string()];
+        names.extend(self.views.iter().map(|view| view.name.clone()));
+        Err(format!(
+            "default_view '{name}' is not a view: the views are {}",
+            names.join(", ")
+        ))
     }
 
     /// Where the token comes from. `token_command` wins when both keys are set.
@@ -156,7 +178,10 @@ mod tests {
     fn an_empty_file_is_the_default_placement() {
         let config = Config::parse("").expect("parses");
         assert_eq!(config.placement, Placement::Split);
-        assert_eq!(config.direction, Direction::Right);
+        assert_eq!(config.side, Side::Right);
+        assert_eq!(config.width, None);
+        assert_eq!(config.default_view, None);
+        assert!(!config.auto_open);
     }
 
     #[test]
@@ -171,12 +196,83 @@ mod tests {
     }
 
     #[test]
-    fn an_unrecognized_direction_is_a_parse_error_naming_the_alternatives() {
-        let error = Config::parse(r#"direction = "sideways""#)
+    fn an_unrecognized_side_is_a_parse_error_naming_the_alternatives() {
+        let error = Config::parse(r#"side = "sideways""#)
             .expect_err("refuses")
             .to_string();
         assert!(error.contains("right"), "{error}");
         assert!(error.contains("down"), "{error}");
+    }
+
+    /// `herdr plugin pane open --direction` only splits rightward or downward, and a same-tab
+    /// `herdr pane move` cannot reposition a pane afterward, so left and up are not sides this
+    /// plugin can place a pane on at all.
+    #[test]
+    fn a_side_herdr_cannot_split_toward_is_a_parse_error() {
+        for text in ["left", "up"] {
+            let error = Config::parse(&format!("side = \"{text}\"")).expect_err("refuses");
+            assert!(error.contains("unknown variant"), "{text}: {error}");
+        }
+    }
+
+    #[test]
+    fn every_side_is_read() {
+        for (text, side) in [("right", Side::Right), ("down", Side::Down)] {
+            let config = Config::parse(&format!("side = \"{text}\"")).expect("parses");
+            assert_eq!(config.side, side);
+        }
+    }
+
+    #[test]
+    fn a_width_is_read_as_a_share_of_the_tab() {
+        assert_eq!(
+            Config::parse("width = 0.3").expect("parses").width,
+            Some(0.3)
+        );
+    }
+
+    #[test]
+    fn a_width_outside_the_tab_is_refused_by_the_number_it_was_given() {
+        for width in ["0.0", "0", "1.0", "1.5", "-0.2"] {
+            let error = Config::parse(&format!("width = {width}")).expect_err("refuses");
+            assert!(error.contains("share of the tab"), "{width}: {error}");
+        }
+    }
+
+    #[test]
+    fn auto_open_is_read_and_is_off_unless_it_is_asked_for() {
+        assert!(Config::parse("auto_open = true").expect("parses").auto_open);
+        assert!(
+            !Config::parse("auto_open = false")
+                .expect("parses")
+                .auto_open
+        );
+    }
+
+    #[test]
+    fn the_opening_view_may_be_a_configured_view_or_the_unfiltered_list() {
+        let config = Config::parse(
+            "default_view = \"today\"\n[[views]]\nname = \"today\"\nfilter = \"today\"\n",
+        )
+        .expect("parses");
+        assert_eq!(config.default_view, Some("today".to_string()));
+
+        let all = Config::parse("default_view = \"all\"").expect("parses");
+        assert_eq!(all.default_view, Some("all".to_string()));
+    }
+
+    #[test]
+    fn an_opening_view_no_view_carries_is_refused_and_names_the_views() {
+        let error = Config::parse(
+            "default_view = \"work\"\n[[views]]\nname = \"today\"\nfilter = \"today\"\n",
+        )
+        .expect_err("refuses");
+
+        assert!(
+            error.contains("default_view 'work' is not a view"),
+            "{error}"
+        );
+        assert!(error.contains("all, today"), "{error}");
     }
 
     #[test]

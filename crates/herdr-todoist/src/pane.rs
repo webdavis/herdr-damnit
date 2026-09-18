@@ -1,10 +1,10 @@
-//! The `open`, `toggle` and `focus` actions. Each one resolves the plugin's pane in the current
-//! workspace, then drives the `herdr` CLI.
-
-use std::path::{Path, PathBuf};
-use std::process::Command;
+//! The `open`, `toggle`, `focus` and `auto-open` actions. Each one resolves the plugin's pane in
+//! the current workspace, then drives the `herdr` CLI.
 
 use crate::config::{Config, Placement};
+use crate::herdr;
+use crate::placement;
+use crate::state;
 use crate::views::Views;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -12,6 +12,8 @@ pub enum Mode {
     Open,
     Toggle,
     Focus,
+    /// A workspace gained focus: open the pane there when it is not open, and never take focus.
+    AutoOpen,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -19,7 +21,26 @@ pub enum Decision {
     Open,
     Close(String),
     Focus(String),
+    LeaveOpen(String),
     NothingToFocus,
+}
+
+/// Whether the opened pane takes the focus. An `auto-open` follows a workspace switch, so the pane
+/// the operator switched to keeps it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Focus {
+    Take,
+    Leave,
+}
+
+impl Focus {
+    /// The flag `herdr plugin pane open` takes for it.
+    fn as_flag(self) -> &'static str {
+        match self {
+            Self::Take => "--focus",
+            Self::Leave => "--no-focus",
+        }
+    }
 }
 
 /// What an action does, given the pane this plugin last opened in the workspace and the panes the
@@ -28,8 +49,9 @@ pub fn decide(mode: Mode, remembered: Option<&str>, live: &[String]) -> Decision
     let open_pane = remembered.filter(|pane| live.iter().any(|live| live == pane));
     match (mode, open_pane) {
         (Mode::Toggle, Some(pane)) => Decision::Close(pane.to_string()),
+        (Mode::AutoOpen, Some(pane)) => Decision::LeaveOpen(pane.to_string()),
         (Mode::Open | Mode::Focus, Some(pane)) => Decision::Focus(pane.to_string()),
-        (Mode::Open | Mode::Toggle, None) => Decision::Open,
+        (Mode::Open | Mode::Toggle | Mode::AutoOpen, None) => Decision::Open,
         (Mode::Focus, None) => Decision::NothingToFocus,
     }
 }
@@ -45,7 +67,14 @@ enum Recovery {
 fn recover(mode: Mode) -> Recovery {
     match mode {
         Mode::Focus => Recovery::ReportGone,
-        Mode::Open | Mode::Toggle => Recovery::RetryOpen,
+        Mode::Open | Mode::Toggle | Mode::AutoOpen => Recovery::RetryOpen,
+    }
+}
+
+fn focus_of(mode: Mode) -> Focus {
+    match mode {
+        Mode::AutoOpen => Focus::Leave,
+        Mode::Open | Mode::Toggle | Mode::Focus => Focus::Take,
     }
 }
 
@@ -53,15 +82,15 @@ fn recover(mode: Mode) -> Recovery {
 pub fn run(mode: Mode, config: &Config) -> Result<String, String> {
     let workspace = std::env::var("HERDR_WORKSPACE_ID")
         .map_err(|_| "no workspace context: run this action from inside herdr".to_string())?;
-    let live = live_panes(&workspace)?;
-    let remembered = remembered_pane(&workspace);
+    let live = herdr::live_panes(&workspace)?;
+    let remembered = state::remembered_pane(&workspace);
     match decide(mode, remembered.as_deref(), &live) {
-        Decision::Focus(pane) => match herdr(&["plugin", "pane", "focus", &pane]) {
+        Decision::Focus(pane) => match herdr::focus_plugin_pane(&pane) {
             Ok(_) => Ok(format!("focused {pane}")),
             Err(_) => {
-                forget_pane(&workspace);
+                state::forget_pane(&workspace);
                 match recover(mode) {
-                    Recovery::RetryOpen => open_and_remember(&workspace, config),
+                    Recovery::RetryOpen => open_and_remember(&workspace, config, focus_of(mode)),
                     Recovery::ReportGone => {
                         Ok(format!("no todoist pane in {workspace}: {pane} is gone"))
                     }
@@ -69,16 +98,26 @@ pub fn run(mode: Mode, config: &Config) -> Result<String, String> {
             }
         },
         Decision::Close(pane) => {
-            let closed = herdr(&["plugin", "pane", "close", &pane]);
-            forget_pane(&workspace);
+            let closed = herdr::close_plugin_pane(&pane);
+            state::forget_pane(&workspace);
             match closed {
                 Ok(_) => Ok(format!("closed {pane}")),
-                Err(_) => open_and_remember(&workspace, config),
+                Err(_) => open_and_remember(&workspace, config, focus_of(mode)),
             }
         }
+        Decision::LeaveOpen(pane) => Ok(format!("{pane} is already open")),
         Decision::NothingToFocus => Ok(format!("no todoist pane in {workspace}")),
-        Decision::Open => open_and_remember(&workspace, config),
+        Decision::Open => open_and_remember(&workspace, config, focus_of(mode)),
     }
+}
+
+/// The `auto-open` event hook: a workspace gained focus, so open the pane there when the operator
+/// asked for that. It is off unless the config turns it on.
+pub fn auto_open(config: &Config) -> Result<String, String> {
+    if !config.auto_open {
+        return Ok("auto_open is off".to_string());
+    }
+    run(Mode::AutoOpen, config)
 }
 
 /// The `view <n>` action: note which view was asked for, then make sure the pane is open, which
@@ -94,164 +133,56 @@ pub fn view(argument: &str, config: &Config) -> Result<String, String> {
             views.len()
         )
     })?;
-    note_then_open(name, &view_request_path(), || run(Mode::Open, config))
+    note_then_open(name, &state::view_request_path(), || {
+        run(Mode::Open, config)
+    })
 }
 
 /// Note the view the pane is to show, then open the pane. A failed open takes the note back, so a
 /// later unrelated `open` or `toggle` does not jump to a view nobody asked for.
 fn note_then_open(
     name: &str,
-    path: &Path,
+    request: &std::path::Path,
     open: impl FnOnce() -> Result<String, String>,
 ) -> Result<String, String> {
-    write_request(path, name);
+    state::request_view(request, name);
     match open() {
         Ok(outcome) => Ok(format!("{outcome}, showing {name}")),
         Err(error) => {
-            let _ = std::fs::remove_file(path);
+            state::clear_view_request(request);
             Err(error)
         }
     }
 }
 
-fn open_and_remember(workspace: &str, config: &Config) -> Result<String, String> {
-    let pane = open_pane(workspace, config)?;
-    remember_pane(workspace, &pane);
-    Ok(format!("opened {pane}"))
+fn open_and_remember(workspace: &str, config: &Config, focus: Focus) -> Result<String, String> {
+    let neighbor = std::env::var("HERDR_PANE_ID").unwrap_or_default();
+    let pane = herdr::open_plugin_pane(workspace, &neighbor, focus.as_flag(), config)?;
+    let note = arrange_pane(&neighbor, config);
+    state::remember_pane(workspace, &pane);
+    Ok(match note {
+        Some(note) => format!("opened {pane}, {note}"),
+        None => format!("opened {pane}"),
+    })
 }
 
-fn open_pane(workspace: &str, config: &Config) -> Result<String, String> {
-    let plugin = std::env::var("HERDR_PLUGIN_ID").unwrap_or_else(|_| "herdr-todoist".to_string());
-    let mut args = vec![
-        "plugin",
-        "pane",
-        "open",
-        "--plugin",
-        &plugin,
-        "--entrypoint",
-        "pane",
-        "--placement",
-        config.placement.as_str(),
-        "--focus",
-    ];
-    // A split or zoomed pane attaches to a pane; a tab or overlay one belongs to the workspace.
-    let target = std::env::var("HERDR_PANE_ID").unwrap_or_default();
-    match config.placement {
-        Placement::Split | Placement::Zoomed if !target.is_empty() => {
-            args.extend_from_slice(&["--target-pane", &target]);
-            if config.placement == Placement::Split {
-                args.extend_from_slice(&["--direction", config.direction.as_str()]);
-            }
-        }
-        _ => args.extend_from_slice(&["--workspace", workspace]),
+/// Give the pane its configured width, which herdr's own open cannot do: it splits at an even
+/// ratio and takes no ratio of its own. This resizes the calling pane rather than the one just
+/// opened, since a same-tab `herdr pane move` is a no-op and a resize is the only call that
+/// actually changes the split. A refused resize leaves the pane at the even split and says so,
+/// because a pane at the wrong width still lists tasks.
+fn arrange_pane(neighbor: &str, config: &Config) -> Option<String> {
+    if config.placement != Placement::Split || neighbor.is_empty() {
+        return None;
     }
-    let output = herdr(&args)?;
-    pane_id_of_open(&output).ok_or_else(|| "herdr plugin pane open named no pane".to_string())
-}
-
-fn pane_id_of_open(output: &str) -> Option<String> {
-    let json: serde_json::Value = serde_json::from_str(output).ok()?;
-    json.pointer("/result/plugin_pane/pane/pane_id")?
-        .as_str()
-        .map(str::to_string)
-}
-
-fn live_panes(workspace: &str) -> Result<Vec<String>, String> {
-    let output = herdr(&["pane", "list", "--workspace", workspace])?;
-    let json: serde_json::Value =
-        serde_json::from_str(&output).map_err(|error| format!("herdr pane list: {error}"))?;
-    json.pointer("/result/panes")
-        .and_then(|panes| panes.as_array())
-        .map(|panes| {
-            panes
-                .iter()
-                .filter_map(|pane| pane.get("pane_id")?.as_str().map(str::to_string))
-                .collect()
-        })
-        .ok_or_else(|| format!("herdr pane list named no panes in {workspace}"))
-}
-
-fn herdr(args: &[&str]) -> Result<String, String> {
-    let binary = std::env::var("HERDR_BIN_PATH").unwrap_or_else(|_| "herdr".to_string());
-    let output = Command::new(&binary)
-        .args(args)
-        .output()
-        .map_err(|error| format!("{binary} {}: {error}", args.join(" ")))?;
-    if !output.status.success() {
-        return Err(format!(
-            "{binary} {} failed: {}",
-            args.join(" "),
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
+    let width = config.width?;
+    let target_ratio = placement::leading_share(width);
+    let direction = config.side.split_direction();
+    match herdr::resize_leading_pane(neighbor, direction, target_ratio) {
+        Ok(true) => None,
+        Ok(false) => Some("placement refused: herdr did not resize the pane".to_string()),
+        Err(error) => Some(format!("placement refused: {error}")),
     }
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
-}
-
-/// The pane this plugin last opened in a workspace, one file per workspace so two workspaces never
-/// overwrite each other.
-fn pane_state_path(workspace: &str) -> PathBuf {
-    state_dir().join("panes").join(workspace)
-}
-
-/// herdr hands the plugin its own state directory; the documented path is the fallback for a run
-/// outside herdr.
-fn state_dir() -> PathBuf {
-    match std::env::var_os("HERDR_PLUGIN_STATE_DIR") {
-        Some(dir) => PathBuf::from(dir),
-        None => state_home().join("herdr/plugins/state/herdr-todoist"),
-    }
-}
-
-/// The view a `view` action asked for. herdr runs an action as its own process, so the name
-/// travels through a file: one file for the plugin, which a pane about to start reads on its
-/// first draw and a pane already open reads on its next tick.
-fn view_request_path() -> PathBuf {
-    state_dir().join("requested-view")
-}
-
-/// The requested view, which is consumed by the read so the pane does not pull itself back to it
-/// after the operator has moved on.
-pub fn take_requested_view() -> Option<String> {
-    take_request(&view_request_path())
-}
-
-fn write_request(path: &std::path::Path, name: &str) {
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let _ = std::fs::write(path, name);
-}
-
-fn take_request(path: &std::path::Path) -> Option<String> {
-    let name = std::fs::read_to_string(path).ok()?;
-    let _ = std::fs::remove_file(path);
-    let name = name.trim().to_string();
-    (!name.is_empty()).then_some(name)
-}
-
-fn state_home() -> PathBuf {
-    match std::env::var_os("XDG_STATE_HOME") {
-        Some(dir) => PathBuf::from(dir),
-        None => PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".local/state"),
-    }
-}
-
-fn remembered_pane(workspace: &str) -> Option<String> {
-    let pane = std::fs::read_to_string(pane_state_path(workspace)).ok()?;
-    let pane = pane.trim().to_string();
-    (!pane.is_empty()).then_some(pane)
-}
-
-fn remember_pane(workspace: &str, pane: &str) {
-    let path = pane_state_path(workspace);
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let _ = std::fs::write(path, pane);
-}
-
-fn forget_pane(workspace: &str) {
-    let _ = std::fs::remove_file(pane_state_path(workspace));
 }
 
 #[cfg(test)]
@@ -288,6 +219,43 @@ mod tests {
     }
 
     #[test]
+    fn a_pane_open_in_another_workspace_is_not_this_workspaces_pane() {
+        // The remembered pane is read per workspace, so a pane open elsewhere is simply absent
+        // here: toggle opens a second one rather than closing the far one or jumping to it.
+        assert_eq!(
+            decide(Mode::Toggle, None, &panes(&["w2:p1"])),
+            Decision::Open
+        );
+    }
+
+    #[test]
+    fn auto_open_opens_a_closed_pane_and_leaves_an_open_one_alone() {
+        assert_eq!(
+            decide(Mode::AutoOpen, None, &panes(&["w:p1"])),
+            Decision::Open
+        );
+        assert_eq!(
+            decide(Mode::AutoOpen, Some("w:p2"), &panes(&["w:p2"])),
+            Decision::LeaveOpen("w:p2".to_string())
+        );
+    }
+
+    #[test]
+    fn an_auto_open_never_takes_the_focus_and_every_other_action_does() {
+        assert_eq!(focus_of(Mode::AutoOpen), Focus::Leave);
+        assert_eq!(focus_of(Mode::Open), Focus::Take);
+        assert_eq!(focus_of(Mode::Toggle), Focus::Take);
+        assert_eq!(focus_of(Mode::Focus), Focus::Take);
+    }
+
+    #[test]
+    fn auto_open_does_nothing_at_all_when_the_config_has_not_asked_for_it() {
+        let outcome = auto_open(&Config::default()).expect("no herdr call at all");
+
+        assert_eq!(outcome, "auto_open is off");
+    }
+
+    #[test]
     fn a_remembered_pane_that_exited_counts_as_no_pane() {
         assert_eq!(
             decide(Mode::Toggle, Some("w:pGone"), &panes(&["w:p1"])),
@@ -311,6 +279,7 @@ mod tests {
     fn a_failed_focus_or_close_retries_as_open_except_in_focus_mode() {
         assert!(matches!(recover(Mode::Open), Recovery::RetryOpen));
         assert!(matches!(recover(Mode::Toggle), Recovery::RetryOpen));
+        assert!(matches!(recover(Mode::AutoOpen), Recovery::RetryOpen));
         assert!(matches!(recover(Mode::Focus), Recovery::ReportGone));
     }
 
@@ -329,32 +298,23 @@ mod tests {
         assert!(error.contains("not a view number"), "{error}");
     }
 
-    #[test]
-    fn a_requested_view_is_read_once_and_then_gone() {
-        let path = std::env::temp_dir().join(format!(
-            "herdr-todoist-requested-view-{}",
-            std::process::id()
-        ));
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("herdr-todoist-{name}-{}", std::process::id()));
         let _ = std::fs::remove_file(&path);
-
-        assert_eq!(take_request(&path), None);
-        write_request(&path, "today");
-        assert_eq!(take_request(&path), Some("today".to_string()));
-        assert_eq!(take_request(&path), None, "the request outlived its read");
+        path
     }
 
     #[test]
     fn a_failed_view_open_clears_its_own_request() {
-        let path =
-            std::env::temp_dir().join(format!("herdr-todoist-failed-view-{}", std::process::id()));
-        let _ = std::fs::remove_file(&path);
+        let request = scratch("failed-view");
 
-        let error = note_then_open("today", &path, || Err("herdr is not there".to_string()))
-            .expect_err("the open failed");
+        let error = note_then_open("today", &request, || Err("herdr is not there".to_string()))
+            .expect_err("failed");
 
         assert_eq!(error, "herdr is not there");
         assert_eq!(
-            take_request(&path),
+            state::take_requested_view(&request),
             None,
             "a failed open must clear its request"
         );
@@ -362,21 +322,15 @@ mod tests {
 
     #[test]
     fn a_view_that_opened_leaves_its_note_for_the_pane_and_says_what_it_shows() {
-        let path =
-            std::env::temp_dir().join(format!("herdr-todoist-opened-view-{}", std::process::id()));
-        let _ = std::fs::remove_file(&path);
+        let request = scratch("opened-view");
 
-        let outcome = note_then_open("today", &path, || Ok("opened w:p3".to_string()))
+        let outcome = note_then_open("work", &request, || Ok("opened w:p3".to_string()))
             .expect("the open succeeded");
 
-        assert_eq!(outcome, "opened w:p3, showing today");
-        assert_eq!(take_request(&path), Some("today".to_string()));
-    }
-
-    #[test]
-    fn the_opened_pane_id_is_read_from_the_open_envelope() {
-        let output = r#"{"result":{"plugin_pane":{"pane":{"pane_id":"w:p7","tab_id":"w:t1"}}}}"#;
-        assert_eq!(pane_id_of_open(output), Some("w:p7".to_string()));
-        assert_eq!(pane_id_of_open("{}"), None);
+        assert_eq!(outcome, "opened w:p3, showing work");
+        assert_eq!(
+            state::take_requested_view(&request),
+            Some("work".to_string())
+        );
     }
 }
