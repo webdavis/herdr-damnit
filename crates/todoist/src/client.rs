@@ -239,28 +239,28 @@ impl Client {
 
 /// The fields of a task an update writes. Every one left `None` is left out of the request, which
 /// is how the API is told to keep that field unchanged.
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Change {
     /// The task's one-line content.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     /// The task's long text, under its content in the app.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// 1 to 4, where 4 is the app's p1 and 1 its p4.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub priority: Option<u8>,
     /// A due date in Todoist's own natural language, which the API parses.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_string: Option<String>,
     /// The task's whole label set, names not ids.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub labels: Option<Vec<String>>,
 }
 
 /// Where a move puts the task. The API takes one id, so a section move names the section alone and
 /// the task follows it into that section's project.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Destination {
     #[serde(rename = "project_id")]
     Project(String),
