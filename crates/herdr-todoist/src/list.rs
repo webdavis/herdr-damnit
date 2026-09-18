@@ -28,6 +28,9 @@ pub enum Row {
 pub struct TaskRow {
     pub id: String,
     pub text: String,
+    /// The task's own long text, carried on the row so `<CR>` draws the detail without a second
+    /// read of a task the list already fetched.
+    pub description: String,
     /// The API's own priority, 1 to 4 with 4 the most urgent, which `p` cycles from.
     pub priority: u8,
     /// The task's label names, which the label picker marks and an update rewrites whole.
@@ -187,6 +190,7 @@ fn emit<'a>(
         rows.push(Row::Task(TaskRow {
             id: task.id.clone(),
             text: task_text(task, depth, subtasks),
+            description: task.description.clone(),
             priority: task.priority.clamp(LOWEST_PRIORITY, HIGHEST_PRIORITY),
             labels: task.labels.clone(),
         }));

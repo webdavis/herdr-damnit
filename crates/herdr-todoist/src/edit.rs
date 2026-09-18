@@ -18,6 +18,8 @@ pub enum After {
     Quit,
     /// Leave the open list for the completed one.
     Completed,
+    /// Open the detail of the task under the cursor.
+    Detail,
 }
 
 /// One key press on the open list, with no prompt open.
@@ -25,6 +27,7 @@ pub async fn key(key: KeyCode, screen: &mut Screen<'_>, prompt: &mut Option<Prom
     match key {
         KeyCode::Char('q') | KeyCode::Esc => Outcome::after(After::Quit),
         KeyCode::Tab | KeyCode::BackTab => Outcome::after(After::Completed),
+        KeyCode::Enter => Outcome::after(After::Detail),
         KeyCode::Char('r' | 'R') => Outcome::said(screen.refresh().await),
         KeyCode::Char('j') | KeyCode::Down => {
             screen.list.move_cursor(1);

@@ -23,6 +23,10 @@ pub(crate) struct Items<T> {
 pub struct Task {
     pub id: String,
     pub content: String,
+    /// The task's own long text, free-form markdown a person typed. The API sends it as a plain
+    /// string, empty when the task has none.
+    #[serde(default)]
+    pub description: String,
     #[serde(default)]
     pub project_id: Option<String>,
     #[serde(default)]
@@ -88,4 +92,45 @@ pub struct CompletedTask {
     pub content: String,
     #[serde(default)]
     pub completed_at: Option<String>,
+}
+
+/// One comment on a task. The vendor calls this object a note: a comment's poster is `posted_uid`
+/// and its attachment `file_attachment`, both of which the API sends as `null` rather than
+/// omitting when there is none. The attachment is a free-form object in the schema, so it is held
+/// as raw JSON and read for the two keys the pane draws.
+#[derive(Debug, Deserialize)]
+pub struct Comment {
+    pub id: String,
+    #[serde(default)]
+    pub content: String,
+    #[serde(default)]
+    pub posted_at: Option<String>,
+    #[serde(default)]
+    pub posted_uid: Option<String>,
+    #[serde(default)]
+    pub file_attachment: Option<serde_json::Value>,
+}
+
+impl Comment {
+    /// What the attachment line says: the file's name, else its type, else that there is one at
+    /// all. The pane names an attachment and never fetches it: a file URL is not something a
+    /// task list should be downloading on a key press.
+    pub fn attachment(&self) -> Option<String> {
+        let attachment = self.file_attachment.as_ref()?;
+        if attachment.is_null() {
+            return None;
+        }
+        let named = |key: &str| {
+            attachment
+                .get(key)
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+        };
+        Some(
+            named("file_name")
+                .or_else(|| named("file_type"))
+                .unwrap_or_else(|| "file".to_string()),
+        )
+    }
 }
