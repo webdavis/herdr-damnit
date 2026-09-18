@@ -314,6 +314,27 @@ async fn the_box_saves_the_first_line_as_the_content_and_the_rest_as_the_descrip
 }
 
 #[tokio::test]
+async fn a_refused_save_keeps_the_box_open_with_the_lines_still_in_it() {
+    let double = refusing().await;
+    let mut list = list_of_one(1, &[]);
+    let mut keys = vec![character('e')];
+    keys.extend(typed("!"));
+    keys.push(KeyCode::Enter);
+    keys.extend(typed("the ones on the sill"));
+    keys.push(crate::prompt::SEND);
+
+    let (status, _, prompt) = pressed(&config_with_editor("[]"), &double, &mut list, &keys).await;
+
+    assert_eq!(
+        status,
+        "Invalid argument value: Unable to parse the due date"
+    );
+    let box_open = prompt.expect("the box closed on a refused save");
+    let (lines, _) = box_open.entries(&Views::new(&[])).expect("the lines typed");
+    assert_eq!(lines, vec![" water the plants!", " the ones on the sill_"]);
+}
+
+#[tokio::test]
 async fn dd_deletes_the_task_after_the_second_d() {
     let double = serve("200 OK", "null").await;
     let mut list = list_of_one(1, &[]);
