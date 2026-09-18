@@ -88,6 +88,7 @@ async fn hand_over(double: &Double, list: &mut List, herdr: &Herdr, note: &str) 
     let config = config_with_token_command("printf test-token");
     let mut connection = Connection::build(&config, &double.base_url).await;
     let mut views = Views::new(&[]);
+    let (mut cache, mut queue) = crate::reload::tests::stores("screen");
     let mut prompt: Option<Prompt> = None;
     let mut screen = Screen {
         connection: &mut connection,
@@ -95,6 +96,8 @@ async fn hand_over(double: &Double, list: &mut List, herdr: &Herdr, note: &str) 
         base_url: &double.base_url,
         list,
         views: &mut views,
+        cache: &mut cache,
+        queue: &mut queue,
     };
     ask(&screen, &mut prompt);
     if let Some(draft) = prompt.as_mut().and_then(Prompt::draft_mut) {
@@ -308,6 +311,7 @@ async fn s_on_the_list_opens_the_note_box_and_sends_nothing_by_itself() {
     let mut connection = Connection::build(&config, &double.base_url).await;
     let mut list = full_task();
     let mut views = Views::new(&[]);
+    let (mut cache, mut queue) = crate::reload::tests::stores("screen");
     let mut prompt: Option<Prompt> = None;
     let mut screen = Screen {
         connection: &mut connection,
@@ -315,6 +319,8 @@ async fn s_on_the_list_opens_the_note_box_and_sends_nothing_by_itself() {
         base_url: &double.base_url,
         list: &mut list,
         views: &mut views,
+        cache: &mut cache,
+        queue: &mut queue,
     };
 
     crate::edit::key(

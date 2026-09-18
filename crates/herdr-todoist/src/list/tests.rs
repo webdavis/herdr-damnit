@@ -303,3 +303,34 @@ fn a_task_whose_project_is_unknown_is_grouped_under_its_project_id() {
 
     assert_eq!(texts(&rows), vec!["p9", "  stray"]);
 }
+
+#[test]
+fn a_task_whose_title_starts_with_a_plus_is_still_marked_waiting() {
+    let mut rows = build(
+        &[task(
+            r#"{"id":"1","content":"+1 follow up","project_id":"p1"}"#,
+        )],
+        &[project(r#"{"id":"p1","name":"First"}"#)],
+        &[],
+        &marks(),
+    );
+
+    mark_waiting(&mut rows, &["1"]);
+
+    assert_eq!(texts(&rows), vec!["First", "  + +1 follow up"]);
+}
+
+#[test]
+fn marking_the_same_row_twice_does_not_double_the_mark() {
+    let mut rows = build(
+        &[task(r#"{"id":"1","content":"keep me","project_id":"p1"}"#)],
+        &[project(r#"{"id":"p1","name":"First"}"#)],
+        &[],
+        &marks(),
+    );
+
+    mark_waiting(&mut rows, &["1"]);
+    mark_waiting(&mut rows, &["1"]);
+
+    assert_eq!(texts(&rows), vec!["First", "  + keep me"]);
+}

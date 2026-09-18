@@ -61,6 +61,10 @@ pub struct TaskRow {
     pub labels: Vec<String>,
     /// The due date as the API's own first ten characters, absent when the task has none.
     pub due: Option<String>,
+    /// Whether the row already carries the waiting mark, so a second read of the same queue does
+    /// not add it twice and a task whose own title happens to start with `+` is not mistaken for
+    /// one.
+    pub waiting: bool,
 }
 
 impl Row {
@@ -230,6 +234,7 @@ fn emit<'a>(
             priority: task.priority.clamp(LOWEST_PRIORITY, HIGHEST_PRIORITY),
             labels: task.labels.clone(),
             due: task.due.as_ref().map(|due| date_of(&due.date)),
+            waiting: false,
         }));
         if let Some(subtasks) = children.get(task.id.as_str()) {
             emit(rows, subtasks.iter().copied(), depth + 1, children, marks);
@@ -275,6 +280,27 @@ fn task_line(task: &Task, depth: usize, subtasks: usize, marks: &Marks) -> Vec<S
         line.push(Segment::new(format!("  ({subtasks})"), Slot::Dim1));
     }
     line
+}
+
+/// The mark a task with a write waiting carries, ahead of every other mark on its line, and the
+/// same character the status line counts them with.
+pub const WAITING: &str = "+";
+
+/// Mark the rows whose task has a write waiting to be sent, and leave every other row alone. The
+/// row itself still says what the API last said: the mark is what tells a change the operator
+/// made from one the server has confirmed.
+pub fn mark_waiting(rows: &mut [Row], ids: &[&str]) {
+    for row in rows {
+        let Row::Task(task) = row else {
+            continue;
+        };
+        if task.waiting || !ids.contains(&task.id.as_str()) {
+            continue;
+        }
+        task.waiting = true;
+        task.text
+            .insert(1, Segment::new(format!("{WAITING} "), Slot::Orange));
+    }
 }
 
 /// Add a mark to the line, spaced off whatever is already there.

@@ -19,6 +19,12 @@ impl List {
         &self.rows
     }
 
+    /// The rows, to mark in place. Nothing here reorders them, so the cursor still points at the
+    /// row it did.
+    pub fn rows_mut(&mut self) -> &mut [Row] {
+        &mut self.rows
+    }
+
     pub fn selected(&self) -> usize {
         self.selected
     }

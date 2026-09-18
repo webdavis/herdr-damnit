@@ -1,22 +1,30 @@
 //! Reading the open list. The pane holds one [`Screen`] worth of state, and every read of the API
 //! goes through it, so a failure always lands in the status line with the rows left on screen.
+//!
+//! A read is also where the local copy of the view is written and where the queue of writes made
+//! offline is sent: a read that reached the API is the proof that the network is back.
 
-use todoist::{Client, Error as TodoistError};
+use todoist::{Client, Error as TodoistError, Project, Section, Task};
 
+use crate::cache::{self, Cache};
 use crate::config::Config;
-use crate::connection::Connection;
+use crate::connection::{Connection, Fault};
 use crate::cursor::List;
 use crate::icons::Marks;
 use crate::list::{self, Row};
+use crate::queue::{Queue, Replayed, Sent, Write};
 use crate::views::Views;
 
-/// Everything a key press acts on: the held connection, the rows on screen and the views.
+/// Everything a key press acts on: the held connection, the rows on screen, the views, the local
+/// copy of each view and the writes still waiting for the network.
 pub struct Screen<'a> {
     pub connection: &'a mut Connection,
     pub config: &'a Config,
     pub base_url: &'a str,
     pub list: &'a mut List,
     pub views: &'a mut Views,
+    pub cache: &'a mut Cache,
+    pub queue: &'a mut Queue,
 }
 
 /// Which view the rows belong to, which is what decides where the cursor lands: a refresh of the
@@ -40,26 +48,137 @@ impl Screen<'_> {
             .await
     }
 
+    async fn request_fault<T, F>(&mut self, request: F) -> Result<T, Fault>
+    where
+        F: AsyncFn(&Client) -> Result<T, TodoistError>,
+    {
+        self.connection
+            .attempt_fault(self.config, self.base_url, request)
+            .await
+    }
+
+    /// Send one write, or queue it when the network is down. A queued write is not drawn onto its
+    /// row, which would put something on screen the server has not agreed to: the row keeps
+    /// saying what the API last said and takes the waiting mark beside it.
+    pub async fn write(&mut self, write: Write) -> Result<Sent, String> {
+        match self
+            .request_fault(async |client: &Client| write.send(client).await)
+            .await
+        {
+            Ok(()) => Ok(Sent::Done),
+            Err(Fault::Offline(_)) => {
+                self.queue.push(write);
+                list::mark_waiting(self.list.rows_mut(), &self.queue.task_ids());
+                Ok(Sent::Queued)
+            }
+            Err(fault) => Err(fault.into_message()),
+        }
+    }
+
+    /// Add a task, or queue the line when the network is down. Reports the task Todoist made of
+    /// the line, and `None` when the line is waiting.
+    pub async fn add(&mut self, text: &str) -> Result<Option<Task>, String> {
+        match self
+            .request_fault(async |client: &Client| client.quick_add(text).await)
+            .await
+        {
+            Ok(task) => Ok(Some(task)),
+            Err(Fault::Offline(_)) => {
+                self.queue.push(Write::Add(text.to_string()));
+                Ok(None)
+            }
+            Err(fault) => Err(fault.into_message()),
+        }
+    }
+
     /// Read the showing view and report the status line. A failure leaves the rows already on
-    /// screen alone and says so in the status line.
+    /// screen alone and says so in the status line, as the cache's age when the network is down.
     pub async fn read(&mut self, reload: Reload) -> String {
+        let replayed = self.replay().await;
+        let view = self.views.current().name.clone();
         let filter = self.views.current().filter.clone();
         // The day the due marks are read against is taken once per read, so every row of one
         // drawing agrees about what today is.
         let marks = Marks::today(self.config.icons);
-        let rows = self
-            .request(async |client: &Client| fetch(client, filter.as_deref(), &marks).await)
+        let now = cache::now();
+        let read = self
+            .request_fault(async |client: &Client| fetch(client, filter.as_deref()).await)
             .await;
-        match rows {
-            Ok(rows) => {
+        let said = match read {
+            Ok((tasks, projects, sections)) => {
+                let mut rows = list::build(&tasks, &projects, &sections, &marks);
+                self.cache.save(&view, tasks, projects, sections, now);
+                list::mark_waiting(&mut rows, &self.queue.task_ids());
                 match reload {
                     Reload::SameView => self.list.refresh(rows),
                     Reload::OtherView => self.list.switch(rows),
                 }
-                format!("{} open tasks", self.list.task_count())
+                format!(
+                    "{} open tasks{}",
+                    self.list.task_count(),
+                    self.queue.waiting_tail()
+                )
             }
-            Err(error) => error,
+            Err(Fault::Offline(message)) => {
+                if reload == Reload::OtherView {
+                    self.draw_cached(&view, &marks);
+                }
+                match self.cache.age(now) {
+                    Some(age) => format!(
+                        "stale {}{}",
+                        cache::age_text(age),
+                        self.queue.waiting_tail()
+                    ),
+                    None => message,
+                }
+            }
+            Err(Fault::Refused(message) | Fault::Unavailable(message)) => message,
+        };
+        match replayed.status() {
+            Some(replay) => format!("{replay}  {said}"),
+            None => said,
         }
+    }
+
+    /// Draw a view's local copy, which is what a switch to another view falls back on when the
+    /// network is down: the pane's own name for the view it is showing has to be the truth. A
+    /// view with no local copy leaves the rows that are on screen, and the age still names them.
+    fn draw_cached(&mut self, view: &str, marks: &Marks) {
+        let Some(snapshot) = self.cache.load(view) else {
+            return;
+        };
+        let mut rows = list::build(
+            &snapshot.tasks,
+            &snapshot.projects,
+            &snapshot.sections,
+            marks,
+        );
+        list::mark_waiting(&mut rows, &self.queue.task_ids());
+        self.list.switch(rows);
+    }
+
+    /// Send what the queue holds, oldest first. Nothing waiting is no requests at all, so the
+    /// common path costs nothing.
+    async fn replay(&mut self) -> Replayed {
+        if self.queue.is_empty() {
+            return Replayed::default();
+        }
+        let Screen {
+            connection,
+            config,
+            base_url,
+            queue,
+            ..
+        } = self;
+        queue
+            .replay(async |write: &Write| {
+                connection
+                    .attempt_fault(config, base_url, async |client: &Client| {
+                        write.send(client).await
+                    })
+                    .await
+            })
+            .await
     }
 
     /// Read the showing view after a switch to it.
@@ -82,226 +201,48 @@ impl Screen<'_> {
     }
 }
 
+/// The rows the pane opens on and the status line that goes with them, taken from the local copy
+/// of the view so the first draw happens before any request. No readable copy is an empty list
+/// and an empty status line, which the first read fills in.
+pub fn opening(
+    cache: &mut Cache,
+    queue: &Queue,
+    view: &str,
+    config: &Config,
+    now: u64,
+) -> (Vec<Row>, String) {
+    let Some(snapshot) = cache.load(view) else {
+        return (Vec::new(), String::new());
+    };
+    let marks = Marks::today(config.icons);
+    let mut rows = list::build(
+        &snapshot.tasks,
+        &snapshot.projects,
+        &snapshot.sections,
+        &marks,
+    );
+    list::mark_waiting(&mut rows, &queue.task_ids());
+    let age = cache.age(now).unwrap_or_default();
+    (
+        rows,
+        format!("stale {}{}", cache::age_text(age), queue.waiting_tail()),
+    )
+}
+
 /// The three lists the view is built from, read at once. `filter` is the showing view's query,
 /// absent on the unfiltered list.
 async fn fetch(
     client: &Client,
     filter: Option<&str>,
-    marks: &Marks,
-) -> Result<Vec<Row>, TodoistError> {
+) -> Result<(Vec<Task>, Vec<Project>, Vec<Section>), TodoistError> {
     let tasks = async {
         match filter {
             Some(query) => client.tasks_matching(query).await,
             None => client.tasks().await,
         }
     };
-    let (tasks, projects, sections) =
-        tokio::try_join!(tasks, client.projects(), client.sections())?;
-    Ok(list::build(&tasks, &projects, &sections, marks))
+    tokio::try_join!(tasks, client.projects(), client.sections())
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::TcpListener;
-
-    use super::*;
-    use crate::list::tests::task;
-
-    /// One empty page, which every list endpoint parses.
-    pub(crate) const EMPTY_PAGE: &str = r#"{"results":[],"next_cursor":null}"#;
-
-    /// The document Todoist answers a malformed filter query with.
-    const REFUSED_FILTER: &str = r#"{"error_tag":"INVALID_ARGUMENT_VALUE","error_code":20,
-        "error":"Invalid argument value","http_code":400,
-        "error_extra":{"argument":"filter","explanation":"Unable to parse the filter query"}}"#;
-
-    pub(crate) fn config_with_token_command(script: &str) -> Config {
-        Config::parse(&format!(r#"token_command = ["sh", "-c", "{script}"]"#)).expect("parses")
-    }
-
-    pub(crate) fn list_of_one() -> List {
-        let project = serde_json::from_str(r#"{"id":"p1","name":"First"}"#).expect("project");
-        List::new(list::build(
-            &[task(r#"{"id":"1","content":"keep me","project_id":"p1"}"#)],
-            &[project],
-            &[],
-            &crate::list::tests::marks(),
-        ))
-    }
-
-    /// A loopback double answering every request the same way, until the listener is dropped.
-    pub(crate) async fn serve_forever(status: &'static str, body: &'static str) -> String {
-        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
-        let base_url = format!("http://{}", listener.local_addr().expect("addr"));
-        let response = format!(
-            "HTTP/1.1 {status}\r\nContent-Length: {}\r\n\r\n{body}",
-            body.len()
-        );
-        tokio::spawn(async move {
-            while let Ok((mut socket, _)) = listener.accept().await {
-                let mut buffer = [0u8; 1024];
-                let _ = socket.read(&mut buffer).await;
-                let _ = socket.write_all(response.as_bytes()).await;
-                let _ = socket.shutdown().await;
-            }
-        });
-        base_url
-    }
-
-    /// A screen over the given rows, reading a double at `base_url`.
-    pub(crate) fn screen<'a>(
-        connection: &'a mut Connection,
-        config: &'a Config,
-        base_url: &'a str,
-        list: &'a mut List,
-        views: &'a mut Views,
-    ) -> Screen<'a> {
-        Screen {
-            connection,
-            config,
-            base_url,
-            list,
-            views,
-        }
-    }
-
-    #[tokio::test]
-    async fn a_failed_connection_reports_its_error_without_probing_the_network() {
-        let mut connection = Connection::Failed("no token source: neither key is set".to_string());
-        let config = Config::default();
-        let mut list = List::new(Vec::new());
-        let mut views = Views::new(&[]);
-        let mut screen = screen(
-            &mut connection,
-            &config,
-            "http://127.0.0.1:1",
-            &mut list,
-            &mut views,
-        );
-
-        assert_eq!(
-            screen.refresh().await,
-            "no token source: neither key is set"
-        );
-    }
-
-    #[tokio::test]
-    async fn a_refresh_reuses_the_client_instead_of_rerunning_token_command() {
-        let counter = std::env::temp_dir().join(format!(
-            "herdr-todoist-token-command-runs-{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&counter);
-        let base_url = serve_forever("200 OK", EMPTY_PAGE).await;
-        let config = config_with_token_command(&format!(
-            "printf x >> {} && printf test-token",
-            counter.display()
-        ));
-        let mut connection = Connection::build(&config, &base_url).await;
-        let mut list = List::new(Vec::new());
-        let mut views = Views::new(&[]);
-        let mut screen = screen(&mut connection, &config, &base_url, &mut list, &mut views);
-
-        let first = screen.refresh().await;
-        let second = screen.refresh().await;
-
-        assert_eq!(first, "0 open tasks");
-        assert_eq!(second, "0 open tasks");
-        let runs = std::fs::read_to_string(&counter).expect("counter file");
-        let _ = std::fs::remove_file(&counter);
-        assert_eq!(runs, "x", "token_command ran more than once: {runs:?}");
-    }
-
-    #[tokio::test]
-    async fn a_rejected_token_is_reported_after_rebuilding_once() {
-        let base_url = serve_forever("401 Unauthorized", "{}").await;
-        let config = config_with_token_command("printf test-token");
-        let mut connection = Connection::build(&config, &base_url).await;
-        let mut list = List::new(Vec::new());
-        let mut views = Views::new(&[]);
-        let mut screen = screen(&mut connection, &config, &base_url, &mut list, &mut views);
-
-        assert_eq!(
-            screen.refresh().await,
-            "unauthorized: the token was rejected"
-        );
-    }
-
-    #[tokio::test]
-    async fn a_rate_limited_refresh_keeps_the_last_good_list_on_screen() {
-        let base_url = serve_forever("429 Too Many Requests", "{}").await;
-        let config = config_with_token_command("printf test-token");
-        let mut connection = Connection::build(&config, &base_url).await;
-        let mut list = list_of_one();
-        let mut views = Views::new(&[]);
-        let mut screen = screen(&mut connection, &config, &base_url, &mut list, &mut views);
-
-        let message = screen.refresh().await;
-
-        assert_eq!(message, "rate limited, retry shortly");
-        assert_eq!(list.task_count(), 1);
-        assert_eq!(list.selected_id(), Some("1"));
-    }
-
-    #[tokio::test]
-    async fn a_refused_filter_reports_the_api_s_own_message_and_keeps_the_rows_on_screen() {
-        let base_url = serve_forever("400 Bad Request", REFUSED_FILTER).await;
-        let config = config_with_token_command("printf test-token");
-        let mut connection = Connection::build(&config, &base_url).await;
-        let mut list = list_of_one();
-        let mut views = Views::new(&[crate::config::View {
-            name: "work".to_string(),
-            filter: "#Work &".to_string(),
-        }]);
-        views.select(1);
-        let mut screen = screen(&mut connection, &config, &base_url, &mut list, &mut views);
-
-        let message = screen.show().await;
-
-        assert_eq!(
-            message,
-            "Invalid argument value: Unable to parse the filter query"
-        );
-        assert_eq!(list.task_count(), 1);
-        assert_eq!(list.selected_id(), Some("1"));
-    }
-
-    #[tokio::test]
-    async fn a_filter_matching_nothing_empties_the_list_instead_of_reporting_a_failure() {
-        let base_url = serve_forever("200 OK", EMPTY_PAGE).await;
-        let config = config_with_token_command("printf test-token");
-        let mut connection = Connection::build(&config, &base_url).await;
-        let mut list = list_of_one();
-        let mut views = Views::new(&[crate::config::View {
-            name: "nobody".to_string(),
-            filter: "today & @nobody".to_string(),
-        }]);
-        views.select(1);
-        let mut screen = screen(&mut connection, &config, &base_url, &mut list, &mut views);
-
-        let message = screen.show().await;
-
-        assert_eq!(message, "0 open tasks");
-        assert_eq!(list.task_count(), 0);
-    }
-
-    #[tokio::test]
-    async fn a_network_failure_keeps_the_last_good_list_on_screen() {
-        let config = config_with_token_command("printf test-token");
-        let base_url = {
-            let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
-            let address = listener.local_addr().expect("addr");
-            format!("http://{address}")
-        };
-        let mut connection = Connection::build(&config, &base_url).await;
-        let mut list = list_of_one();
-        let mut views = Views::new(&[]);
-        let mut screen = screen(&mut connection, &config, &base_url, &mut list, &mut views);
-
-        let message = screen.refresh().await;
-
-        assert!(message.starts_with("network error:"), "{message}");
-        assert_eq!(list.task_count(), 1);
-    }
-}
+pub(crate) mod tests;

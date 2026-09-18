@@ -1,6 +1,7 @@
 //! The plugin binary. With no arguments it is the pane; the subcommands are the plugin actions.
 
 mod apply;
+mod cache;
 mod completed;
 mod config;
 mod connection;
@@ -18,6 +19,8 @@ mod markdown;
 mod pane;
 mod placement;
 mod prompt;
+mod queue;
+mod refresh;
 mod reload;
 mod render;
 mod send;

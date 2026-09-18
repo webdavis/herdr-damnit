@@ -142,6 +142,7 @@ pub(crate) async fn pressed(
 ) -> (String, After, Option<Prompt>) {
     let mut connection = Connection::build(config, &double.base_url).await;
     let mut views = Views::new(&[]);
+    let (mut cache, mut queue) = crate::reload::tests::stores("screen");
     let mut prompt: Option<Prompt> = None;
     let mut status = String::new();
     let mut after = After::Stay;
@@ -152,6 +153,8 @@ pub(crate) async fn pressed(
             base_url: &double.base_url,
             list,
             views: &mut views,
+            cache: &mut cache,
+            queue: &mut queue,
         };
         let outcome = if prompt.is_some() {
             prompt_key(*key_press, &mut screen, &mut prompt).await

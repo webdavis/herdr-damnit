@@ -1,7 +1,7 @@
 //! The objects the pane reads. Every field the list view shows is named here; anything else the
 //! API sends is ignored, so a new field upstream is not a parse failure.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// One page of a list endpoint. `next_cursor` is `None` on the last page.
 #[derive(Debug, Deserialize)]
@@ -19,7 +19,7 @@ pub(crate) struct Items<T> {
 
 /// An open task. `parent_id` is how the API expresses a subtask: it holds the parent task's id,
 /// and is absent on a top-level task.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Task {
     pub id: String,
     pub content: String,
@@ -58,14 +58,14 @@ pub fn task_url(id: &str) -> String {
 /// A task's due date. `date` is a date or a date and time; the list shows its first ten
 /// characters, which are the date either way. `is_recurring` says the task repeats, which the
 /// vendor's own v1 client documents as a boolean defaulting to false.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Due {
     pub date: String,
     #[serde(default)]
     pub is_recurring: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Project {
     pub id: String,
     pub name: String,
@@ -73,7 +73,7 @@ pub struct Project {
     pub order: i64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Section {
     pub id: String,
     pub name: String,

@@ -6,6 +6,8 @@
 
 use todoist::{Change, Client, Destination};
 
+use crate::queue::{Sent, Write as Queued};
+
 use crate::edit::Outcome;
 use crate::list::{HIGHEST_PRIORITY, LOWEST_PRIORITY};
 use crate::prompt::{self, Prompt};
@@ -48,29 +50,21 @@ pub async fn write(screen: &mut Screen<'_>, edit: Edit) -> Outcome {
         return Outcome::quiet();
     };
     let id = task.id;
-    let (done, sent) = match edit {
-        Edit::Complete => (
-            "completed".to_string(),
-            screen
-                .request(async |client: &Client| client.close(&id).await)
-                .await,
-        ),
-        Edit::Reopen => (
-            "reopened".to_string(),
-            screen
-                .request(async |client: &Client| client.reopen(&id).await)
-                .await,
-        ),
+    let (done, queued) = match edit {
+        Edit::Complete => ("completed".to_string(), Queued::Close(id)),
+        Edit::Reopen => ("reopened".to_string(), Queued::Reopen(id)),
         Edit::Priority => {
             let next = cycled(task.priority);
             (
                 format!("p{}", HIGHEST_PRIORITY + LOWEST_PRIORITY - next),
-                screen
-                    .request(async |client: &Client| client.update(&id, &priority(next)).await)
-                    .await,
+                Queued::Update {
+                    id,
+                    change: priority(next),
+                },
             )
         }
     };
+    let sent = screen.write(queued).await;
     Outcome::said(reported(screen, done, sent).await)
 }
 
@@ -232,23 +226,17 @@ pub async fn send(screen: &mut Screen<'_>, prompt: &mut Option<Prompt>) -> Outco
         }
         Sending::Delete(id) => {
             *prompt = None;
-            let sent = screen
-                .request(async |client: &Client| client.delete(&id).await)
-                .await;
+            let sent = screen.write(Queued::Delete(id)).await;
             Outcome::said(reported(screen, "deleted".to_string(), sent).await)
         }
         Sending::Due { id, due } => {
             let sent = screen
-                .request(async |client: &Client| {
-                    client
-                        .update(
-                            &id,
-                            &Change {
-                                due_string: Some(due.clone()),
-                                ..Default::default()
-                            },
-                        )
-                        .await
+                .write(Queued::Update {
+                    id,
+                    change: Change {
+                        due_string: Some(due),
+                        ..Default::default()
+                    },
                 })
                 .await;
             // A refused write keeps the prompt open, so the line typed into it is not lost.
@@ -257,22 +245,21 @@ pub async fn send(screen: &mut Screen<'_>, prompt: &mut Option<Prompt>) -> Outco
             }
             Outcome::said(reported(screen, "due set".to_string(), sent).await)
         }
-        Sending::Add(text) => {
-            let added = screen
-                .request(async |client: &Client| client.quick_add(&text).await)
-                .await;
-            match added {
-                Ok(task) => {
-                    *prompt = None;
-                    Outcome::said(format!(
-                        "added {}  {}",
-                        task.content,
-                        screen.refresh().await
-                    ))
-                }
-                Err(error) => Outcome::said(error),
+        Sending::Add(text) => match screen.add(&text).await {
+            Ok(Some(task)) => {
+                *prompt = None;
+                Outcome::said(format!(
+                    "added {}  {}",
+                    task.content,
+                    screen.refresh().await
+                ))
             }
-        }
+            Ok(None) => {
+                *prompt = None;
+                Outcome::said("queued: add".to_string())
+            }
+            Err(error) => Outcome::said(error),
+        },
         Sending::Label {
             id,
             at,
@@ -281,16 +268,12 @@ pub async fn send(screen: &mut Screen<'_>, prompt: &mut Option<Prompt>) -> Outco
             labels,
         } => {
             let sent = screen
-                .request(async |client: &Client| {
-                    client
-                        .update(
-                            &id,
-                            &Change {
-                                labels: Some(labels.clone()),
-                                ..Default::default()
-                            },
-                        )
-                        .await
+                .write(Queued::Update {
+                    id,
+                    change: Change {
+                        labels: Some(labels),
+                        ..Default::default()
+                    },
                 })
                 .await;
             if sent.is_err() {
@@ -312,17 +295,13 @@ pub async fn send(screen: &mut Screen<'_>, prompt: &mut Option<Prompt>) -> Outco
             description,
         } => {
             let sent = screen
-                .request(async |client: &Client| {
-                    client
-                        .update(
-                            &id,
-                            &Change {
-                                content: Some(content.clone()),
-                                description: Some(description.clone()),
-                                ..Default::default()
-                            },
-                        )
-                        .await
+                .write(Queued::Update {
+                    id,
+                    change: Change {
+                        content: Some(content),
+                        description: Some(description),
+                        ..Default::default()
+                    },
                 })
                 .await;
             // A refused write keeps the box open, so the lines just typed into it are not lost.
@@ -333,20 +312,25 @@ pub async fn send(screen: &mut Screen<'_>, prompt: &mut Option<Prompt>) -> Outco
         }
         Sending::Move { id, label, to } => {
             *prompt = None;
-            let sent = screen
-                .request(async |client: &Client| client.move_task(&id, &to).await)
-                .await;
+            let sent = screen.write(Queued::Move { id, to }).await;
             Outcome::said(reported(screen, format!("moved to {label}"), sent).await)
         }
     }
 }
 
-/// What the status line says about a write: the API's own words when it refused, and otherwise
-/// what the write did followed by a fresh read of the showing view.
-async fn reported(screen: &mut Screen<'_>, done: String, sent: Result<(), String>) -> String {
+/// What the status line says about a write: the API's own words when it refused, what is waiting
+/// when the network is down, and otherwise what the write did followed by a fresh read of the
+/// showing view.
+async fn reported(screen: &mut Screen<'_>, done: String, sent: Result<Sent, String>) -> String {
     match sent {
         Err(error) => error,
-        Ok(()) => {
+        // Offline there is nothing to read back, so the status line names the write that is
+        // waiting and its row keeps the waiting mark until the queue is sent.
+        Ok(Sent::Queued) => match done.is_empty() {
+            true => format!("queued{}", screen.queue.waiting_tail()),
+            false => format!("queued: {done}{}", screen.queue.waiting_tail()),
+        },
+        Ok(Sent::Done) => {
             let read = screen.refresh().await;
             if done.is_empty() {
                 read

@@ -39,6 +39,9 @@ pub struct Config {
     /// terminal whose font has none.
     #[serde(default)]
     pub icons: IconSet,
+    /// How often the pane reads the API on its own, in seconds. Zero turns the interval off,
+    /// leaving `R` and the read that follows every write.
+    pub refresh_seconds: Option<u64>,
     /// Named filter views, in the order the pane numbers them.
     #[serde(default)]
     pub views: Vec<View>,
@@ -161,6 +164,12 @@ impl Config {
             "default_view '{name}' is not a view: the views are {}",
             names.join(", ")
         ))
+    }
+
+    /// The interval the pane refreshes on, the default when the config names none.
+    pub fn refresh_seconds(&self) -> u64 {
+        self.refresh_seconds
+            .unwrap_or(crate::refresh::DEFAULT_SECONDS)
     }
 
     /// Where the token comes from. `token_command` wins when both keys are set.
