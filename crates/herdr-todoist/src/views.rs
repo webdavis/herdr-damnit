@@ -8,6 +8,11 @@ use crate::config;
 /// configured.
 pub const ALL: &str = "all";
 
+/// The highest view number a number key or a `view:<n>` action reaches. herdr declares plugin
+/// actions in the manifest with no runtime registration, so the manifest carries exactly this
+/// many numbered `view:<n>` actions; a single digit key is the other place this ceiling holds.
+pub const MAX_NUMBERED_VIEW: usize = 9;
+
 /// One view. `filter` is a Todoist filter query, absent on the unfiltered list.
 #[derive(Debug, PartialEq, Eq)]
 pub struct View {

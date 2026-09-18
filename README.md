@@ -110,7 +110,8 @@ blank. A filter that is merely matching nothing is an empty list and says `0 ope
 herdr declares plugin actions in the manifest and has no runtime action registration, and a
 `plugin_action` keybinding passes no arguments, so there can be no `view:<name>` action per
 configured view: the views are config and the manifest is not. The actions are numbered instead,
-`view:1` to `view:9`, each showing the view at that number:
+`view:1` to `view:9`. Nine is `views::MAX_NUMBERED_VIEW`, the ceiling the manifest, the number
+keys and the pane's hint line all share; raising it means adding entries in all three places.
 
 ```toml
 [[keys.command]]

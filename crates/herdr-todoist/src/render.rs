@@ -7,10 +7,13 @@ use ratatui::widgets::{Block, Borders, Clear, ListItem, ListState, Paragraph};
 
 use crate::cursor::List;
 use crate::list::Row;
-use crate::views::{Picker, Views};
+use crate::views::{MAX_NUMBERED_VIEW, Picker, Views};
 
-const HINTS: &str = "j/k move   v views   1-9 view   R refresh   q close";
 const PICKER_HINTS: &str = "j/k move   <CR> show   <Esc> cancel";
+
+fn hints() -> String {
+    format!("j/k move   v views   1-{MAX_NUMBERED_VIEW} view   R refresh   q close")
+}
 
 /// The status line, naming the showing view. Every failure the client can report (a rejected
 /// token, a rate limit with its retry delay, a network outage) arrives in `status` as its own
@@ -52,9 +55,9 @@ pub fn draw(
         draw_picker(frame, body_area, views, picker);
     }
     let hints = if picker.is_some() {
-        PICKER_HINTS
+        PICKER_HINTS.to_string()
     } else {
-        HINTS
+        hints()
     };
     frame.render_widget(Paragraph::new(Line::from(hints)), hint_area);
 }
