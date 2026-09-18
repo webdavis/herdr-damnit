@@ -3,7 +3,9 @@
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, ListItem, ListState, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, ListItem, ListState, Paragraph, Wrap};
+
+use crate::detail::Detail;
 
 use crate::cursor::List;
 use crate::list::Row;
@@ -12,13 +14,21 @@ use crate::views::{MAX_NUMBERED_VIEW, Views};
 
 const COMPLETED_HINTS: &str = "j/k  u reopen  <Tab> open  R  q";
 
+/// The detail screen's own keys.
+const DETAIL_HINTS: &str = "j/k  c comment  <Esc> back  R";
+
+/// What the status line calls the detail screen.
+const DETAIL_LABEL: &str = "task";
+
 /// What the status line calls the completed list, which has no filter query of its own.
 const COMPLETED_LABEL: &str = "completed";
 
-/// The open list's own keys. A side pane is about 32 columns wide, so the line names the eight
-/// edits, the view keys and the two screens, and leaves j/k, R and the arrow keys unsaid.
+/// The open list's own keys. A side pane is about 32 columns wide and this line fills it exactly:
+/// the eight edits, `<CR>` into the detail, the view picker and its numbers, and `<Tab>` to the
+/// completed list. j/k, R, `q` and the arrow keys are left unsaid, `q` because `<Esc>` closes the
+/// pane too and both other screens name it.
 fn hints() -> String {
-    format!("x X dd p s l m a  v 1-{MAX_NUMBERED_VIEW} <Tab> q")
+    format!("x X dd p s l m a <CR> v1-{MAX_NUMBERED_VIEW} <Tab>")
 }
 
 /// The status line, naming the showing view. Every failure the client can report (a rejected
@@ -73,6 +83,36 @@ pub fn draw(
     frame.render_widget(Paragraph::new(Line::from(hints)), hint_area);
 }
 
+/// The detail screen: one task's description and its comment thread, as one wrapped paragraph so
+/// a long link, a table row or a line of code breaks inside the pane rather than running off it.
+/// The comment box is the same bordered overlay every prompt draws in.
+pub fn draw_detail(frame: &mut ratatui::Frame<'_>, views: &Views, detail: &Detail) {
+    let [status_area, body_area, hint_area] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(0),
+        Constraint::Length(1),
+    ])
+    .areas(frame.area());
+    frame.render_widget(
+        Paragraph::new(status_line(detail.status(), DETAIL_LABEL)),
+        status_area,
+    );
+    frame.render_widget(
+        Paragraph::new(detail.lines())
+            .wrap(Wrap { trim: false })
+            .scroll((detail.scroll(), 0)),
+        body_area,
+    );
+    let hints = match detail.prompt() {
+        Some(prompt) => {
+            draw_prompt(frame, body_area, views, prompt);
+            prompt.hints().to_string()
+        }
+        None => DETAIL_HINTS.to_string(),
+    };
+    frame.render_widget(Paragraph::new(Line::from(hints)), hint_area);
+}
+
 /// The prompt, over the list: a bordered box holding either its entries with the cursor on one of
 /// them, or the one line it is asking for. One drawing serves every prompt, so the views picker,
 /// the label picker, the move picker, the confirm and the two inputs all sit in the same place.
@@ -83,11 +123,16 @@ fn draw_prompt(frame: &mut ratatui::Frame<'_>, body_area: Rect, views: &Views, p
             let area = boxed(body_area, entries.len() as u16);
             let mut state = ListState::default();
             state.select(Some(at));
+            let highlight = if prompt.highlights() {
+                Style::new().add_modifier(Modifier::REVERSED)
+            } else {
+                Style::new()
+            };
             frame.render_widget(Clear, area);
             frame.render_stateful_widget(
                 ratatui::widgets::List::new(entries.into_iter().map(ListItem::new))
                     .block(block)
-                    .highlight_style(Style::new().add_modifier(Modifier::REVERSED)),
+                    .highlight_style(highlight),
                 area,
                 &mut state,
             );
@@ -303,11 +348,7 @@ mod tests {
         let open = narrow_frame(None);
         let drawn = open.last().expect("a hint line");
         assert!(drawn.chars().count() <= NARROW as usize, "{drawn}");
-        assert_eq!(
-            drawn.trim(),
-            expected.trim(),
-            "the open list's hints wrapped"
-        );
+        assert_eq!(drawn.trim(), expected, "the open list's hints wrapped");
 
         for prompt in &prompts {
             let frame = narrow_frame(Some(prompt));
@@ -379,6 +420,7 @@ mod tests {
         let hints = frame.last().expect("a hint line");
 
         assert!(hints.contains("x X dd p s l m a"), "{frame:?}");
+        assert!(hints.contains("<CR>"), "{frame:?}");
         assert!(hints.contains("<Tab>"), "{frame:?}");
     }
 }

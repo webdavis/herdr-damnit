@@ -23,6 +23,11 @@ impl List {
         self.selected
     }
 
+    /// The task row under the cursor, which is what `<CR>` opens the detail for.
+    pub fn selected_task(&self) -> Option<&crate::list::TaskRow> {
+        self.rows.get(self.selected).and_then(Row::task)
+    }
+
     pub fn selected_id(&self) -> Option<&str> {
         self.rows.get(self.selected).and_then(Row::task_id)
     }

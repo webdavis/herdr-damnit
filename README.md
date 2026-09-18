@@ -196,6 +196,7 @@ tasks.
 | `v`           | open the view picker                                |
 | `1` to `9`    | show that view                                      |
 | `<Tab>`       | the completed list, and back                        |
+| `<CR>`        | the task's detail: its description and its comments |
 | `x`           | complete the task                                   |
 | `X`           | reopen the task                                     |
 | `dd`          | delete the task, after the confirm                  |
@@ -208,7 +209,52 @@ tasks.
 
 In the picker, `j` and `k` move, `<CR>` takes the entry under the cursor and `<Esc>` cancels. In
 the completed list `j` and `k` move, `u` and `X` reopen, `R` starts the walk again from today and
-`q` closes the pane.
+`q` closes the pane. On the detail screen `j` and `k` scroll, `c` opens the comment box, `R` reads
+the thread again, `<Esc>`, `<CR>` and `<Tab>` go back to the list and `q` closes the pane.
+
+## The task detail
+
+`<CR>` on a task opens its detail: the task's title, its description rendered as markdown, and its
+comment thread oldest first, so a comment just added is at the bottom where it was typed. The
+thread is ordered here rather than taken as it arrives, because the endpoint promises no ordering;
+a comment carrying no timestamp sorts after every dated one instead of jumping to the top. Each
+comment is headed with the day it was posted and the id of who posted it. Going back leaves the
+list exactly as it was, cursor included.
+
+The detail is a third screen rather than a tenth view, the way the completed list is: the numbered
+views are the operator's own filter queries and this screen has no filter, so `view:1` to `view:9`
+and `default_view` are untouched by it.
+
+An attachment is NAMED, never fetched: the line reads `[attached] <file name>`, and nothing in the
+pane downloads a file on a key press. The API sends a comment's attachment as a free-form object,
+so the name is read off it when there is one and the line says `[attached] file` when there is not.
+
+### How much markdown is rendered
+
+A description is free text a person typed, often on a phone, and the pane it lands in is about 32
+columns wide, so the renderer covers what a person actually writes and leaves the rest as written:
+
+- **Rendered:** ATX headings (bold, one weight at every level), bullet lists (every marker drawn as
+  one dash), numbered lists (keeping the numbers written), blockquotes, thematic breaks, bold,
+  italics, inline code, and links, which draw their text followed by `<target>` since a pane cannot
+  be clicked and the target is the half worth copying. An underscore inside a word is left alone,
+  so `a_variable_name` stays as typed.
+- **Shown as written:** a table, because 32 columns cannot hold one, and the body of a fenced code
+  block, because reflowing code changes what it says. The fences themselves are dropped.
+
+Every line is WRAPPED rather than cut: a long link, a wide table row and an unbreakable identifier
+each break inside the pane, which is pinned by a test that draws the screen 32 columns wide.
+
+## Adding a comment
+
+`c` on the detail screen opens a multi-line box, drawn by the pane, so no editor is entered. `<CR>`
+opens a line, `<C-d>` posts, `<Esc>` throws the draft away, and a box holding nothing but
+whitespace posts nothing. `<CR>` cannot also send, which is why posting is its own key.
+
+A posted comment arrives by a read of the thread rather than by being added to what is on screen,
+so the order and the timestamp drawn are the server's own. A REFUSED post leaves the box open with
+every line still in it and the API's own message in the status line: a person has just typed
+several lines and losing them to a refusal would be the worst thing this screen could do.
 
 ## Quick edits
 
