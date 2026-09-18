@@ -211,7 +211,8 @@ fn choices(on: &[String], known: &[Label]) -> Vec<Choice> {
     let mut sorted: Vec<&Label> = known.iter().collect();
     sorted.sort_by(|left, right| {
         left.order
-            .cmp(&right.order)
+            .unwrap_or(i64::MAX)
+            .cmp(&right.order.unwrap_or(i64::MAX))
             .then(left.name.cmp(&right.name))
     });
     let mut choices: Vec<Choice> = sorted
@@ -292,8 +293,8 @@ mod tests {
             "1",
             &on(&["home"]),
             &[
-                label(r#"{"name":"errands","item_order":2}"#),
-                label(r#"{"name":"home","item_order":1}"#),
+                label(r#"{"name":"errands","order":2}"#),
+                label(r#"{"name":"home","order":1}"#),
             ],
         );
 
@@ -301,6 +302,22 @@ mod tests {
 
         assert_eq!(entries, [" [x] home", " [ ] errands"]);
         assert_eq!(at, 0);
+    }
+
+    #[test]
+    fn a_label_with_a_null_order_sorts_after_the_ordered_ones() {
+        let prompt = Prompt::labels(
+            "1",
+            &on(&[]),
+            &[
+                label(r#"{"name":"unordered","order":null}"#),
+                label(r#"{"name":"home","order":1}"#),
+            ],
+        );
+
+        let (entries, _) = prompt.entries(&Views::new(&[])).expect("a picker");
+
+        assert_eq!(entries, [" [ ] home", " [ ] unordered"]);
     }
 
     #[test]
@@ -317,8 +334,8 @@ mod tests {
         let choices = choices(
             &on(&["home"]),
             &[
-                label(r#"{"name":"home","item_order":1}"#),
-                label(r#"{"name":"errands","item_order":2}"#),
+                label(r#"{"name":"home","order":1}"#),
+                label(r#"{"name":"errands","order":2}"#),
             ],
         );
 
@@ -330,8 +347,8 @@ mod tests {
         let choices = choices(
             &on(&["home", "errands"]),
             &[
-                label(r#"{"name":"home","item_order":1}"#),
-                label(r#"{"name":"errands","item_order":2}"#),
+                label(r#"{"name":"home","order":1}"#),
+                label(r#"{"name":"errands","order":2}"#),
             ],
         );
 

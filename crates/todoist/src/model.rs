@@ -70,11 +70,13 @@ pub struct Section {
 }
 
 /// A label, which the picker offers by name: an update writes a task's label NAMES, not ids.
+/// `order` is `null`, not omitted, when the account has no explicit order for it, so the field is
+/// optional rather than defaulted: a default only covers an absent key.
 #[derive(Debug, Deserialize)]
 pub struct Label {
     pub name: String,
-    #[serde(default, alias = "item_order")]
-    pub order: i64,
+    #[serde(default)]
+    pub order: Option<i64>,
 }
 
 /// A completed task. The vendor schema sends `completed_at` as `null` for an active (not yet

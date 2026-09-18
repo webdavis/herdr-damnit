@@ -520,16 +520,20 @@ async fn the_labels_a_picker_offers_are_read_by_name() {
     let double = support::serve_once(
         "200 OK",
         &["Content-Type: application/json"],
-        r#"{"results":[{"id":"1","name":"home","item_order":2},
-            {"id":"2","name":"errands","item_order":1}],"next_cursor":null}"#,
+        r#"{"results":[
+            {"id":"1","name":"home","color":"berry_red","order":2,"is_favorite":false},
+            {"id":"2","name":"errands","color":"blue","order":1,"is_favorite":false},
+            {"id":"3","name":"unordered","color":"grey","order":null,"is_favorite":false}
+            ],"next_cursor":null}"#,
     )
     .await;
     let client = Client::new(&double.base_url, token().await).expect("client");
 
     let labels = client.labels().await.expect("labels read");
 
-    assert_eq!(labels.len(), 2);
+    assert_eq!(labels.len(), 3);
     assert_eq!(labels[0].name, "home");
+    assert_eq!(labels[2].order, None);
     let request = double.request.lock().expect("lock").clone();
     assert!(request.starts_with("GET /labels?"), "{request}");
 }
