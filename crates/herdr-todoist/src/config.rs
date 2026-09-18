@@ -25,6 +25,9 @@ pub struct Config {
     pub width: Option<f32>,
     /// The view the pane opens on, the unfiltered list when unset.
     pub default_view: Option<String>,
+    /// Argv of the editor `e` enters on a task, Neovim when unset and the pane's own box when it
+    /// is an empty list.
+    pub editor: Option<Vec<String>>,
     /// Whether focusing a workspace opens the pane there on its own.
     #[serde(default)]
     pub auto_open: bool,
@@ -181,6 +184,7 @@ mod tests {
         assert_eq!(config.side, Side::Right);
         assert_eq!(config.width, None);
         assert_eq!(config.default_view, None);
+        assert_eq!(config.editor, None);
         assert!(!config.auto_open);
     }
 
@@ -273,6 +277,25 @@ mod tests {
             "{error}"
         );
         assert!(error.contains("all, today"), "{error}");
+    }
+
+    #[test]
+    fn an_editor_is_read_as_argv_so_a_path_with_a_space_in_it_stays_one_word() {
+        let config =
+            Config::parse(r#"editor = ["/Applications/My Editor/bin/nvim"]"#).expect("parses");
+
+        assert_eq!(
+            config.editor,
+            Some(vec!["/Applications/My Editor/bin/nvim".to_string()])
+        );
+    }
+
+    #[test]
+    fn an_empty_editor_list_is_read_as_no_editor_at_all() {
+        assert_eq!(
+            Config::parse("editor = []").expect("parses").editor,
+            Some(Vec::new())
+        );
     }
 
     #[test]

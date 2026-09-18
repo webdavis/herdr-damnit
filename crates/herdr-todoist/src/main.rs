@@ -9,6 +9,7 @@ mod detail;
 mod doctor;
 mod draft;
 mod edit;
+mod editor;
 mod herdr;
 mod history;
 mod list;

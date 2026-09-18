@@ -16,6 +16,8 @@ use crate::views::Views;
 #[derive(Debug, PartialEq, Eq)]
 pub enum After {
     Stay,
+    /// Enter the configured editor on the task under the cursor, in this pane.
+    Editor,
     Quit,
     /// Leave the open list for the completed one.
     Completed,
@@ -49,6 +51,18 @@ pub async fn key(key: KeyCode, screen: &mut Screen<'_>, prompt: &mut Option<Prom
         KeyCode::Char('s') => apply::open(screen, prompt, Ask::Due).await,
         KeyCode::Char('l') => apply::open(screen, prompt, Ask::Labels).await,
         KeyCode::Char('m') => apply::open(screen, prompt, Ask::Move).await,
+        KeyCode::Char('e') => match screen.selected() {
+            // With an editor configured the pane hands the terminal over, which only the draw
+            // loop can do; with none it opens its own box over the same words.
+            Some(task) if crate::editor::argv(screen.config, &task.id).is_some() => {
+                Outcome::after(After::Editor)
+            }
+            Some(task) => {
+                *prompt = Some(Prompt::edit(&task.id, &task.text, &task.description));
+                Outcome::quiet()
+            }
+            None => Outcome::quiet(),
+        },
         KeyCode::Char('S') => send::ask(screen, prompt),
         KeyCode::Char('a') => {
             *prompt = Some(Prompt::add());
@@ -90,21 +104,32 @@ pub async fn prompt_key(
             _ => Outcome::quiet(),
         };
     }
-    if let Prompt::Note { .. } = open {
-        // The note box is the comment box's widget, so it takes the same keys: `<CR>` opens a
-        // line and SEND hands the brief over.
+    // A multi-line box takes every printable key the way an input does, and `<CR>` opens a line
+    // in it rather than sending, so the send key is its own. The two boxes the list opens send
+    // different ways: a note goes to an agent pane, a task's own words go to Todoist.
+    let to_agent = match open {
+        Prompt::Note { .. } => Some(true),
+        Prompt::Edit { .. } => Some(false),
+        _ => None,
+    };
+    if let Some(to_agent) = to_agent {
         if key == crate::prompt::SEND {
-            return send::send(screen, prompt, &send::Host::from_env(&send::cli)).await;
+            return match to_agent {
+                true => send::send(screen, prompt, &send::Host::from_env(&send::cli)).await,
+                false => apply::send(screen, prompt).await,
+            };
         }
-        let Some(draft) = open.draft_mut() else {
+        if key == KeyCode::Esc {
+            *prompt = None;
             return Outcome::quiet();
-        };
-        match key {
-            KeyCode::Esc => *prompt = None,
-            KeyCode::Enter => draft.newline(),
-            KeyCode::Backspace => draft.backspace(),
-            KeyCode::Char(character) => draft.push(character),
-            _ => {}
+        }
+        if let Some(draft) = prompt.as_mut().and_then(Prompt::draft_mut) {
+            match key {
+                KeyCode::Enter => draft.newline(),
+                KeyCode::Backspace => draft.backspace(),
+                KeyCode::Char(character) => draft.push(character),
+                _ => {}
+            }
         }
         return Outcome::quiet();
     }
@@ -152,7 +177,7 @@ impl Outcome {
         }
     }
 
-    fn after(after: After) -> Self {
+    pub(crate) fn after(after: After) -> Self {
         Self {
             after,
             status: None,
@@ -168,229 +193,4 @@ impl Outcome {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
-    use super::*;
-    use crate::connection::Connection;
-    use crate::cursor::List;
-    use crate::list;
-    use crate::list::tests::task;
-    use std::sync::{Arc, Mutex};
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::TcpListener;
-
-    /// Every request a double was sent, as its request line plus body.
-    pub(crate) type Seen = Arc<Mutex<Vec<String>>>;
-
-    pub(crate) struct Double {
-        pub(crate) base_url: String,
-        seen: Seen,
-    }
-
-    impl Double {
-        pub(crate) fn requests(&self) -> Vec<String> {
-            self.seen.lock().expect("lock").clone()
-        }
-
-        /// The requests that are not the list reads a refresh makes.
-        pub(crate) fn writes(&self) -> Vec<String> {
-            self.requests()
-                .into_iter()
-                .filter(|request| !request.starts_with("GET"))
-                .collect()
-        }
-    }
-
-    /// A loopback double answering every write with `status` and `body`, every read named in
-    /// `reads` with the body it is paired with, and every other read with an empty page.
-    pub(crate) async fn serve(status: &'static str, body: &'static str) -> Double {
-        serve_reading(status, body, &[]).await
-    }
-
-    pub(crate) async fn serve_reading(
-        status: &'static str,
-        body: &'static str,
-        reads: &'static [(&'static str, &'static str)],
-    ) -> Double {
-        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
-        let base_url = format!("http://{}", listener.local_addr().expect("addr"));
-        let seen: Seen = Arc::new(Mutex::new(Vec::new()));
-        let recorded = Arc::clone(&seen);
-        tokio::spawn(async move {
-            while let Ok((mut socket, _)) = listener.accept().await {
-                let mut buffer = [0u8; 2048];
-                let read = socket.read(&mut buffer).await.unwrap_or(0);
-                let request = String::from_utf8_lossy(&buffer[..read]).to_string();
-                // The method and the target, without the HTTP version, so a case reads as the
-                // request it is about.
-                let mut words = request.split_whitespace();
-                let line = format!(
-                    "{} {}",
-                    words.next().unwrap_or_default(),
-                    words.next().unwrap_or_default()
-                );
-                let sent_body = request.split_once("\r\n\r\n").map(|(_, body)| body);
-                recorded.lock().expect("lock").push(
-                    format!("{line} {}", sent_body.unwrap_or_default())
-                        .trim_end()
-                        .to_string(),
-                );
-                // A list read is answered with an empty page whatever the write case is, so a
-                // refresh after a write never turns a write's case into a parse failure.
-                let answer = if line.starts_with("GET") {
-                    let read = reads
-                        .iter()
-                        .find(|(needle, _)| line.contains(needle))
-                        .map(|(_, body)| *body);
-                    (
-                        "200 OK",
-                        read.unwrap_or(r#"{"results":[],"next_cursor":null}"#),
-                    )
-                } else {
-                    (status, body)
-                };
-                let response = format!(
-                    "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                    answer.0,
-                    answer.1.len(),
-                    answer.1
-                );
-                let _ = socket.write_all(response.as_bytes()).await;
-                let _ = socket.shutdown().await;
-            }
-        });
-        Double { base_url, seen }
-    }
-
-    /// A double that refuses every write the way the API refuses one, with its own message.
-    pub(crate) async fn refusing() -> Double {
-        serve(
-            "400 Bad Request",
-            r#"{"error":"Invalid argument value",
-                 "error_extra":{"explanation":"Unable to parse the due date"}}"#,
-        )
-        .await
-    }
-
-    /// One open task, carrying the priority and labels a quick edit reads off its row.
-    pub(crate) fn list_of_one(priority: u8, labels: &[&str]) -> List {
-        let project = serde_json::from_str(r#"{"id":"p1","name":"First"}"#).expect("project");
-        let labels = labels
-            .iter()
-            .map(|label| format!("\"{label}\""))
-            .collect::<Vec<_>>()
-            .join(",");
-        List::new(list::build(
-            &[task(&format!(
-                r#"{{"id":"6X","content":"water the plants","project_id":"p1",
-                     "priority":{priority},"labels":[{labels}]}}"#
-            ))],
-            &[project],
-            &[],
-        ))
-    }
-
-    /// Press `keys` on the open list of one task, against `double`, and report the status line
-    /// the last press left behind.
-    pub(crate) async fn press(double: &Double, list: &mut List, keys: &[KeyCode]) -> String {
-        let config = crate::reload::tests::config_with_token_command("printf test-token");
-        let mut connection = Connection::build(&config, &double.base_url).await;
-        let mut views = Views::new(&[]);
-        let mut prompt: Option<Prompt> = None;
-        let mut status = String::new();
-        for pressed in keys {
-            let mut screen = Screen {
-                connection: &mut connection,
-                config: &config,
-                base_url: &double.base_url,
-                list,
-                views: &mut views,
-            };
-            let outcome = if prompt.is_some() {
-                prompt_key(*pressed, &mut screen, &mut prompt).await
-            } else {
-                key(*pressed, &mut screen, &mut prompt).await
-            };
-            if let Some(said) = outcome.status {
-                status = said;
-            }
-        }
-        status
-    }
-
-    pub(crate) fn character(key: char) -> KeyCode {
-        KeyCode::Char(key)
-    }
-
-    pub(crate) fn typed(line: &str) -> Vec<KeyCode> {
-        line.chars().map(KeyCode::Char).collect()
-    }
-
-    #[tokio::test]
-    async fn a_dismissed_confirm_sends_nothing_at_all() {
-        let double = serve("200 OK", "null").await;
-        let mut list = list_of_one(1, &[]);
-
-        let status = press(&double, &mut list, &[character('d'), KeyCode::Esc]).await;
-
-        assert!(
-            double.requests().is_empty(),
-            "a dismissed confirm still sent: {:?}",
-            double.requests()
-        );
-        assert_eq!(status, "");
-        assert_eq!(list.task_count(), 1, "the row left on a dismissal");
-    }
-
-    #[tokio::test]
-    async fn an_input_left_empty_sends_nothing() {
-        let double = serve("200 OK", "null").await;
-        let mut list = list_of_one(1, &[]);
-
-        press(&double, &mut list, &[character('a'), KeyCode::Enter]).await;
-
-        assert!(
-            double.requests().is_empty(),
-            "an empty line still sent: {:?}",
-            double.requests()
-        );
-    }
-
-    #[tokio::test]
-    async fn a_key_with_no_task_under_the_cursor_sends_nothing() {
-        let double = serve("200 OK", "null").await;
-        let mut list = List::new(Vec::new());
-
-        press(
-            &double,
-            &mut list,
-            &[character('x'), character('p'), character('d')],
-        )
-        .await;
-
-        assert!(
-            double.requests().is_empty(),
-            "a key on an empty list sent: {:?}",
-            double.requests()
-        );
-    }
-    #[tokio::test]
-    async fn dd_deletes_the_task_after_the_second_d() {
-        let double = serve("200 OK", "null").await;
-        let mut list = list_of_one(1, &[]);
-
-        let status = press(&double, &mut list, &[character('d')]).await;
-        assert!(
-            double.requests().is_empty(),
-            "the first d sent something: {:?}",
-            double.requests()
-        );
-
-        assert_eq!(status, "", "the first d said something");
-
-        let double = serve("200 OK", "null").await;
-        let status = press(&double, &mut list, &[character('d'), character('d')]).await;
-
-        assert_eq!(double.writes(), ["DELETE /tasks/6X".to_string()]);
-        assert_eq!(status, "deleted  0 open tasks");
-    }
-}
+pub(crate) mod tests;

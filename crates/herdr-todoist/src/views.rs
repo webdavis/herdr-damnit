@@ -83,12 +83,13 @@ impl Views {
             .map(|view| view.name.as_str())
     }
 
-    /// The view a number key asks for. `1` is the first view, which is the unfiltered list, and
-    /// any other character asks for nothing.
+    /// The view a number key asks for. `1` is the first view, which is the unfiltered list; a
+    /// digit outside the numbered range, and any other character, ask for nothing.
     pub fn by_number(key: char) -> Option<usize> {
-        key.to_digit(10)
-            .filter(|digit| *digit > 0)
-            .map(|digit| digit as usize - 1)
+        let number = key.to_digit(10)? as usize;
+        (1..=MAX_NUMBERED_VIEW)
+            .contains(&number)
+            .then(|| number - 1)
     }
 }
 

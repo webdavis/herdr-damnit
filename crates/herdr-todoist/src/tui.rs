@@ -11,6 +11,7 @@ use crate::connection::Connection;
 use crate::cursor::List;
 use crate::detail::{After as DetailAfter, Detail};
 use crate::edit::{self, After};
+use crate::editor;
 use crate::prompt::Prompt;
 use crate::reload::Screen;
 use crate::render::{draw, draw_detail};
@@ -88,7 +89,8 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
             match completed_key(key, history, &mut connection, config, base_url, &mut views).await {
                 After::Quit => break Ok(()),
                 After::Completed => showing = Showing::Open,
-                After::Detail | After::Stay => {}
+                // The completed list has no edits, so neither of these is reachable from it.
+                After::Detail | After::Editor | After::Stay => {}
             }
             // A number key left the completed list for another view, which has to be read; a Tab
             // back to the view already on screen has nothing to read.
@@ -116,6 +118,16 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
                 }
                 showing = Showing::Completed;
             }
+            After::Editor => {
+                // `enter_editor` only leaves the alternate screen when it has an editor to run,
+                // so the terminal is only re-entered on that same path.
+                if let Some(said) =
+                    enter_editor(&mut connection, config, base_url, &mut list, &mut views).await
+                {
+                    status = said;
+                    terminal = ratatui::init();
+                }
+            }
             After::Detail => {
                 if let Some(opened) = open_detail(&mut connection, config, base_url, &list).await {
                     showing = Showing::Detail(opened);
@@ -126,6 +138,26 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
     };
     ratatui::restore();
     outcome
+}
+
+/// Hand the pane's terminal to the editor and take it back.
+///
+/// The alternate screen, raw mode and the mouse belong to whoever is drawing, so the pane leaves
+/// them before the child starts and the caller enters them again afterwards, on every path: a
+/// child that could not be started and one that exited badly both come back here. Reports the
+/// status line, or `None` when there was nothing under the cursor to edit.
+async fn enter_editor(
+    connection: &mut Connection,
+    config: &Config,
+    base_url: &str,
+    list: &mut List,
+    views: &mut Views,
+) -> Option<String> {
+    let argv = editor::argv(config, &list.selected_task()?.id)?;
+    ratatui::restore();
+    let ran = editor::run(&argv);
+    let mut pane = screen(connection, config, base_url, list, views);
+    Some(editor::after(ran, &mut pane).await)
 }
 
 /// Which of the pane's three screens is on. The completed list and the detail are screens rather
