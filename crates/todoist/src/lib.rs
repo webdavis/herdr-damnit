@@ -10,7 +10,7 @@ mod token;
 
 pub use client::{Change, Client, CompletedPage, Destination, User};
 pub use error::Error;
-pub use model::{Comment, CompletedTask, Due, Label, Project, Section, Task};
+pub use model::{Comment, CompletedTask, Due, Label, Project, Section, Task, task_url};
 pub use token::{Token, TokenError, TokenSource, resolve, resolve_with};
 
 /// The default API base. Every request path is joined onto it, and tests point the client at a
