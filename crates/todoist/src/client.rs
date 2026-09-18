@@ -241,6 +241,12 @@ impl Client {
 /// is how the API is told to keep that field unchanged.
 #[derive(Debug, Default, Serialize)]
 pub struct Change {
+    /// The task's one-line content.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    /// The task's long text, under its content in the app.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// 1 to 4, where 4 is the app's p1 and 1 its p4.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub priority: Option<u8>,
