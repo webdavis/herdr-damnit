@@ -180,7 +180,9 @@ fn sending(prompt: &Prompt) -> Sending {
             },
             None => Sending::Nothing,
         },
-        Prompt::Due { .. } | Prompt::Add { .. } => Sending::Nothing,
+        // A comment is typed on the detail screen, which posts it itself: the quick edits act on
+        // the task under the list's cursor and the detail screen has no list.
+        Prompt::Comment { .. } | Prompt::Due { .. } | Prompt::Add { .. } => Sending::Nothing,
     }
 }
 
