@@ -188,23 +188,23 @@ tasks.
 
 ## Keys in the pane
 
-| Key             | What it does                                       |
-| --------------- | -------------------------------------------------- |
-| `j`, `<Down>`   | move down one task                                 |
-| `k`, `<Up>`     | move up one task                                   |
-| `R`, `r`        | refresh the list                                   |
-| `v`             | open the view picker                               |
-| `1` to `9`      | show that view                                     |
-| `<Tab>`         | the completed list, and back                       |
-| `x`             | complete the task                                  |
-| `X`             | reopen the task                                    |
-| `dd`            | delete the task, after the confirm                 |
-| `p`             | cycle the priority one step up in urgency          |
-| `s`             | set the due date from a natural-language line       |
-| `l`             | toggle a label from a picker                       |
-| `m`             | move the task to a project or section from a picker |
-| `a`             | Quick Add a task from a whole line of its syntax   |
-| `q`, `<Esc>`    | close the pane                                     |
+| Key           | What it does                                        |
+| ------------- | --------------------------------------------------- |
+| `j`, `<Down>` | move down one task                                  |
+| `k`, `<Up>`   | move up one task                                    |
+| `R`, `r`      | refresh the list                                    |
+| `v`           | open the view picker                                |
+| `1` to `9`    | show that view                                      |
+| `<Tab>`       | the completed list, and back                        |
+| `x`           | complete the task                                   |
+| `X`           | reopen the task                                     |
+| `dd`          | delete the task, after the confirm                  |
+| `p`           | cycle the priority one step up in urgency           |
+| `s`           | set the due date from a natural-language line       |
+| `l`           | toggle a label from a picker                        |
+| `m`           | move the task to a project or section from a picker |
+| `a`           | Quick Add a task from a whole line of its syntax    |
+| `q`, `<Esc>`  | close the pane                                      |
 
 In the picker, `j` and `k` move, `<CR>` takes the entry under the cursor and `<Esc>` cancels. In
 the completed list `j` and `k` move, `u` and `X` reopen, `R` starts the walk again from today and
