@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::model::{Items, Page};
-use crate::{CompletedTask, Error, Label, Project, Section, Task, Token};
+use crate::{Comment, CompletedTask, Error, Label, Project, Section, Task, Token};
 
 /// The authenticated user, as much of it as the pane needs.
 #[derive(Debug, Deserialize)]
@@ -117,6 +117,21 @@ impl Client {
             .json()
             .await
             .map_err(|error| Error::Malformed(strip_url(&error.to_string())))
+    }
+
+    /// Every comment on the task, in whatever order the endpoint answers in: the vendor schema
+    /// promises no ordering, so the caller orders what it reads. The endpoint takes exactly one
+    /// of `task_id` and `project_id`, and paginates like every other list.
+    pub async fn comments(&self, task_id: &str) -> Result<Vec<Comment>, Error> {
+        self.collect("/comments", &[("task_id", task_id.to_string())])
+            .await
+    }
+
+    /// Add a comment to the task. Its answer is the comment the API made, which the pane does not
+    /// read: it re-reads the thread instead, so what is drawn is the server's own ordering.
+    pub async fn add_comment(&self, task_id: &str, content: &str) -> Result<(), Error> {
+        self.post("/comments", Some(json(&NewComment { task_id, content })?))
+            .await
     }
 
     /// Every label the account has, which is what the label picker offers.
@@ -250,6 +265,14 @@ pub enum Destination {
 #[derive(Serialize)]
 struct QuickAdd<'a> {
     text: &'a str,
+}
+
+/// A comment to create. `task_id` and `content` are the only two fields the pane sends: an
+/// attachment is a file upload, which a task pane is not the place for.
+#[derive(Serialize)]
+struct NewComment<'a> {
+    task_id: &'a str,
+    content: &'a str,
 }
 
 fn json<T: Serialize>(body: &T) -> Result<String, Error> {

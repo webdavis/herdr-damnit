@@ -1,5 +1,9 @@
 //! A loopback HTTP double. Every client test runs against this, never against Todoist.
 
+// Each test binary compiles its own copy of this module and uses the doubles its own cases need,
+// so a helper another binary uses reads as dead here.
+#![allow(dead_code)]
+
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
