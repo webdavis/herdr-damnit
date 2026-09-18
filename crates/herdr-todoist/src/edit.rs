@@ -58,7 +58,7 @@ pub async fn key(key: KeyCode, screen: &mut Screen<'_>, prompt: &mut Option<Prom
                 Outcome::after(After::Editor)
             }
             Some(task) => {
-                *prompt = Some(Prompt::edit(&task.id, &task.text, &task.description));
+                *prompt = Some(Prompt::edit(&task.id, &task.content, &task.description));
                 Outcome::quiet()
             }
             None => Outcome::quiet(),

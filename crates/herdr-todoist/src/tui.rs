@@ -184,7 +184,7 @@ async fn open_detail(
             config,
             base_url,
             &task.id,
-            &task.text,
+            &task.content,
             &task.description,
         )
         .await,
