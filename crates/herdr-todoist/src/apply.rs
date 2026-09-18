@@ -82,8 +82,8 @@ fn priority(priority: u8) -> Change {
 }
 
 /// Open a prompt about the task under the cursor. The two pickers read what they offer first, so
-/// a failed read says so in the status line and leaves the pane as it was rather than drawing an
-/// empty picker.
+/// a failed read, or one with nothing to offer, says so in the status line and leaves the pane as
+/// it was rather than drawing an empty picker.
 pub async fn open(screen: &mut Screen<'_>, prompt: &mut Option<Prompt>, ask: Ask) -> Outcome {
     let Some(task) = under_cursor(screen) else {
         return Outcome::quiet();
@@ -96,6 +96,9 @@ pub async fn open(screen: &mut Screen<'_>, prompt: &mut Option<Prompt>, ask: Ask
                 .request(async |client: &Client| client.labels().await)
                 .await
             {
+                Ok(known) if known.is_empty() && task.labels.is_empty() => {
+                    return Outcome::said("no labels".to_string());
+                }
                 Ok(known) => *prompt = Some(Prompt::labels(&task.id, &task.labels, &known)),
                 Err(error) => return Outcome::said(error),
             }
@@ -387,6 +390,22 @@ mod tests {
             ]
         );
         assert_eq!(status, "@home off  0 open tasks");
+    }
+
+    #[tokio::test]
+    async fn l_with_no_labels_anywhere_says_so_instead_of_opening_an_empty_picker() {
+        let double = serve_reading(
+            "200 OK",
+            "null",
+            &[("/labels", r#"{"results":[],"next_cursor":null}"#)],
+        )
+        .await;
+        let mut list = list_of_one(1, &[]);
+
+        let status = press(&double, &mut list, &[character('l')]).await;
+
+        assert_eq!(status, "no labels");
+        assert_eq!(double.writes(), Vec::<String>::new());
     }
 
     #[tokio::test]
