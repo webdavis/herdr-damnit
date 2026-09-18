@@ -11,7 +11,7 @@ use crate::views::{MAX_NUMBERED_VIEW, Picker, Views};
 
 const PICKER_HINTS: &str = "j/k move   <CR> show   <Esc> cancel";
 
-const COMPLETED_HINTS: &str = "j/k move   u reopen   <Tab> open tasks   R refresh   q close";
+const COMPLETED_HINTS: &str = "j/k  u reopen  <Tab> open  R  q";
 
 /// What the status line calls the completed list, which has no filter query of its own.
 const COMPLETED_LABEL: &str = "completed";
@@ -149,8 +149,20 @@ mod tests {
         picker: Option<&Picker>,
         completed: bool,
     ) -> Vec<String> {
+        frame_of_width(views, list, picker, completed, 80)
+    }
+
+    /// Draw into an off-screen terminal the width of a real side pane, roughly a third of a
+    /// terminal, so a hint or status line too wide to fit shows up truncated.
+    fn frame_of_width(
+        views: &Views,
+        list: &List,
+        picker: Option<&Picker>,
+        completed: bool,
+        width: u16,
+    ) -> Vec<String> {
         let mut terminal =
-            ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 8)).expect("terminal");
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, 8)).expect("terminal");
         let mut state = ListState::default();
         terminal
             .draw(|frame| {
@@ -257,12 +269,13 @@ mod tests {
         let mut views = views_of(&["today"]);
         views.select(1);
 
-        let frame = frame_of_screen(&views, &list_of_two(), None, true);
+        // 32 columns: roughly a third of a normal terminal, the default `width` a side pane
+        // opens at, so a hint line too wide for it shows up truncated here.
+        let frame = frame_of_width(&views, &list_of_two(), None, true, 32);
 
         assert!(frame[0].contains("todoist  completed"), "{frame:?}");
         let hints = frame.last().expect("a hint line");
-        assert!(hints.contains("u reopen"), "{hints}");
-        assert!(hints.contains("<Tab> open tasks"), "{hints}");
+        assert_eq!(hints.trim(), COMPLETED_HINTS, "{hints}");
     }
 
     #[test]

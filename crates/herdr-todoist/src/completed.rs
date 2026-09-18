@@ -107,14 +107,11 @@ impl Completed {
     }
 
     /// What the status line says about the history: how much of it is on screen, and, at the
-    /// bottom, how far back the API was read and why it stops there.
+    /// bottom, how far back the API was read. Kept short enough to survive a narrow side pane.
     fn count(&self) -> String {
         let count = format!("{} completed tasks", self.history.len());
         if self.history.spent() {
-            return format!(
-                "{count}  bottom of history: the API reads three months at a time, read back to {}",
-                self.history.floor()
-            );
+            return format!("{count}  read back to {}", self.history.floor());
         }
         count
     }
@@ -259,10 +256,9 @@ mod tests {
         let walked = double.requests();
         assert!(texts(&completed).is_empty());
         assert!(
-            completed.status().starts_with(
-                "0 completed tasks  bottom of history: the API reads three months at a time, \
-                 read back to "
-            ),
+            completed
+                .status()
+                .starts_with("0 completed tasks  read back to "),
             "{}",
             completed.status()
         );
