@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::widgets::ListState;
 
 use crate::completed::Completed;
@@ -224,8 +224,24 @@ fn next_key() -> Result<Option<KeyCode>, std::io::Error> {
         return Ok(None);
     }
     match event::read()? {
-        Event::Key(key) if key.kind == KeyEventKind::Press => Ok(Some(key.code)),
+        Event::Key(key) if key.kind == KeyEventKind::Press => Ok(Some(fold(key))),
         _ => Ok(None),
+    }
+}
+
+/// Fold a Ctrl-held letter into the control character a terminal itself would send, since
+/// crossterm hands back the letter and the modifier separately. This is what turns Ctrl-D into
+/// [`crate::prompt::SEND`]: everywhere past this point the pane's only currency is a bare
+/// `KeyCode`.
+fn fold(key: KeyEvent) -> KeyCode {
+    match key.code {
+        KeyCode::Char(character) if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            match character.to_ascii_lowercase() {
+                letter @ 'a'..='z' => KeyCode::Char((letter as u8 - b'a' + 1) as char),
+                _ => key.code,
+            }
+        }
+        _ => key.code,
     }
 }
 
@@ -238,6 +254,26 @@ fn opening_view(config: &Config, request: &std::path::Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ctrl_d_folds_to_the_send_key_the_comment_box_listens_for() {
+        assert_eq!(
+            fold(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL)),
+            crate::prompt::SEND
+        );
+    }
+
+    #[test]
+    fn a_plain_letter_and_a_control_key_with_no_letter_pass_through_unfolded() {
+        assert_eq!(
+            fold(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)),
+            KeyCode::Char('d')
+        );
+        assert_eq!(
+            fold(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL)),
+            KeyCode::Enter
+        );
+    }
 
     #[test]
     fn a_numbered_action_s_request_outranks_the_configured_opening_view() {
