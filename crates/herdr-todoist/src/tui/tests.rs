@@ -8,14 +8,10 @@ async fn a_refresh_interval_of_zero_still_reads_once_when_the_pane_opens() {
         "refresh_seconds = 0\ntoken_command = [\"sh\", \"-c\", \"printf test-token\"]",
     )
     .expect("parses");
-    let mut list = List::new(Vec::new());
-    let mut views = Views::new(&[]);
-    let (mut cache, mut queue) = crate::reload::tests::stores("tui-open-zero-interval");
+    let (cache, queue) = crate::reload::tests::stores("tui-open-zero-interval");
 
-    let (_, schedule, status) = open(
-        &config, &base_url, &mut list, &mut views, &mut cache, &mut queue,
-    )
-    .await;
+    let (_, schedule, status) =
+        open(&config, &base_url, "all", Views::new(&[]), cache, queue).await;
 
     assert_eq!(
         status, "0 open tasks",

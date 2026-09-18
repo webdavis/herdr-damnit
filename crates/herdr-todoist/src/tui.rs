@@ -20,6 +20,17 @@ use crate::reload::{self, Screen};
 use crate::render::{Chrome, draw, draw_detail};
 use crate::views::Views;
 
+/// Everything a key press borrows to act: the held connection, the rows on screen, the views, the
+/// local copy of each view and the writes still waiting for the network. One struct so a call
+/// that needs several of them takes one `&mut` instead of one argument per field.
+struct Pane {
+    connection: Connection,
+    list: List,
+    views: Views,
+    cache: Cache,
+    queue: Queue,
+}
+
 pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
     let mut views = Views::new(&config.views);
     // A `view` action's request outranks the configured opening view: it is the later word, and
@@ -27,20 +38,14 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
     if let Some(name) = opening_view(config, &crate::state::view_request_path()) {
         views.select_named(&name);
     }
-    // The pane opens on the view's local copy, so the rows are ready before anything is asked of
-    // the API.
-    let mut cache = Cache::in_state_dir();
-    let mut queue = Queue::in_state_dir();
-    let (rows, _) = reload::opening(
-        &mut cache,
-        &queue,
-        &views.current().name.clone(),
+    let view = views.current().name.clone();
+    let (mut pane, mut schedule, mut status) = open(
         config,
-        cache::now(),
-    );
-    let mut list = List::new(rows);
-    let (mut connection, mut schedule, mut status) = open(
-        config, base_url, &mut list, &mut views, &mut cache, &mut queue,
+        base_url,
+        &view,
+        views,
+        Cache::in_state_dir(),
+        Queue::in_state_dir(),
     )
     .await;
     let mut prompt: Option<Prompt> = None;
@@ -57,12 +62,12 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
             (Showing::Completed, Some(history)) => Some((history.status(), history.list())),
             _ => None,
         };
-        let (drawn_status, drawn_list) = drawn.unwrap_or((status.as_str(), &list));
+        let (drawn_status, drawn_list) = drawn.unwrap_or((status.as_str(), &pane.list));
         let drew = terminal.draw(|frame| match &showing {
             Showing::Detail(detail) => draw_detail(
                 frame,
                 &Chrome {
-                    views: &views,
+                    views: &pane.views,
                     palette: &palette,
                 },
                 detail,
@@ -71,7 +76,7 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
                 frame,
                 drawn_status,
                 &Chrome {
-                    views: &views,
+                    views: &pane.views,
                     palette: &palette,
                 },
                 drawn_list,
@@ -85,38 +90,18 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
         }
         // A `view` action runs as its own process, so its request arrives here rather than as a key.
         if let Some(name) = crate::state::take_requested_view(&crate::state::view_request_path())
-            && views.select_named(&name)
+            && pane.views.select_named(&name)
         {
             showing = Showing::Open;
             prompt = None;
-            status = screen(
-                &mut connection,
-                config,
-                base_url,
-                &mut list,
-                &mut views,
-                &mut cache,
-                &mut queue,
-            )
-            .show()
-            .await;
+            status = screen(&mut pane, config, base_url).show().await;
         }
         // The interval refresh. It is held back while a prompt is open or another screen is on,
         // so a half-typed line is never redrawn away, and it is driven from this loop alone,
         // which is why it cannot outlive the pane.
         let busy = prompt.is_some() || !matches!(showing, Showing::Open);
         if schedule.due(cache::now(), busy) {
-            status = screen(
-                &mut connection,
-                config,
-                base_url,
-                &mut list,
-                &mut views,
-                &mut cache,
-                &mut queue,
-            )
-            .refresh()
-            .await;
+            status = screen(&mut pane, config, base_url).refresh().await;
             schedule.mark(cache::now());
             continue;
         }
@@ -128,7 +113,10 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
         if let Showing::Detail(detail) = &mut showing {
             // Leaving the detail draws the list again with its own cursor untouched: nothing here
             // reads or writes the list, so the row that was under the cursor still is.
-            match detail.key(key, &mut connection, config, base_url).await {
+            match detail
+                .key(key, &mut pane.connection, config, base_url)
+                .await
+            {
                 DetailAfter::Quit => break Ok(()),
                 DetailAfter::Back => showing = Showing::Open,
                 DetailAfter::Stay => {}
@@ -136,9 +124,18 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
             continue;
         }
         if let Showing::Completed = showing {
-            let was = views.showing();
+            let was = pane.views.showing();
             let history = completed.as_mut().expect("the completed list is built");
-            match completed_key(key, history, &mut connection, config, base_url, &mut views).await {
+            match completed_key(
+                key,
+                history,
+                &mut pane.connection,
+                config,
+                base_url,
+                &mut pane.views,
+            )
+            .await
+            {
                 After::Quit => break Ok(()),
                 After::Completed => showing = Showing::Open,
                 // The completed list has no edits, so neither of these is reachable from it.
@@ -146,34 +143,16 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
             }
             // A number key left the completed list for another view, which has to be read; a Tab
             // back to the view already on screen has nothing to read.
-            if matches!(showing, Showing::Open) && views.showing() != was {
-                status = screen(
-                    &mut connection,
-                    config,
-                    base_url,
-                    &mut list,
-                    &mut views,
-                    &mut cache,
-                    &mut queue,
-                )
-                .show()
-                .await;
+            if matches!(showing, Showing::Open) && pane.views.showing() != was {
+                status = screen(&mut pane, config, base_url).show().await;
             }
             continue;
         }
-        let mut pane = screen(
-            &mut connection,
-            config,
-            base_url,
-            &mut list,
-            &mut views,
-            &mut cache,
-            &mut queue,
-        );
+        let mut acting = screen(&mut pane, config, base_url);
         let acted = if prompt.is_some() {
-            edit::prompt_key(key, &mut pane, &mut prompt).await
+            edit::prompt_key(key, &mut acting, &mut prompt).await
         } else {
-            edit::key(key, &mut pane, &mut prompt).await
+            edit::key(key, &mut acting, &mut prompt).await
         };
         if let Some(said) = acted.status {
             status = said;
@@ -184,30 +163,22 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
             After::Quit => break Ok(()),
             After::Completed => {
                 if completed.is_none() {
-                    completed = Some(Completed::open(&mut connection, config, base_url).await);
+                    completed = Some(Completed::open(&mut pane.connection, config, base_url).await);
                 }
                 showing = Showing::Completed;
             }
             After::Editor => {
                 // `enter_editor` only leaves the alternate screen when it has an editor to run,
                 // so the terminal is only re-entered on that same path.
-                if let Some(said) = enter_editor(
-                    &mut connection,
-                    config,
-                    base_url,
-                    &mut list,
-                    &mut views,
-                    &mut cache,
-                    &mut queue,
-                )
-                .await
-                {
+                if let Some(said) = enter_editor(&mut pane, config, base_url).await {
                     status = said;
                     terminal = ratatui::init();
                 }
             }
             After::Detail => {
-                if let Some(opened) = open_detail(&mut connection, config, base_url, &list).await {
+                if let Some(opened) =
+                    open_detail(&mut pane.connection, config, base_url, &pane.list).await
+                {
                     showing = Showing::Detail(opened);
                 }
             }
@@ -218,27 +189,44 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
     outcome
 }
 
+/// Build the pane's held state and read once before the first draw, whatever `refresh_seconds`
+/// is: it turns off the interval that follows, never the read that proves the cache right or
+/// wrong the moment the pane opens.
+async fn open(
+    config: &Config,
+    base_url: &str,
+    view: &str,
+    views: Views,
+    mut cache: Cache,
+    queue: Queue,
+) -> (Pane, Schedule, String) {
+    let (rows, _) = reload::opening(&mut cache, &queue, view, config, cache::now());
+    let connection = Connection::build(config, base_url).await;
+    let mut pane = Pane {
+        connection,
+        list: List::new(rows),
+        views,
+        cache,
+        queue,
+    };
+    let status = screen(&mut pane, config, base_url).refresh().await;
+    let mut schedule = Schedule::new(config.refresh_seconds(), cache::now());
+    schedule.mark(cache::now());
+    (pane, schedule, status)
+}
+
 /// Hand the pane's terminal to the editor and take it back.
 ///
 /// The alternate screen, raw mode and the mouse belong to whoever is drawing, so the pane leaves
 /// them before the child starts and the caller enters them again afterwards, on every path: a
 /// child that could not be started and one that exited badly both come back here. Reports the
 /// status line, or `None` when there was nothing under the cursor to edit.
-#[allow(clippy::too_many_arguments)]
-async fn enter_editor(
-    connection: &mut Connection,
-    config: &Config,
-    base_url: &str,
-    list: &mut List,
-    views: &mut Views,
-    cache: &mut Cache,
-    queue: &mut Queue,
-) -> Option<String> {
-    let argv = editor::argv(config, &list.selected_task()?.id)?;
+async fn enter_editor(pane: &mut Pane, config: &Config, base_url: &str) -> Option<String> {
+    let argv = editor::argv(config, &pane.list.selected_task()?.id)?;
     ratatui::restore();
     let ran = editor::run(&argv);
-    let mut pane = screen(connection, config, base_url, list, views, cache, queue);
-    Some(editor::after(ran, &mut pane).await)
+    let mut acting = screen(pane, config, base_url);
+    Some(editor::after(ran, &mut acting).await)
 }
 
 /// Which of the pane's three screens is on. The completed list and the detail are screens rather
@@ -272,46 +260,16 @@ async fn open_detail(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
-fn screen<'a>(
-    connection: &'a mut Connection,
-    config: &'a Config,
-    base_url: &'a str,
-    list: &'a mut List,
-    views: &'a mut Views,
-    cache: &'a mut Cache,
-    queue: &'a mut Queue,
-) -> Screen<'a> {
+fn screen<'a>(pane: &'a mut Pane, config: &'a Config, base_url: &'a str) -> Screen<'a> {
     Screen {
-        connection,
+        connection: &mut pane.connection,
         config,
         base_url,
-        list,
-        views,
-        cache,
-        queue,
+        list: &mut pane.list,
+        views: &mut pane.views,
+        cache: &mut pane.cache,
+        queue: &mut pane.queue,
     }
-}
-
-/// Build the connection and read once before the first draw, whatever `refresh_seconds` is: it
-/// turns off the interval that follows, never the read that proves the cache right or wrong the
-/// moment the pane opens.
-#[allow(clippy::too_many_arguments)]
-async fn open(
-    config: &Config,
-    base_url: &str,
-    list: &mut List,
-    views: &mut Views,
-    cache: &mut Cache,
-    queue: &mut Queue,
-) -> (Connection, Schedule, String) {
-    let mut connection = Connection::build(config, base_url).await;
-    let status = screen(&mut connection, config, base_url, list, views, cache, queue)
-        .refresh()
-        .await;
-    let mut schedule = Schedule::new(config.refresh_seconds(), cache::now());
-    schedule.mark(cache::now());
-    (connection, schedule, status)
 }
 
 /// One key press on the completed list. `u` and `X` both reopen, since `X` reopens wherever the
