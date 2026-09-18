@@ -97,6 +97,12 @@ impl Config {
     fn check_view_names(&self) -> Result<(), String> {
         let mut seen: Vec<&str> = Vec::new();
         for view in &self.views {
+            if view.name.trim().is_empty() {
+                return Err("a view needs a name".to_string());
+            }
+            if view.filter.trim().is_empty() {
+                return Err(format!("view '{}' has an empty filter", view.name));
+            }
             if view.name == crate::views::ALL {
                 return Err(format!(
                     "a view cannot be named '{}': that is the pane's own unfiltered list",
@@ -274,5 +280,21 @@ mod tests {
         let error = Config::parse("[[views]]\nfilter = \"today\"\n").expect_err("refuses");
 
         assert!(error.contains("name"), "{error}");
+    }
+
+    #[test]
+    fn a_view_with_an_empty_name_is_a_config_error() {
+        let error =
+            Config::parse("[[views]]\nname = \"\"\nfilter = \"today\"\n").expect_err("refuses");
+
+        assert!(error.contains("needs a name"), "{error}");
+    }
+
+    #[test]
+    fn a_view_with_an_empty_filter_is_a_config_error_naming_the_view() {
+        let error =
+            Config::parse("[[views]]\nname = \"today\"\nfilter = \"\"\n").expect_err("refuses");
+
+        assert!(error.contains("view 'today' has an empty filter"), "{error}");
     }
 }
