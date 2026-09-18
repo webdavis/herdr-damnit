@@ -52,8 +52,8 @@ pub struct Agent {
     pub name: String,
 }
 
-/// One row of `herdr agent list`. `name` and `display_agent` are absent until something sets them,
-/// so the name falls back through them to the agent kind.
+/// One row of `herdr agent list`. `name` is absent until herdr sets one; `display_agent` is the
+/// auth profile a pane authenticated with, not the agent, so the true kind (`agent`) outranks it.
 #[derive(Deserialize)]
 struct Listed {
     pane_id: String,
@@ -155,7 +155,7 @@ fn agent_in(listing: &str, workspace: &str, me: &str) -> Result<Agent, String> {
 }
 
 fn named(listed: &Listed) -> String {
-    [&listed.name, &listed.display_agent, &listed.agent]
+    [&listed.name, &listed.agent, &listed.display_agent]
         .into_iter()
         .flatten()
         .find(|name| !name.is_empty())

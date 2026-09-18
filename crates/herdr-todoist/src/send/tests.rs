@@ -166,7 +166,7 @@ async fn a_note_box_submitted_blank_sends_the_brief_without_a_note() {
     let status = hand_over(&double, &mut full_task(), &herdr, "   \n  ").await;
 
     assert!(!sent(&herdr).contains("note:"), "{}", sent(&herdr));
-    assert_eq!(status, "sent to personal");
+    assert_eq!(status, "sent to claude");
 }
 
 #[tokio::test]
@@ -178,10 +178,10 @@ async fn a_sent_brief_is_followed_by_the_comment_recording_the_hand_off() {
 
     assert_eq!(
         double.writes(),
-        [r#"POST /comments {"task_id":"6X","content":"Handed to the agent personal from the herdr Todoist pane."}"#
+        [r#"POST /comments {"task_id":"6X","content":"Handed to the agent claude from the herdr Todoist pane."}"#
             .to_string()]
     );
-    assert_eq!(status, "sent to personal");
+    assert_eq!(status, "sent to claude");
 }
 
 #[tokio::test]
@@ -206,7 +206,7 @@ async fn a_refused_comment_says_so_and_does_not_claim_the_send_failed() {
 
     assert_eq!(
         status,
-        "sent to personal, comment refused: \
+        "sent to claude, comment refused: \
          Invalid argument value: Unable to parse the due date"
     );
     assert!(!herdr.calls().is_empty(), "the send never happened");
@@ -247,7 +247,7 @@ fn the_agent_pane_is_the_one_pane_of_this_workspace_herdr_names_an_agent_for() {
         agent,
         Agent {
             pane: "w1:p2".to_string(),
-            name: "personal".to_string(),
+            name: "claude".to_string(),
         }
     );
 }
@@ -264,6 +264,22 @@ fn a_workspace_of_panes_with_no_agent_among_them_has_no_send_target() {
 fn an_agent_herdr_named_nothing_for_is_still_addressable_by_its_kind() {
     let listing =
         r#"{"result":{"agents":[{"agent":"codex","pane_id":"w1:p3","workspace_id":"w1"}]}}"#;
+
+    assert_eq!(
+        agent_in(listing, "w1", "w1:p9").expect("an agent").name,
+        "codex"
+    );
+}
+
+/// Verbatim shape of a live `herdr agent list` on 0.9.0: `display_agent` is the auth profile a
+/// pane signed in with, not the agent, so two different agents can share one. The agent kind
+/// must still tell them apart.
+#[test]
+fn the_agent_kind_outranks_the_auth_profile_it_shares_with_another_pane() {
+    let listing = r#"{"result":{"agents":[
+        {"agent":"codex","display_agent":"personal-backup","pane_id":"w1:p2","workspace_id":"w1"},
+        {"agent":"claude","display_agent":"personal-backup","pane_id":"w1:p3","workspace_id":"w1"}
+    ]}}"#;
 
     assert_eq!(
         agent_in(listing, "w1", "w1:p9").expect("an agent").name,
