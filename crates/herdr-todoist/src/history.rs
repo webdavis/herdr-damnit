@@ -118,6 +118,10 @@ impl History {
                 Row::Task(TaskRow {
                     id: task.id.clone(),
                     text: line(task),
+                    // The completed endpoint sends neither field, so the completed screen's keys
+                    // are the ones that need neither.
+                    priority: crate::list::LOWEST_PRIORITY,
+                    labels: Vec::new(),
                 })
             })
             .collect()

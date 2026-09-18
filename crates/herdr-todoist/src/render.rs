@@ -7,19 +7,18 @@ use ratatui::widgets::{Block, Borders, Clear, ListItem, ListState, Paragraph};
 
 use crate::cursor::List;
 use crate::list::Row;
-use crate::views::{MAX_NUMBERED_VIEW, Picker, Views};
-
-const PICKER_HINTS: &str = "j/k move   <CR> show   <Esc> cancel";
+use crate::prompt::Prompt;
+use crate::views::{MAX_NUMBERED_VIEW, Views};
 
 const COMPLETED_HINTS: &str = "j/k  u reopen  <Tab> open  R  q";
 
 /// What the status line calls the completed list, which has no filter query of its own.
 const COMPLETED_LABEL: &str = "completed";
 
+/// The open list's own keys. A side pane is about 32 columns wide, so the line names the eight
+/// edits, the view keys and the two screens, and leaves j/k, R and the arrow keys unsaid.
 fn hints() -> String {
-    format!(
-        "j/k move   v views   1-{MAX_NUMBERED_VIEW} view   <Tab> completed   R refresh   q close"
-    )
+    format!("x X dd p s l m a  v 1-{MAX_NUMBERED_VIEW} <Tab> q")
 }
 
 /// The status line, naming the showing view. Every failure the client can report (a rejected
@@ -32,7 +31,7 @@ fn status_line(status: &str, view: &str) -> Line<'static> {
     ])
 }
 
-/// The pane's whole frame: the status line, the list, the picker when it is open, and the hints.
+/// The pane's whole frame: the status line, the list, the prompt when one is open, and the hints.
 /// `completed` says which of the pane's two lists is on screen, which is what the status line
 /// names and what the hints are for.
 pub fn draw(
@@ -41,7 +40,7 @@ pub fn draw(
     views: &Views,
     list: &List,
     row: &mut ListState,
-    picker: Option<&Picker>,
+    prompt: Option<&Prompt>,
     completed: bool,
 ) {
     let [status_area, body_area, hint_area] = Layout::vertical([
@@ -63,39 +62,54 @@ pub fn draw(
         body_area,
         row,
     );
-    if let Some(picker) = picker {
-        draw_picker(frame, body_area, views, picker);
+    if let Some(prompt) = prompt {
+        draw_prompt(frame, body_area, views, prompt);
     }
-    let hints = match (picker.is_some(), completed) {
-        (true, _) => PICKER_HINTS.to_string(),
-        (false, true) => COMPLETED_HINTS.to_string(),
-        (false, false) => hints(),
+    let hints = match (prompt, completed) {
+        (Some(prompt), _) => prompt.hints().to_string(),
+        (None, true) => COMPLETED_HINTS.to_string(),
+        (None, false) => hints(),
     };
     frame.render_widget(Paragraph::new(Line::from(hints)), hint_area);
 }
 
-/// The view picker, over the list: every view by name and number, the cursor on one of them.
-fn draw_picker(frame: &mut ratatui::Frame<'_>, body_area: Rect, views: &Views, picker: &Picker) {
-    let height = (views.len() as u16 + 2).min(body_area.height);
-    let area = Rect {
-        height,
+/// The prompt, over the list: a bordered box holding either its entries with the cursor on one of
+/// them, or the one line it is asking for. One drawing serves every prompt, so the views picker,
+/// the label picker, the move picker, the confirm and the two inputs all sit in the same place.
+fn draw_prompt(frame: &mut ratatui::Frame<'_>, body_area: Rect, views: &Views, prompt: &Prompt) {
+    let block = Block::default().borders(Borders::ALL).title(prompt.title());
+    match prompt.entries(views) {
+        Some((entries, at)) => {
+            let area = boxed(body_area, entries.len() as u16);
+            let mut state = ListState::default();
+            state.select(Some(at));
+            frame.render_widget(Clear, area);
+            frame.render_stateful_widget(
+                ratatui::widgets::List::new(entries.into_iter().map(ListItem::new))
+                    .block(block)
+                    .highlight_style(Style::new().add_modifier(Modifier::REVERSED)),
+                area,
+                &mut state,
+            );
+        }
+        None => {
+            let area = boxed(body_area, 1);
+            frame.render_widget(Clear, area);
+            frame.render_widget(
+                Paragraph::new(Line::from(prompt.line().unwrap_or_default())).block(block),
+                area,
+            );
+        }
+    }
+}
+
+/// A box for `rows` rows at the top of the body, never taller than the body itself, so a long
+/// picker in a short pane is cut off rather than drawn outside the pane.
+fn boxed(body_area: Rect, rows: u16) -> Rect {
+    Rect {
+        height: rows.saturating_add(2).min(body_area.height),
         ..body_area
-    };
-    let entries: Vec<ListItem<'_>> = views
-        .names()
-        .enumerate()
-        .map(|(index, name)| ListItem::new(Line::from(format!(" {} {name}", index + 1))))
-        .collect();
-    let mut state = ListState::default();
-    state.select(Some(picker.at()));
-    frame.render_widget(Clear, area);
-    frame.render_stateful_widget(
-        ratatui::widgets::List::new(entries)
-            .block(Block::default().borders(Borders::ALL).title("views"))
-            .highlight_style(Style::new().add_modifier(Modifier::REVERSED)),
-        area,
-        &mut state,
-    );
+    }
 }
 
 /// A heading stands out in bold; a task line is drawn as it was built.
@@ -113,6 +127,7 @@ mod tests {
     use crate::config;
     use crate::list;
     use crate::list::tests::task;
+    use crate::prompt::Input;
 
     fn list_of_two() -> List {
         let project = serde_json::from_str(r#"{"id":"p1","name":"First"}"#).expect("project");
@@ -139,17 +154,17 @@ mod tests {
     }
 
     /// Draw one frame into an off-screen terminal and report the buffer as lines.
-    fn frame_of(views: &Views, list: &List, picker: Option<&Picker>) -> Vec<String> {
-        frame_of_screen(views, list, picker, false)
+    fn frame_of(views: &Views, list: &List, prompt: Option<&Prompt>) -> Vec<String> {
+        frame_of_screen(views, list, prompt, false)
     }
 
     fn frame_of_screen(
         views: &Views,
         list: &List,
-        picker: Option<&Picker>,
+        prompt: Option<&Prompt>,
         completed: bool,
     ) -> Vec<String> {
-        frame_of_width(views, list, picker, completed, 80)
+        frame_of_width(views, list, prompt, completed, 80)
     }
 
     /// Draw into an off-screen terminal the width of a real side pane, roughly a third of a
@@ -157,7 +172,7 @@ mod tests {
     fn frame_of_width(
         views: &Views,
         list: &List,
-        picker: Option<&Picker>,
+        prompt: Option<&Prompt>,
         completed: bool,
         width: u16,
     ) -> Vec<String> {
@@ -172,7 +187,7 @@ mod tests {
                     views,
                     list,
                     &mut state,
-                    picker,
+                    prompt,
                     completed,
                 )
             })
@@ -250,18 +265,98 @@ mod tests {
     #[test]
     fn the_picker_draws_every_view_by_number_over_the_list() {
         let views = views_of(&["today", "work"]);
-        let picker = Picker::open(&views);
+        let prompt = Prompt::views(&views);
 
-        let frame = frame_of(&views, &list_of_two(), Some(&picker));
+        let frame = frame_of(&views, &list_of_two(), Some(&prompt));
 
         assert!(frame[1].contains("views"), "{frame:?}");
         assert!(frame[2].contains("1 all"), "{frame:?}");
         assert!(frame[3].contains("2 today"), "{frame:?}");
         assert!(frame[4].contains("3 work"), "{frame:?}");
         assert!(
-            frame.last().expect("a hint line").contains("<CR> show"),
+            frame.last().expect("a hint line").contains("<CR> pick"),
             "{frame:?}"
         );
+    }
+
+    /// 32 columns: roughly a third of a normal terminal, the width a side pane opens at, so a
+    /// line too wide for it shows up truncated here.
+    const NARROW: u16 = 32;
+
+    fn narrow_frame(prompt: Option<&Prompt>) -> Vec<String> {
+        frame_of_width(&views_of(&["today"]), &list_of_two(), prompt, false, NARROW)
+    }
+
+    #[test]
+    fn every_hint_line_fits_a_narrow_side_pane() {
+        let views = views_of(&["today"]);
+        let prompts = [
+            Prompt::views(&views),
+            Prompt::delete("1", "first"),
+            Prompt::due("1"),
+            Prompt::add(),
+            Prompt::labels("1", &["home".to_string()], &[]),
+            Prompt::move_to("1", &[], &[]),
+        ];
+
+        let expected = hints();
+        let open = narrow_frame(None);
+        let drawn = open.last().expect("a hint line");
+        assert!(drawn.chars().count() <= NARROW as usize, "{drawn}");
+        assert_eq!(
+            drawn.trim(),
+            expected.trim(),
+            "the open list's hints wrapped"
+        );
+
+        for prompt in &prompts {
+            let frame = narrow_frame(Some(prompt));
+            let hints = frame.last().expect("a hint line");
+            assert_eq!(
+                hints.trim(),
+                prompt.hints(),
+                "the {} prompt's hints wrapped",
+                prompt.title()
+            );
+        }
+    }
+
+    #[test]
+    fn the_confirm_names_the_task_over_the_rows_it_would_leave_alone() {
+        let frame = narrow_frame(Some(&Prompt::delete("1", "first")));
+
+        assert!(frame[1].contains("delete"), "{frame:?}");
+        assert!(frame[2].contains("delete first?"), "{frame:?}");
+        assert!(
+            frame.last().expect("a hint line").contains("dd delete"),
+            "{frame:?}"
+        );
+    }
+
+    #[test]
+    fn an_input_draws_the_line_typed_so_far_in_a_box_of_its_own() {
+        let mut prompt = Prompt::due("1");
+        let input: &mut Input = prompt.input_mut().expect("an input");
+        for character in "next mon".chars() {
+            input.push(character);
+        }
+
+        let frame = narrow_frame(Some(&prompt));
+
+        assert!(frame[1].contains("due"), "{frame:?}");
+        assert!(frame[2].contains("next mon_"), "{frame:?}");
+    }
+
+    #[test]
+    fn the_label_picker_draws_a_mark_against_the_labels_the_task_carries() {
+        let frame = narrow_frame(Some(&Prompt::labels(
+            "1",
+            &["home".to_string()],
+            &[serde_json::from_str(r#"{"name":"home"}"#).expect("label")],
+        )));
+
+        assert!(frame[1].contains("labels"), "{frame:?}");
+        assert!(frame[2].contains("[x] home"), "{frame:?}");
     }
 
     #[test]
@@ -279,15 +374,11 @@ mod tests {
     }
 
     #[test]
-    fn the_open_list_hints_the_way_to_the_completed_one() {
+    fn the_open_list_hints_its_edits_and_the_way_to_the_completed_one() {
         let frame = frame_of(&views_of(&[]), &list_of_two(), None);
+        let hints = frame.last().expect("a hint line");
 
-        assert!(
-            frame
-                .last()
-                .expect("a hint line")
-                .contains("<Tab> completed"),
-            "{frame:?}"
-        );
+        assert!(hints.contains("x X dd p s l m a"), "{frame:?}");
+        assert!(hints.contains("<Tab>"), "{frame:?}");
     }
 }

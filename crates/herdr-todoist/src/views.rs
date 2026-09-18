@@ -92,8 +92,9 @@ impl Views {
     }
 }
 
-/// The picker's own cursor while it is open, kept apart from the showing view so cancelling
-/// leaves the pane where it was.
+/// A picker's own cursor while it is open, kept apart from what it is picking from so cancelling
+/// leaves the pane as it was. Every list overlay the pane draws moves its cursor through this,
+/// the views it was written for included.
 #[derive(Debug)]
 pub struct Picker {
     at: usize,
@@ -106,6 +107,11 @@ impl Picker {
             at: views.showing(),
             len: views.len(),
         }
+    }
+
+    /// A picker over `len` entries, starting on the first.
+    pub fn over(len: usize) -> Self {
+        Self { at: 0, len }
     }
 
     pub fn at(&self) -> usize {
