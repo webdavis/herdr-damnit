@@ -188,19 +188,63 @@ tasks.
 
 ## Keys in the pane
 
-| Key             | What it does                  |
-| --------------- | ----------------------------- |
-| `j`, `<Down>`   | move down one task            |
-| `k`, `<Up>`     | move up one task              |
-| `R`, `r`        | refresh the list              |
-| `v`             | open the view picker          |
-| `1` to `9`      | show that view                |
-| `<Tab>`         | the completed list, and back  |
-| `q`, `<Esc>`    | close the pane                |
+| Key             | What it does                                       |
+| --------------- | -------------------------------------------------- |
+| `j`, `<Down>`   | move down one task                                 |
+| `k`, `<Up>`     | move up one task                                   |
+| `R`, `r`        | refresh the list                                   |
+| `v`             | open the view picker                               |
+| `1` to `9`      | show that view                                     |
+| `<Tab>`         | the completed list, and back                       |
+| `x`             | complete the task                                  |
+| `X`             | reopen the task                                    |
+| `dd`            | delete the task, after the confirm                 |
+| `p`             | cycle the priority one step up in urgency          |
+| `s`             | set the due date from a natural-language line       |
+| `l`             | toggle a label from a picker                       |
+| `m`             | move the task to a project or section from a picker |
+| `a`             | Quick Add a task from a whole line of its syntax   |
+| `q`, `<Esc>`    | close the pane                                     |
 
-In the picker, `j` and `k` move, `<CR>` shows the view under the cursor and `<Esc>` cancels. In the
-completed list `j` and `k` move, `u` reopens, `R` starts the walk again from today and `q` closes
-the pane.
+In the picker, `j` and `k` move, `<CR>` takes the entry under the cursor and `<Esc>` cancels. In
+the completed list `j` and `k` move, `u` and `X` reopen, `R` starts the walk again from today and
+`q` closes the pane.
+
+## Quick edits
+
+Each edit is one key press, and the three that need words are one line typed in the pane, drawn
+over the list in the same box the view picker uses. No editor is entered and nothing is typed into
+a file.
+
+- `x` completes and `X` reopens the task under the cursor. `X` on a task that is already open is
+  refused by the API, which says so in the status line.
+- `dd` deletes. The first `d` draws a confirm naming the task; the second `d` sends the delete and
+  any other key dismisses it, sending nothing at all. A deleted task takes its subtasks with it and
+  there is no undo, which is why the confirm is there.
+- `p` cycles the priority one step up in urgency and wraps at the top: `p4`, `p3`, `p2`, `p1`, and
+  from `p1` back to `p4`. The API numbers priority the other way round from the app, 4 being the
+  app's `p1`; the pane speaks the app's wording throughout.
+- `s` takes a due date in Todoist's own words (`tomorrow`, `next mon`, `every 2 weeks`) and sends
+  it as `due_string`, so Todoist parses it. The pane has no date parser of its own, and a line it
+  cannot parse comes back as Todoist's own complaint with the line still in the box.
+- `l` opens a picker of every label, marking the ones the task carries. `<CR>` toggles the one
+  under the cursor and writes the task's whole label set; the picker stays open, so several labels
+  go on or off without reopening it. A label the account no longer lists but the task still carries
+  is offered too, so it can be taken off.
+- `m` opens a picker of every project with its sections indented under it, and `<CR>` moves the
+  task there.
+- `a` takes a whole line of
+  [Quick Add syntax](https://www.todoist.com/help/articles/use-task-quick-add-in-todoist-va4Lhpzz)
+  (`Pay rent tomorrow 9am p1 #Finances @home`) and sends it as typed, so Todoist parses the date,
+  the priority, the project and the labels. The status line names the task Todoist made of it.
+
+An empty line sends nothing, and `<Esc>` leaves any prompt without a request.
+
+Every write is followed by a read of the showing view, so the rows come from the server rather than
+from a guess at what the write did: a completed or deleted task leaves the list, a moved task
+appears under its new project, and a task that no longer matches the showing filter disappears. A
+refused write leaves every row where it is and puts the API's own message in the status line, the
+same shape a refused filter query has.
 
 A refresh keeps the cursor on the same task rather than on the same row, so a task added, removed
 or reordered above it does not move the highlight. When the task under the cursor is gone, the

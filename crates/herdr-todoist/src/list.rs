@@ -10,6 +10,11 @@ use todoist::{Project, Section, Task};
 /// keeps malformed input from recursing without end.
 const MAX_DEPTH: usize = 8;
 
+/// The API's priority range. It runs the other way from the app's wording: 4 is the app's p1, the
+/// most urgent, and 1 is its p4, which the app draws as no priority at all.
+pub const LOWEST_PRIORITY: u8 = 1;
+pub const HIGHEST_PRIORITY: u8 = 4;
+
 /// One line of the list. A header carries its own indentation, as does a task, so drawing a row
 /// is printing its text.
 #[derive(Debug, PartialEq, Eq)]
@@ -23,6 +28,10 @@ pub enum Row {
 pub struct TaskRow {
     pub id: String,
     pub text: String,
+    /// The API's own priority, 1 to 4 with 4 the most urgent, which `p` cycles from.
+    pub priority: u8,
+    /// The task's label names, which the label picker marks and an update rewrites whole.
+    pub labels: Vec<String>,
 }
 
 impl Row {
@@ -31,6 +40,14 @@ impl Row {
         match self {
             Self::Header(_) => None,
             Self::Task(task) => Some(&task.id),
+        }
+    }
+
+    /// The task this row is, or `None` for a heading.
+    pub fn task(&self) -> Option<&TaskRow> {
+        match self {
+            Self::Header(_) => None,
+            Self::Task(task) => Some(task),
         }
     }
 
@@ -170,6 +187,8 @@ fn emit<'a>(
         rows.push(Row::Task(TaskRow {
             id: task.id.clone(),
             text: task_text(task, depth, subtasks),
+            priority: task.priority.clamp(LOWEST_PRIORITY, HIGHEST_PRIORITY),
+            labels: task.labels.clone(),
         }));
         if let Some(subtasks) = children.get(task.id.as_str()) {
             emit(rows, subtasks.iter().copied(), depth + 1, children);

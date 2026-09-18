@@ -4,15 +4,16 @@ use std::time::Duration;
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::widgets::ListState;
-use todoist::{Client, Error as TodoistError};
 
 use crate::completed::Completed;
 use crate::config::Config;
 use crate::connection::Connection;
 use crate::cursor::List;
-use crate::list::{self, Row};
+use crate::edit::{self, After};
+use crate::prompt::Prompt;
+use crate::reload::Screen;
 use crate::render::draw;
-use crate::views::{Picker, Views};
+use crate::views::Views;
 
 pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
     let mut views = Views::new(&config.views);
@@ -23,8 +24,10 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
     }
     let mut connection = Connection::build(config, base_url).await;
     let mut list = List::new(Vec::new());
-    let mut status = show(&mut connection, config, base_url, &mut list, &views).await;
-    let mut picker: Option<Picker> = None;
+    let mut status = screen(&mut connection, config, base_url, &mut list, &mut views)
+        .show()
+        .await;
+    let mut prompt: Option<Prompt> = None;
     // The completed list is a second screen rather than a tenth view: the numbered views are the
     // operator's own filter queries, and this one has no filter, no grouping and keys of its own.
     // It is built on its first use and kept, so leaving and returning does not re-read the API.
@@ -36,7 +39,7 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
         let showing = completed
             .as_ref()
             .filter(|_| showing_completed)
-            .map(|screen| (screen.status(), screen.list()));
+            .map(|history| (history.status(), history.list()));
         let (drawn_status, drawn_list) = showing.unwrap_or((status.as_str(), &list));
         if let Err(error) = terminal.draw(|frame| {
             draw(
@@ -45,7 +48,7 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
                 &views,
                 drawn_list,
                 &mut row,
-                picker.as_ref(),
+                prompt.as_ref(),
                 showing_completed,
             )
         }) {
@@ -56,170 +59,113 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
             && views.select_named(&name)
         {
             showing_completed = false;
-            status = show(&mut connection, config, base_url, &mut list, &views).await;
+            prompt = None;
+            status = screen(&mut connection, config, base_url, &mut list, &mut views)
+                .show()
+                .await;
         }
         let key = match next_key().map_err(|error| error.to_string()) {
             Err(error) => break Err(error),
             Ok(None) => continue,
             Ok(Some(key)) => key,
         };
-        match &mut picker {
-            None if showing_completed => {
-                let screen = completed.as_mut().expect("the completed list is built");
-                match key {
-                    KeyCode::Char('q') | KeyCode::Esc => break Ok(()),
-                    KeyCode::Tab | KeyCode::BackTab => showing_completed = false,
-                    KeyCode::Char('j') | KeyCode::Down => {
-                        screen.down(&mut connection, config, base_url).await;
-                    }
-                    KeyCode::Char('k') | KeyCode::Up => screen.up(),
-                    KeyCode::Char('u') => {
-                        screen.reopen(&mut connection, config, base_url).await;
-                    }
-                    KeyCode::Char('r' | 'R') => {
-                        *screen = Completed::open(&mut connection, config, base_url).await;
-                    }
-                    // A number key names an open-task view, so it leaves the completed list for
-                    // that view, and a number with no view behind it does nothing here either.
-                    KeyCode::Char(digit) => {
-                        if let Some(index) = Views::by_number(digit).filter(|at| *at < views.len())
-                        {
-                            views.select(index);
-                            showing_completed = false;
-                            status =
-                                show(&mut connection, config, base_url, &mut list, &views).await;
-                        }
-                    }
-                    _ => {}
-                }
+        if showing_completed {
+            let showing = views.showing();
+            let history = completed.as_mut().expect("the completed list is built");
+            match completed_key(key, history, &mut connection, config, base_url, &mut views).await {
+                After::Quit => break Ok(()),
+                After::Completed => showing_completed = false,
+                After::Stay => {}
             }
-            Some(open) => match key {
-                KeyCode::Char('j') | KeyCode::Down => open.move_cursor(1),
-                KeyCode::Char('k') | KeyCode::Up => open.move_cursor(-1),
-                KeyCode::Enter => {
-                    let chosen = open.at();
-                    picker = None;
-                    if views.select(chosen) {
-                        status = show(&mut connection, config, base_url, &mut list, &views).await;
-                    }
-                }
-                KeyCode::Esc | KeyCode::Char('q') => picker = None,
-                _ => {}
-            },
-            None => match key {
-                KeyCode::Char('q') | KeyCode::Esc => break Ok(()),
-                KeyCode::Char('r' | 'R') => {
-                    status = check(
-                        &mut connection,
-                        config,
-                        base_url,
-                        &mut list,
-                        views.current().filter.as_deref(),
-                        Change::Refresh,
-                    )
+            // A number key left the completed list for another view, which has to be read; a Tab
+            // back to the view already on screen has nothing to read.
+            if !showing_completed && views.showing() != showing {
+                status = screen(&mut connection, config, base_url, &mut list, &mut views)
+                    .show()
                     .await;
+            }
+            continue;
+        }
+        let mut pane = screen(&mut connection, config, base_url, &mut list, &mut views);
+        let acted = if prompt.is_some() {
+            edit::prompt_key(key, &mut pane, &mut prompt).await
+        } else {
+            edit::key(key, &mut pane, &mut prompt).await
+        };
+        if let Some(said) = acted.status {
+            status = said;
+        }
+        match acted.after {
+            After::Quit => break Ok(()),
+            After::Completed => {
+                if completed.is_none() {
+                    completed = Some(Completed::open(&mut connection, config, base_url).await);
                 }
-                KeyCode::Char('j') | KeyCode::Down => {
-                    list.move_cursor(1);
-                }
-                KeyCode::Char('k') | KeyCode::Up => {
-                    list.move_cursor(-1);
-                }
-                KeyCode::Char('v') => picker = Some(Picker::open(&views)),
-                KeyCode::Tab | KeyCode::BackTab => {
-                    if completed.is_none() {
-                        completed = Some(Completed::open(&mut connection, config, base_url).await);
-                    }
-                    showing_completed = true;
-                }
-                KeyCode::Char(digit) => {
-                    if let Some(index) = Views::by_number(digit)
-                        && views.select(index)
-                    {
-                        status = show(&mut connection, config, base_url, &mut list, &views).await;
-                    }
-                }
-                _ => {}
-            },
+                showing_completed = true;
+            }
+            After::Stay => {}
         }
     };
     ratatui::restore();
     outcome
 }
 
-/// The view the pane opens on: the one a `view` action asked for, else the configured opening
-/// view, else the unfiltered list.
-fn opening_view(config: &Config, request: &std::path::Path) -> Option<String> {
-    crate::state::take_requested_view(request).or_else(|| config.default_view.clone())
-}
-
-/// The three lists the view is built from, read at once. `filter` is the showing view's query,
-/// absent on the unfiltered list.
-async fn fetch(client: &Client, filter: Option<&str>) -> Result<Vec<Row>, TodoistError> {
-    let tasks = async {
-        match filter {
-            Some(query) => client.tasks_matching(query).await,
-            None => client.tasks().await,
-        }
-    };
-    let (tasks, projects, sections) =
-        tokio::try_join!(tasks, client.projects(), client.sections())?;
-    Ok(list::build(&tasks, &projects, &sections))
-}
-
-/// Read the list through the held connection and report the status line. A failure leaves the
-/// rows already on screen alone and says so in the status line.
-async fn check(
-    connection: &mut Connection,
-    config: &Config,
-    base_url: &str,
-    list: &mut List,
-    filter: Option<&str>,
-    change: Change,
-) -> String {
-    let read = connection
-        .attempt(config, base_url, async |client: &Client| {
-            fetch(client, filter).await
-        })
-        .await;
-    match read {
-        Ok(rows) => {
-            match change {
-                Change::Refresh => list.refresh(rows),
-                Change::Switch => list.switch(rows),
-            }
-            format!("{} open tasks", list.task_count())
-        }
-        Err(error) => error,
-    }
-}
-
-/// Which view the rows belong to, which is what decides where the cursor lands: a refresh of the
-/// showing view keeps the cursor near its task, a switch to another view only keeps the task
-/// itself.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Change {
-    Refresh,
-    Switch,
-}
-
-/// Read the showing view and report the status line.
-async fn show(
-    connection: &mut Connection,
-    config: &Config,
-    base_url: &str,
-    list: &mut List,
-    views: &Views,
-) -> String {
-    check(
+fn screen<'a>(
+    connection: &'a mut Connection,
+    config: &'a Config,
+    base_url: &'a str,
+    list: &'a mut List,
+    views: &'a mut Views,
+) -> Screen<'a> {
+    Screen {
         connection,
         config,
         base_url,
         list,
-        views.current().filter.as_deref(),
-        Change::Switch,
-    )
-    .await
+        views,
+    }
+}
+
+/// One key press on the completed list. `u` and `X` both reopen, since `X` reopens wherever the
+/// cursor is, and a number key leaves for that view the way it does on the open list.
+async fn completed_key(
+    key: KeyCode,
+    completed: &mut Completed,
+    connection: &mut Connection,
+    config: &Config,
+    base_url: &str,
+    views: &mut Views,
+) -> After {
+    match key {
+        KeyCode::Char('q') | KeyCode::Esc => After::Quit,
+        KeyCode::Tab | KeyCode::BackTab => After::Completed,
+        KeyCode::Char('j') | KeyCode::Down => {
+            completed.down(connection, config, base_url).await;
+            After::Stay
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            completed.up();
+            After::Stay
+        }
+        KeyCode::Char('u' | 'X') => {
+            completed.reopen(connection, config, base_url).await;
+            After::Stay
+        }
+        KeyCode::Char('r' | 'R') => {
+            *completed = Completed::open(connection, config, base_url).await;
+            After::Stay
+        }
+        // A number key names an open-task view, so it leaves the completed list for that view,
+        // and a number with no view behind it does nothing here either.
+        KeyCode::Char(digit) => match Views::by_number(digit).filter(|at| *at < views.len()) {
+            Some(index) => {
+                views.select(index);
+                After::Completed
+            }
+            None => After::Stay,
+        },
+        _ => After::Stay,
+    }
 }
 
 /// A key press, or `None` when the poll window passed with nothing pressed, which keeps the draw
@@ -234,26 +180,15 @@ fn next_key() -> Result<Option<KeyCode>, std::io::Error> {
     }
 }
 
+/// The view the pane opens on: the one a `view` action asked for, else the configured opening
+/// view, else the unfiltered list.
+fn opening_view(config: &Config, request: &std::path::Path) -> Option<String> {
+    crate::state::take_requested_view(request).or_else(|| config.default_view.clone())
+}
+
 #[cfg(test)]
 mod tests {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::TcpListener;
-
     use super::*;
-    use crate::config::Config;
-    use crate::list::tests::task;
-
-    /// One empty page, which every list endpoint parses.
-    const EMPTY_PAGE: &str = r#"{"results":[],"next_cursor":null}"#;
-
-    /// The document Todoist answers a malformed filter query with.
-    const REFUSED_FILTER: &str = r#"{"error_tag":"INVALID_ARGUMENT_VALUE","error_code":20,
-        "error":"Invalid argument value","http_code":400,
-        "error_extra":{"argument":"filter","explanation":"Unable to parse the filter query"}}"#;
-
-    fn config_with_token_command(script: &str) -> Config {
-        Config::parse(&format!(r#"token_command = ["sh", "-c", "{script}"]"#)).expect("parses")
-    }
 
     #[test]
     fn a_numbered_action_s_request_outranks_the_configured_opening_view() {
@@ -290,166 +225,5 @@ mod tests {
             None,
             "with no configured view the pane opens on the unfiltered list"
         );
-    }
-
-    fn list_of_one() -> List {
-        let project = serde_json::from_str(r#"{"id":"p1","name":"First"}"#).expect("project");
-        List::new(list::build(
-            &[task(r#"{"id":"1","content":"keep me","project_id":"p1"}"#)],
-            &[project],
-            &[],
-        ))
-    }
-
-    /// A refresh of the unfiltered list, which is what most of these cases are.
-    async fn refresh(
-        connection: &mut Connection,
-        config: &Config,
-        base_url: &str,
-        list: &mut List,
-    ) -> String {
-        check(connection, config, base_url, list, None, Change::Refresh).await
-    }
-
-    /// A loopback double answering every request the same way, until the listener is dropped.
-    async fn serve_forever(status: &'static str, body: &'static str) -> String {
-        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
-        let base_url = format!("http://{}", listener.local_addr().expect("addr"));
-        let response = format!(
-            "HTTP/1.1 {status}\r\nContent-Length: {}\r\n\r\n{body}",
-            body.len()
-        );
-        tokio::spawn(async move {
-            while let Ok((mut socket, _)) = listener.accept().await {
-                let mut buffer = [0u8; 1024];
-                let _ = socket.read(&mut buffer).await;
-                let _ = socket.write_all(response.as_bytes()).await;
-                let _ = socket.shutdown().await;
-            }
-        });
-        base_url
-    }
-
-    #[tokio::test]
-    async fn a_failed_connection_reports_its_error_without_probing_the_network() {
-        let mut connection = Connection::Failed("no token source: neither key is set".to_string());
-        let config = Config::default();
-        let mut list = List::new(Vec::new());
-        let message = refresh(&mut connection, &config, "http://127.0.0.1:1", &mut list).await;
-        assert_eq!(message, "no token source: neither key is set");
-    }
-
-    #[tokio::test]
-    async fn a_refresh_reuses_the_client_instead_of_rerunning_token_command() {
-        let counter = std::env::temp_dir().join(format!(
-            "herdr-todoist-token-command-runs-{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&counter);
-        let base_url = serve_forever("200 OK", EMPTY_PAGE).await;
-        let config = config_with_token_command(&format!(
-            "printf x >> {} && printf test-token",
-            counter.display()
-        ));
-        let mut connection = Connection::build(&config, &base_url).await;
-        let mut list = List::new(Vec::new());
-
-        let first = refresh(&mut connection, &config, &base_url, &mut list).await;
-        let second = refresh(&mut connection, &config, &base_url, &mut list).await;
-
-        assert_eq!(first, "0 open tasks");
-        assert_eq!(second, "0 open tasks");
-        let runs = std::fs::read_to_string(&counter).expect("counter file");
-        let _ = std::fs::remove_file(&counter);
-        assert_eq!(runs, "x", "token_command ran more than once: {runs:?}");
-    }
-
-    #[tokio::test]
-    async fn a_rejected_token_is_reported_after_rebuilding_once() {
-        let base_url = serve_forever("401 Unauthorized", "{}").await;
-        let config = config_with_token_command("printf test-token");
-        let mut connection = Connection::build(&config, &base_url).await;
-        let mut list = List::new(Vec::new());
-
-        let message = refresh(&mut connection, &config, &base_url, &mut list).await;
-
-        assert_eq!(message, "unauthorized: the token was rejected");
-    }
-
-    #[tokio::test]
-    async fn a_rate_limited_refresh_keeps_the_last_good_list_on_screen() {
-        let base_url = serve_forever("429 Too Many Requests", "{}").await;
-        let config = config_with_token_command("printf test-token");
-        let mut connection = Connection::build(&config, &base_url).await;
-        let mut list = list_of_one();
-
-        let message = refresh(&mut connection, &config, &base_url, &mut list).await;
-
-        assert_eq!(message, "rate limited, retry shortly");
-        assert_eq!(list.task_count(), 1);
-        assert_eq!(list.selected_id(), Some("1"));
-    }
-
-    #[tokio::test]
-    async fn a_refused_filter_reports_the_api_s_own_message_and_keeps_the_rows_on_screen() {
-        let base_url = serve_forever("400 Bad Request", REFUSED_FILTER).await;
-        let config = config_with_token_command("printf test-token");
-        let mut connection = Connection::build(&config, &base_url).await;
-        let mut list = list_of_one();
-
-        let message = check(
-            &mut connection,
-            &config,
-            &base_url,
-            &mut list,
-            Some("#Work &"),
-            Change::Switch,
-        )
-        .await;
-
-        assert_eq!(
-            message,
-            "Invalid argument value: Unable to parse the filter query"
-        );
-        assert_eq!(list.task_count(), 1);
-        assert_eq!(list.selected_id(), Some("1"));
-    }
-
-    #[tokio::test]
-    async fn a_filter_matching_nothing_empties_the_list_instead_of_reporting_a_failure() {
-        let base_url = serve_forever("200 OK", EMPTY_PAGE).await;
-        let config = config_with_token_command("printf test-token");
-        let mut connection = Connection::build(&config, &base_url).await;
-        let mut list = list_of_one();
-
-        let message = check(
-            &mut connection,
-            &config,
-            &base_url,
-            &mut list,
-            Some("today & @nobody"),
-            Change::Switch,
-        )
-        .await;
-
-        assert_eq!(message, "0 open tasks");
-        assert_eq!(list.task_count(), 0);
-    }
-
-    #[tokio::test]
-    async fn a_network_failure_keeps_the_last_good_list_on_screen() {
-        let config = config_with_token_command("printf test-token");
-        let base_url = {
-            let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
-            let address = listener.local_addr().expect("addr");
-            format!("http://{address}")
-        };
-        let mut connection = Connection::build(&config, &base_url).await;
-        let mut list = list_of_one();
-
-        let message = refresh(&mut connection, &config, &base_url, &mut list).await;
-
-        assert!(message.starts_with("network error:"), "{message}");
-        assert_eq!(list.task_count(), 1);
     }
 }

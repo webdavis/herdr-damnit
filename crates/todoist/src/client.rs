@@ -239,7 +239,7 @@ pub struct Change {
 
 /// Where a move puts the task. The API takes one id, so a section move names the section alone and
 /// the task follows it into that section's project.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum Destination {
     #[serde(rename = "project_id")]
     Project(String),
