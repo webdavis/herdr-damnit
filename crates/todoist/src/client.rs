@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
-use crate::model::Page;
-use crate::{Error, Project, Section, Task, Token};
+use crate::model::{Items, Page};
+use crate::{CompletedTask, Error, Project, Section, Task, Token};
 
 /// The authenticated user, as much of it as the pane needs.
 #[derive(Debug, Deserialize)]
@@ -53,6 +53,40 @@ impl Client {
             .await
     }
 
+    /// One page of the tasks completed in `[since, until)`, both ISO 8601 timestamps, newest
+    /// first being no promise of the endpoint: the caller orders what it reads. The API caps the
+    /// window at three months and pages it by cursor, so this makes exactly ONE request and hands
+    /// back the cursor for the next: a caller drawing a screen at a time never reads a history it
+    /// has not been asked for.
+    pub async fn completed(
+        &self,
+        since: &str,
+        until: &str,
+        cursor: Option<&str>,
+    ) -> Result<CompletedPage, Error> {
+        let mut query = vec![
+            ("since", since.to_string()),
+            ("until", until.to_string()),
+            ("limit", COMPLETED_PAGE_LIMIT.to_string()),
+        ];
+        if let Some(cursor) = cursor {
+            query.push(("cursor", cursor.to_string()));
+        }
+        let page: Items<CompletedTask> = self
+            .get("/tasks/completed/by_completion_date", &query)
+            .await?;
+        Ok(CompletedPage {
+            tasks: page.items,
+            next_cursor: page.next_cursor,
+        })
+    }
+
+    /// Reopen a completed task. Its answer carries nothing the pane reads, so only a refusal,
+    /// which arrives in the API's own words, is worth reporting.
+    pub async fn reopen(&self, id: &str) -> Result<(), Error> {
+        self.post(&format!("/tasks/{id}/reopen")).await
+    }
+
     pub async fn projects(&self) -> Result<Vec<Project>, Error> {
         self.collect("/projects", &[]).await
     }
@@ -90,6 +124,28 @@ impl Client {
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T, Error> {
+        let response = self.send(reqwest::Method::GET, path, query).await?;
+        response
+            .json()
+            .await
+            .map_err(|error| Error::Malformed(strip_url(&error.to_string())))
+    }
+
+    /// A write whose answer the pane does not read. The body is left unparsed, so an empty answer
+    /// and a document are both a success.
+    async fn post(&self, path: &str) -> Result<(), Error> {
+        self.send(reqwest::Method::POST, path, &[]).await?;
+        Ok(())
+    }
+
+    /// One authenticated request, with every failure the API can report mapped to an [`Error`]
+    /// carrying the API's own message.
+    async fn send(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        query: &[(&str, String)],
+    ) -> Result<reqwest::Response, Error> {
         let mut url = reqwest::Url::parse(&format!("{}{path}", self.base_url))
             .map_err(|error| Error::Network(error.to_string()))?;
         if !query.is_empty() {
@@ -97,7 +153,7 @@ impl Client {
         }
         let response = self
             .http
-            .get(url)
+            .request(method, url)
             .header(reqwest::header::AUTHORIZATION, self.token.header_value())
             .send()
             .await
@@ -112,15 +168,22 @@ impl Client {
             let body = response.text().await.unwrap_or_default();
             return Err(error.with_api_message(&body));
         }
-        response
-            .json()
-            .await
-            .map_err(|error| Error::Malformed(strip_url(&error.to_string())))
+        Ok(response)
     }
+}
+
+/// One page of completed tasks, with the cursor that reads the page after it.
+#[derive(Debug)]
+pub struct CompletedPage {
+    pub tasks: Vec<CompletedTask>,
+    pub next_cursor: Option<String>,
 }
 
 /// Pages are read at the API's documented maximum, so a few hundred open tasks is one request.
 const PAGE_LIMIT: u16 = 200;
+
+/// A completed page is the endpoint's own default size, which is about a screen of history.
+const COMPLETED_PAGE_LIMIT: u16 = 50;
 
 /// reqwest appends the request URL to its messages; the status line has no room for it and the
 /// base URL says nothing a reader needs.

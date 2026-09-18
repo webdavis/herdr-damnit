@@ -32,7 +32,9 @@ impl List {
     }
 
     /// Move the cursor by `steps` task rows, skipping headings and stopping at either end.
-    pub fn move_cursor(&mut self, steps: isize) {
+    /// Reports whether it moved, which is how the completed list knows the cursor is at the
+    /// bottom and the next page is wanted.
+    pub fn move_cursor(&mut self, steps: isize) -> bool {
         let tasks: Vec<usize> = self
             .rows
             .iter()
@@ -41,14 +43,16 @@ impl List {
             .map(|(index, _)| index)
             .collect();
         if tasks.is_empty() {
-            return;
+            return false;
         }
         let at = tasks
             .iter()
             .position(|index| *index >= self.selected)
             .unwrap_or(tasks.len() - 1) as isize;
         let target = (at + steps).clamp(0, tasks.len() as isize - 1) as usize;
+        let moved = tasks[target] != self.selected;
         self.selected = tasks[target];
+        moved
     }
 
     /// Replace the rows, keeping the cursor on the task it was on. When that task is gone the

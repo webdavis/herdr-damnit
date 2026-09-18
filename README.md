@@ -165,6 +165,27 @@ level of indentation deeper. Each line carries the task's content, its due date,
 the `p1` to `p4` the app shows, its labels, and the number of subtasks under it. A project or
 section with no open task of its own is left out.
 
+## The completed list
+
+`<Tab>` shows the completed tasks instead of the open ones, and `<Tab>` again goes back. It is a
+second screen rather than a tenth view: the numbered views are filter queries over open tasks, and
+this list has no filter and no grouping. `1` to `9` and the view picker go back to the open list on
+the view they name, so a `view:<n>` keybinding behaves the same whichever list is on screen.
+
+Completed tasks are newest first, one line each, the completion date first so the dates line up
+down the pane. The list is paged: the first screen is one request when the newest window has rows,
+and reaching the bottom row asks for the next page. An account whose newest windows hold nothing
+walks back through them before the first screen draws, since each page is a request of its own.
+`u` reopens the task under the cursor, which drops its row at once, since a reopened task is no
+longer completed; the cursor takes the row below it. A refused reopen leaves every row where it is
+and reports the API's own message in the status line.
+
+The API reads completed tasks in a window of at most three months at a time, so the list walks back
+one window per page. It stops about three years back and the status line says so along with the day
+it read back to, rather than leaving the bottom of the list looking like the end of the history. How
+much of that reads at all is the account's own retention: a free plan keeps a week of completed
+tasks.
+
 ## Keys in the pane
 
 | Key             | What it does                  |
@@ -174,9 +195,12 @@ section with no open task of its own is left out.
 | `R`, `r`        | refresh the list              |
 | `v`             | open the view picker          |
 | `1` to `9`      | show that view                |
+| `<Tab>`         | the completed list, and back  |
 | `q`, `<Esc>`    | close the pane                |
 
-In the picker, `j` and `k` move, `<CR>` shows the view under the cursor and `<Esc>` cancels.
+In the picker, `j` and `k` move, `<CR>` shows the view under the cursor and `<Esc>` cancels. In the
+completed list `j` and `k` move, `u` reopens, `R` starts the walk again from today and `q` closes
+the pane.
 
 A refresh keeps the cursor on the same task rather than on the same row, so a task added, removed
 or reordered above it does not move the highlight. When the task under the cursor is gone, the

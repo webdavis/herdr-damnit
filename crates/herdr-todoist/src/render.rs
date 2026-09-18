@@ -11,8 +11,15 @@ use crate::views::{MAX_NUMBERED_VIEW, Picker, Views};
 
 const PICKER_HINTS: &str = "j/k move   <CR> show   <Esc> cancel";
 
+const COMPLETED_HINTS: &str = "j/k  u reopen  <Tab> open  R  q";
+
+/// What the status line calls the completed list, which has no filter query of its own.
+const COMPLETED_LABEL: &str = "completed";
+
 fn hints() -> String {
-    format!("j/k move   v views   1-{MAX_NUMBERED_VIEW} view   R refresh   q close")
+    format!(
+        "j/k move   v views   1-{MAX_NUMBERED_VIEW} view   <Tab> completed   R refresh   q close"
+    )
 }
 
 /// The status line, naming the showing view. Every failure the client can report (a rejected
@@ -26,6 +33,8 @@ fn status_line(status: &str, view: &str) -> Line<'static> {
 }
 
 /// The pane's whole frame: the status line, the list, the picker when it is open, and the hints.
+/// `completed` says which of the pane's two lists is on screen, which is what the status line
+/// names and what the hints are for.
 pub fn draw(
     frame: &mut ratatui::Frame<'_>,
     status: &str,
@@ -33,6 +42,7 @@ pub fn draw(
     list: &List,
     row: &mut ListState,
     picker: Option<&Picker>,
+    completed: bool,
 ) {
     let [status_area, body_area, hint_area] = Layout::vertical([
         Constraint::Length(1),
@@ -40,10 +50,12 @@ pub fn draw(
         Constraint::Length(1),
     ])
     .areas(frame.area());
-    frame.render_widget(
-        Paragraph::new(status_line(status, &views.current().name)),
-        status_area,
-    );
+    let label = if completed {
+        COMPLETED_LABEL
+    } else {
+        &views.current().name
+    };
+    frame.render_widget(Paragraph::new(status_line(status, label)), status_area);
     row.select(list.selected_id().map(|_| list.selected()));
     frame.render_stateful_widget(
         ratatui::widgets::List::new(list.rows().iter().map(item))
@@ -54,10 +66,10 @@ pub fn draw(
     if let Some(picker) = picker {
         draw_picker(frame, body_area, views, picker);
     }
-    let hints = if picker.is_some() {
-        PICKER_HINTS.to_string()
-    } else {
-        hints()
+    let hints = match (picker.is_some(), completed) {
+        (true, _) => PICKER_HINTS.to_string(),
+        (false, true) => COMPLETED_HINTS.to_string(),
+        (false, false) => hints(),
     };
     frame.render_widget(Paragraph::new(Line::from(hints)), hint_area);
 }
@@ -128,11 +140,42 @@ mod tests {
 
     /// Draw one frame into an off-screen terminal and report the buffer as lines.
     fn frame_of(views: &Views, list: &List, picker: Option<&Picker>) -> Vec<String> {
+        frame_of_screen(views, list, picker, false)
+    }
+
+    fn frame_of_screen(
+        views: &Views,
+        list: &List,
+        picker: Option<&Picker>,
+        completed: bool,
+    ) -> Vec<String> {
+        frame_of_width(views, list, picker, completed, 80)
+    }
+
+    /// Draw into an off-screen terminal the width of a real side pane, roughly a third of a
+    /// terminal, so a hint or status line too wide to fit shows up truncated.
+    fn frame_of_width(
+        views: &Views,
+        list: &List,
+        picker: Option<&Picker>,
+        completed: bool,
+        width: u16,
+    ) -> Vec<String> {
         let mut terminal =
-            ratatui::Terminal::new(ratatui::backend::TestBackend::new(40, 8)).expect("terminal");
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, 8)).expect("terminal");
         let mut state = ListState::default();
         terminal
-            .draw(|frame| draw(frame, "2 open tasks", views, list, &mut state, picker))
+            .draw(|frame| {
+                draw(
+                    frame,
+                    "2 open tasks",
+                    views,
+                    list,
+                    &mut state,
+                    picker,
+                    completed,
+                )
+            })
             .expect("draw");
         let buffer = terminal.backend().buffer().clone();
         (0..buffer.area.height)
@@ -160,6 +203,7 @@ mod tests {
                     list,
                     &mut state,
                     None,
+                    false,
                 )
             })
             .expect("draw");
@@ -216,6 +260,33 @@ mod tests {
         assert!(frame[4].contains("3 work"), "{frame:?}");
         assert!(
             frame.last().expect("a hint line").contains("<CR> show"),
+            "{frame:?}"
+        );
+    }
+
+    #[test]
+    fn the_completed_list_is_named_in_the_status_line_and_hints_its_own_keys() {
+        let mut views = views_of(&["today"]);
+        views.select(1);
+
+        // 32 columns: roughly a third of a normal terminal, the default `width` a side pane
+        // opens at, so a hint line too wide for it shows up truncated here.
+        let frame = frame_of_width(&views, &list_of_two(), None, true, 32);
+
+        assert!(frame[0].contains("todoist  completed"), "{frame:?}");
+        let hints = frame.last().expect("a hint line");
+        assert_eq!(hints.trim(), COMPLETED_HINTS, "{hints}");
+    }
+
+    #[test]
+    fn the_open_list_hints_the_way_to_the_completed_one() {
+        let frame = frame_of(&views_of(&[]), &list_of_two(), None);
+
+        assert!(
+            frame
+                .last()
+                .expect("a hint line")
+                .contains("<Tab> completed"),
             "{frame:?}"
         );
     }
