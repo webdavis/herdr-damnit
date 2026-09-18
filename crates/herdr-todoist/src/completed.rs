@@ -49,6 +49,7 @@ impl Completed {
             return;
         }
         self.status = self.read(connection, config, base_url).await;
+        self.list.move_cursor(1);
     }
 
     /// Reopen the task under the cursor. It stops being completed, so its row leaves at once and
@@ -221,6 +222,7 @@ mod tests {
             "the first screen read more than a page"
         );
         assert_eq!(completed.status(), "1 completed tasks");
+        assert_eq!(completed.list().selected_id(), Some("1"));
 
         completed
             .down(&mut connection, &config, &double.base_url)
@@ -230,6 +232,11 @@ mod tests {
             vec!["2026-09-17  newest", "2026-05-02  older"]
         );
         assert_eq!(double.requests(), 2);
+        assert_eq!(
+            completed.list().selected_id(),
+            Some("2"),
+            "the key press that loaded the next page has to move onto it"
+        );
 
         completed.up();
         completed
