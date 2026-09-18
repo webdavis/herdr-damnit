@@ -128,7 +128,8 @@ fn hand_off(host: &Host<'_>, text: &str) -> Result<Agent, String> {
         .as_deref()
         .ok_or_else(|| "no workspace context: run this pane inside herdr".to_string())?;
     let agent = agent_in(&(host.run)(&["agent", "list"])?, workspace, &host.me)?;
-    (host.run)(&["pane", "send-text", &agent.pane, &pasted(text)])?;
+    (host.run)(&["pane", "send-text", &agent.pane, &pasted(text)])
+        .map_err(|_| format!("herdr refused the send to {}", agent.pane))?;
     // Focus is a convenience once the text is delivered: a refused focus leaves the brief in the
     // agent's input, so failing the send here would report a hand-off that did happen as one that
     // did not.

@@ -219,7 +219,7 @@ async fn a_refused_send_writes_no_comment_at_all() {
 
     let status = hand_over(&double, &mut full_task(), &herdr, "").await;
 
-    assert_eq!(status, "herdr pane send-text failed: pane w1:p2 not found");
+    assert_eq!(status, "herdr refused the send to w1:p2");
     assert_eq!(
         double.writes(),
         Vec::<String>::new(),
