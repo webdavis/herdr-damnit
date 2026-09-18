@@ -1,8 +1,8 @@
 //! The comment a person is typing: several lines, drawn in the pane rather than in an editor.
 //!
 //! This is the one thing the quick edits' single-line [`crate::prompt::Input`] cannot be, so it
-//! is its own widget in the same prompt: `<CR>` opens a line rather than sending, and the caret
-//! walks the text it has already typed.
+//! is its own widget in the same prompt: `<CR>` opens a line rather than sending, and a
+//! backspace at the start of a line joins it to the one above.
 
 /// A multi-line draft. The caret is a line and a column within it, so `<CR>` splits a line and a
 /// backspace at the start of one joins it to the line above, which is what a hand expects.
