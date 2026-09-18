@@ -119,10 +119,14 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
                 showing = Showing::Completed;
             }
             After::Editor => {
-                status = enter_editor(&mut connection, config, base_url, &mut list, &mut views)
-                    .await
-                    .unwrap_or(status);
-                terminal = ratatui::init();
+                // `enter_editor` only leaves the alternate screen when it has an editor to run,
+                // so the terminal is only re-entered on that same path.
+                if let Some(said) =
+                    enter_editor(&mut connection, config, base_url, &mut list, &mut views).await
+                {
+                    status = said;
+                    terminal = ratatui::init();
+                }
             }
             After::Detail => {
                 if let Some(opened) = open_detail(&mut connection, config, base_url, &list).await {
