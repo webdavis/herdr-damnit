@@ -35,6 +35,9 @@ pub enum Prompt {
     /// variant that names no task: it is opened from the detail screen, which is about one task
     /// already and posts the comment itself.
     Comment { draft: Draft },
+    /// The task's own words, typed over several lines: its content on the first line and its
+    /// description under it. This is the box `e` opens when no editor is configured.
+    Edit { id: String, draft: Draft },
     /// Which project or section to move the task to.
     Move {
         id: String,
@@ -96,6 +99,18 @@ impl Prompt {
         }
     }
 
+    /// The box over a task's own words, opened on what the task says now.
+    pub fn edit(id: &str, content: &str, description: &str) -> Self {
+        let text = match description.trim().is_empty() {
+            true => content.trim().to_string(),
+            false => format!("{}\n{description}", content.trim()),
+        };
+        Self::Edit {
+            id: id.to_string(),
+            draft: Draft::of(&text),
+        }
+    }
+
     pub fn move_to(id: &str, projects: &[Project], sections: &[Section]) -> Self {
         let choices = destinations(projects, sections);
         Self::Move {
@@ -114,6 +129,7 @@ impl Prompt {
             Self::Add { .. } => "add",
             Self::Labels { .. } => "labels",
             Self::Comment { .. } => "comment",
+            Self::Edit { .. } => "edit",
             Self::Move { .. } => "move",
         }
     }
@@ -150,7 +166,9 @@ impl Prompt {
                     .collect(),
                 picker.at(),
             )),
-            Self::Comment { draft, .. } => Some((draft.drawn(), draft.caret_line())),
+            Self::Comment { draft, .. } | Self::Edit { draft, .. } => {
+                Some((draft.drawn(), draft.caret_line()))
+            }
             Self::Delete { .. } | Self::Due { .. } | Self::Add { .. } => None,
         }
     }
@@ -158,7 +176,7 @@ impl Prompt {
     /// Whether the cursor row is drawn highlighted. A picker's cursor is a choice, so it is; a
     /// comment's caret is already drawn in the text, so a reversed line would only obscure it.
     pub fn highlights(&self) -> bool {
-        !matches!(self, Self::Comment { .. })
+        !matches!(self, Self::Comment { .. } | Self::Edit { .. })
     }
 
     /// The one line the prompt draws when it has no entries: a question for the confirm, and the
@@ -167,7 +185,11 @@ impl Prompt {
         match self {
             Self::Delete { content, .. } => Some(format!(" delete {content}?")),
             Self::Due { input, .. } | Self::Add { input } => Some(format!(" {}_", input.text())),
-            Self::Views(_) | Self::Labels { .. } | Self::Comment { .. } | Self::Move { .. } => None,
+            Self::Views(_)
+            | Self::Labels { .. }
+            | Self::Comment { .. }
+            | Self::Edit { .. }
+            | Self::Move { .. } => None,
         }
     }
 
@@ -179,6 +201,7 @@ impl Prompt {
             Self::Due { .. } | Self::Add { .. } => "<CR> send  <Esc> cancel",
             Self::Labels { .. } => "j/k  <CR> toggle  <Esc>",
             Self::Comment { .. } => "<C-d> post  <Esc> cancel",
+            Self::Edit { .. } => "<C-d> save  <Esc> cancel",
         }
     }
 
@@ -188,7 +211,11 @@ impl Prompt {
             Self::Views(picker) | Self::Labels { picker, .. } | Self::Move { picker, .. } => {
                 picker.move_cursor(steps);
             }
-            Self::Delete { .. } | Self::Due { .. } | Self::Add { .. } | Self::Comment { .. } => {}
+            Self::Delete { .. }
+            | Self::Due { .. }
+            | Self::Add { .. }
+            | Self::Comment { .. }
+            | Self::Edit { .. } => {}
         }
     }
 
@@ -200,6 +227,7 @@ impl Prompt {
             | Self::Delete { .. }
             | Self::Labels { .. }
             | Self::Comment { .. }
+            | Self::Edit { .. }
             | Self::Move { .. } => None,
         }
     }
@@ -207,7 +235,7 @@ impl Prompt {
     /// The draft open in a comment prompt, which takes keys the one-line inputs do not.
     pub fn draft_mut(&mut self) -> Option<&mut Draft> {
         match self {
-            Self::Comment { draft, .. } => Some(draft),
+            Self::Comment { draft, .. } | Self::Edit { draft, .. } => Some(draft),
             Self::Views(_)
             | Self::Delete { .. }
             | Self::Due { .. }

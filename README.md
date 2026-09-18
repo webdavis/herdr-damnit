@@ -81,6 +81,7 @@ herdr plugin action invoke doctor --plugin herdr-todoist
 | `width`         | none      | a fraction above 0 and below 1      | the share of the tab the pane takes                     |
 | `default_view`  | none      | a view name                         | the view the pane opens on                              |
 | `auto_open`     | `false`   | `true`, `false`                     | whether focusing a workspace opens the pane there       |
+| `editor`        | `nvim`    | argv, or `[]` for none              | the editor `e` enters on a task, in this pane           |
 | `[[views]]`     | none      | `name` and `filter`                 | the named filter views, in the order they are written   |
 
 An unrecognized `placement` or `side` is a config parse error naming the values above, and so is a
@@ -205,6 +206,7 @@ tasks.
 | `l`           | toggle a label from a picker                        |
 | `m`           | move the task to a project or section from a picker |
 | `a`           | Quick Add a task from a whole line of its syntax    |
+| `e`           | edit the task in your editor, or in the pane's box  |
 | `q`, `<Esc>`  | close the pane                                      |
 
 In the picker, `j` and `k` move, `<CR>` takes the entry under the cursor and `<Esc>` cancels. In
@@ -256,11 +258,38 @@ so the order and the timestamp drawn are the server's own. A REFUSED post leaves
 every line still in it and the API's own message in the status line: a person has just typed
 several lines and losing them to a refusal would be the worst thing this screen could do.
 
+## Editing a task in an editor
+
+`e` on a task runs the editor in this pane, waits for it, and reads the list again once it has
+gone. The command is
+[todoist.nvim](https://github.com/webdavis/todoist.nvim)'s own entry point:
+
+```bash
+nvim +"Todoist task <id>"
+```
+
+which opens that one task as an editable buffer in an editor holding nothing else, so the herdr
+pane and the Neovim plugin are two halves of the same workflow. Any editor works: `editor` is argv,
+so the program is one entry and each argument is its own, and the `+Todoist task <id>` word is
+appended to it. An entry is never split on spaces, so a path with a space in it needs no quoting.
+
+With `editor` unset the pane runs `nvim`. `editor = []` turns the editor off and `e` opens the
+pane's own multi-line box over the task instead: the first line is the task's content and the lines
+under it are its description, `<CR>` opens a line, `<C-d>` saves and `<Esc>` throws the edit away.
+A refused save leaves the box open with every line still in it.
+
+The pane leaves the alternate screen before the editor starts and enters it again once the editor
+has gone, on every path: an editor that exited non-zero, and an `editor` naming a program that is
+not installed, both come back to a drawn pane rather than a terminal left in raw mode. A program
+that cannot be started at all is named in the status line.
+
+The list is read again whatever the editor exited with, since a person who quit in a hurry may
+still have saved.
+
 ## Quick edits
 
 Each edit is one key press, and the three that need words are one line typed in the pane, drawn
-over the list in the same box the view picker uses. No editor is entered and nothing is typed into
-a file.
+over the list in the same box the view picker uses. Only `e` enters an editor.
 
 - `x` completes and `X` reopens the task under the cursor. `X` on a task that is already open is
   refused by the API, which says so in the status line.

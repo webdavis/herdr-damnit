@@ -10,7 +10,7 @@ use crate::detail::Detail;
 use crate::cursor::List;
 use crate::list::Row;
 use crate::prompt::Prompt;
-use crate::views::{MAX_NUMBERED_VIEW, Views};
+use crate::views::Views;
 
 const COMPLETED_HINTS: &str = "j/k  u reopen  <Tab> open  R  q";
 
@@ -23,12 +23,12 @@ const DETAIL_LABEL: &str = "task";
 /// What the status line calls the completed list, which has no filter query of its own.
 const COMPLETED_LABEL: &str = "completed";
 
-/// The open list's own keys. A side pane is about 32 columns wide and this line fills it exactly:
-/// the eight edits, `<CR>` into the detail, the view picker and its numbers, and `<Tab>` to the
-/// completed list. j/k, R, `q` and the arrow keys are left unsaid, `q` because `<Esc>` closes the
-/// pane too and both other screens name it.
-fn hints() -> String {
-    format!("x X dd p s l m a <CR> v1-{MAX_NUMBERED_VIEW} <Tab>")
+/// The open list's own keys, inside the 32 columns a side pane opens at: the eight edits, `e`
+/// into the editor, `<CR>` into the detail, the view picker and `<Tab>` to the completed list.
+/// The view numbers are left to the picker, which lists them; j/k, R, `q` and the arrow keys are
+/// left unsaid, `q` because `<Esc>` closes the pane too and both other screens name it.
+fn hints() -> &'static str {
+    "x X dd p s l m a e <CR> v <Tab>"
 }
 
 /// The status line, naming the showing view. Every failure the client can report (a rejected
@@ -78,7 +78,7 @@ pub fn draw(
     let hints = match (prompt, completed) {
         (Some(prompt), _) => prompt.hints().to_string(),
         (None, true) => COMPLETED_HINTS.to_string(),
-        (None, false) => hints(),
+        (None, false) => hints().to_string(),
     };
     frame.render_widget(Paragraph::new(Line::from(hints)), hint_area);
 }
@@ -415,11 +415,11 @@ mod tests {
     }
 
     #[test]
-    fn the_open_list_hints_its_edits_and_the_way_to_the_completed_one() {
+    fn the_open_list_hints_its_edits_the_editor_and_the_way_to_the_completed_one() {
         let frame = frame_of(&views_of(&[]), &list_of_two(), None);
         let hints = frame.last().expect("a hint line");
 
-        assert!(hints.contains("x X dd p s l m a"), "{frame:?}");
+        assert!(hints.contains("x X dd p s l m a e"), "{frame:?}");
         assert!(hints.contains("<CR>"), "{frame:?}");
         assert!(hints.contains("<Tab>"), "{frame:?}");
     }

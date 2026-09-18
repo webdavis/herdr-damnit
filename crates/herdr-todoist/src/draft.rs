@@ -28,6 +28,19 @@ impl Draft {
         Self::default()
     }
 
+    /// A draft holding words already written, the caret at the end of them: what the pane opens
+    /// when the text being edited is a task's own.
+    pub fn of(text: &str) -> Self {
+        let lines: Vec<String> = text.split('\n').map(str::to_string).collect();
+        let line = lines.len() - 1;
+        let column = lines[line].chars().count();
+        Self {
+            lines,
+            line,
+            column,
+        }
+    }
+
     /// Type one character. A control character is dropped rather than stored, so the key that
     /// sends the comment can never end up inside it.
     pub fn push(&mut self, character: char) {
@@ -185,6 +198,18 @@ mod tests {
 
         assert_eq!(draft.text(), "one\n");
         assert_eq!(draft.drawn(), vec![" one", " _"]);
+    }
+
+    #[test]
+    fn a_draft_of_written_words_holds_every_line_with_the_caret_at_the_end() {
+        let draft = Draft::of("water the plants\nthe ones on the sill");
+
+        assert_eq!(draft.text(), "water the plants\nthe ones on the sill");
+        assert_eq!(draft.caret_line(), 1);
+        assert_eq!(
+            draft.drawn().last().expect("a line"),
+            " the ones on the sill_"
+        );
     }
 
     #[test]
