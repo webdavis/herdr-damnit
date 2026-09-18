@@ -77,7 +77,7 @@ herdr plugin action invoke doctor --plugin herdr-todoist
 | `token_command` | none      | any command                         | argv of a command whose standard output is the token    |
 | `token_env`     | none      | any variable name                   | name of an environment variable holding the token       |
 | `placement`     | `"split"` | `overlay`, `split`, `tab`, `zoomed` | how `open` and `toggle` place the pane                  |
-| `side`          | `"right"` | `right`, `left`, `down`, `up`       | which side of the calling pane a `split` takes          |
+| `side`          | `"right"` | `right`, `down`                     | which side of the calling pane a `split` takes          |
 | `width`         | none      | a fraction above 0 and below 1      | the share of the tab the pane takes                     |
 | `default_view`  | none      | a view name                         | the view the pane opens on                              |
 | `auto_open`     | `false`   | `true`, `false`                     | whether focusing a workspace opens the pane there       |
@@ -90,14 +90,14 @@ An unrecognized `placement` or `side` is a config parse error naming the values 
 
 ```toml
 placement = "split"
-side = "left"
+side = "down"
 width = 0.3
 ```
 
-`herdr` splits rightward and downward and at an even ratio, so a `left` or `up` side, or any
-`width`, is one `herdr pane move` right after the pane opens. With the default `right` side and no
-`width`, the open places the pane by itself and no move is made. A refused move leaves the pane
-where the open put it and says so: a pane in the wrong place still lists tasks.
+`herdr` splits rightward or downward at an even ratio and takes no ratio of its own, so `side`
+picks the direction the open itself splits in and a `width` is one `herdr pane resize` right
+after. With no `width`, the open places the pane by itself and no resize is made. A refused resize
+leaves the pane at the even split and says so: a pane at the wrong width still lists tasks.
 
 `width` is the share of the tab the Todoist pane gets, so `0.3` is a third of it and the pane the
 action ran in keeps the rest.

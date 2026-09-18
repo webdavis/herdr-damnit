@@ -5,7 +5,6 @@ use std::ffi::OsStr;
 use std::process::Command;
 
 use crate::config::{Config, Placement};
-use crate::placement::Arrangement;
 
 pub fn focus_plugin_pane(pane: &str) -> Result<String, String> {
     run(&["plugin", "pane", "focus", pane])
@@ -49,35 +48,51 @@ pub fn open_plugin_pane(
     pane_id_of_open(&output).ok_or_else(|| "herdr plugin pane open named no pane".to_string())
 }
 
-/// Move the pane an arrangement names, and report the id of the pane that moved.
-pub fn move_pane(arrangement: &Arrangement, tab: &str) -> Result<String, String> {
-    let output = run(&move_args(arrangement, tab))?;
-    Ok(moved_pane_id(&output).unwrap_or_else(|| arrangement.source.clone()))
+/// Resize the pane already in the tab to `target_ratio` of it, so the Todoist pane opened beside
+/// it ends up at the width the config asked for. `herdr plugin pane open` cannot take a ratio of
+/// its own, and a same-tab `herdr pane move` is a no-op, so a resize after the open is the only
+/// call that actually changes it. Reports whether herdr moved the split at all.
+pub fn resize_leading_pane(pane: &str, direction: &str, target_ratio: f32) -> Result<bool, String> {
+    let amount = target_ratio - current_ratio(pane)?;
+    let output = run(&resize_args(pane, direction, amount))?;
+    Ok(resize_changed(&output))
 }
 
-/// The argv of the one `herdr pane move` an arrangement takes. The ratio is rendered here because
-/// the CLI takes strings, and it is passed only when a width was configured.
-fn move_args(arrangement: &Arrangement, tab: &str) -> Vec<String> {
-    let mut args: Vec<String> = [
+fn resize_args(pane: &str, direction: &str, amount: f32) -> Vec<String> {
+    [
         "pane",
-        "move",
-        &arrangement.source,
-        "--tab",
-        tab,
-        "--split",
-        arrangement.direction,
-        "--target-pane",
-        &arrangement.target,
-        "--no-focus",
+        "resize",
+        "--pane",
+        pane,
+        "--direction",
+        direction,
+        "--amount",
     ]
     .iter()
     .map(|argument| argument.to_string())
-    .collect();
-    if let Some(ratio) = arrangement.ratio {
-        args.push("--ratio".to_string());
-        args.push(ratio.to_string());
-    }
-    args
+    .chain(std::iter::once(amount.to_string()))
+    .collect()
+}
+
+/// The leading pane's current share of the tab, read fresh because the open's own even split is
+/// not guaranteed to be exactly 0.5.
+fn current_ratio(pane: &str) -> Result<f32, String> {
+    let output = run(&["pane", "layout", "--pane", pane])?;
+    ratio_of_layout(&output).ok_or_else(|| format!("herdr pane layout named no ratio for {pane}"))
+}
+
+fn ratio_of_layout(output: &str) -> Option<f32> {
+    let json: serde_json::Value = serde_json::from_str(output).ok()?;
+    json.pointer("/result/layout/splits/0/ratio")
+        .and_then(serde_json::Value::as_f64)
+        .map(|ratio| ratio as f32)
+}
+
+fn resize_changed(output: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(output)
+        .ok()
+        .and_then(|json| json.pointer("/result/resize/changed")?.as_bool())
+        .unwrap_or(false)
 }
 
 /// Every pane id live in a workspace, which is what proves a remembered pane is still there.
@@ -98,12 +113,6 @@ pub fn live_panes(workspace: &str) -> Result<Vec<String>, String> {
 
 fn pane_id_of_open(output: &str) -> Option<String> {
     read_pane_id(output, "/result/plugin_pane/pane/pane_id")
-}
-
-/// A move can rename the pane it moved, so the id to remember comes out of the move's own
-/// envelope.
-fn moved_pane_id(output: &str) -> Option<String> {
-    read_pane_id(output, "/result/move_result/pane/pane_id")
 }
 
 fn read_pane_id(output: &str, pointer: &str) -> Option<String> {
@@ -136,7 +145,6 @@ fn run<S: AsRef<OsStr>>(args: &[S]) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::placement::{self, Side};
 
     #[test]
     fn the_opened_pane_id_is_read_from_the_open_envelope() {
@@ -146,29 +154,26 @@ mod tests {
     }
 
     #[test]
-    fn the_moved_pane_id_is_read_from_the_move_envelope() {
-        let output =
-            r#"{"result":{"move_result":{"pane":{"pane_id":"w:p8"},"previous_pane_id":"w:p7"}}}"#;
-        assert_eq!(moved_pane_id(output), Some("w:p8".to_string()));
-        assert_eq!(moved_pane_id("{}"), None);
-    }
-
-    #[test]
-    fn a_width_becomes_one_move_with_the_tab_and_the_ratio_on_it() {
-        let arrangement =
-            placement::arrange(Side::Left, Some(0.25), "w:p2", "w:p1").expect("a move");
-
+    fn a_resize_carries_the_pane_the_direction_and_the_rendered_amount() {
         assert_eq!(
-            move_args(&arrangement, "w:t1").join(" "),
-            "pane move w:p1 --tab w:t1 --split right --target-pane w:p2 --no-focus --ratio 0.25"
+            resize_args("w:p1", "right", 0.2).join(" "),
+            "pane resize --pane w:p1 --direction right --amount 0.2"
         );
     }
 
     #[test]
-    fn a_move_with_no_width_passes_no_ratio() {
-        let arrangement = placement::arrange(Side::Up, None, "w:p2", "w:p1").expect("a move");
-        let args = move_args(&arrangement, "w:t1");
+    fn the_current_ratio_is_read_from_the_layouts_leading_split() {
+        let output = r#"{"result":{"layout":{"splits":[{"ratio":0.5}]}}}"#;
+        assert_eq!(ratio_of_layout(output), Some(0.5));
+        assert_eq!(ratio_of_layout("{}"), None);
+    }
 
-        assert!(!args.contains(&"--ratio".to_string()), "{args:?}");
+    #[test]
+    fn the_resize_outcome_is_read_from_its_own_changed_flag() {
+        let changed = r#"{"result":{"resize":{"changed":true}}}"#;
+        let unchanged = r#"{"result":{"resize":{"changed":false,"reason":"unchanged"}}}"#;
+        assert!(resize_changed(changed));
+        assert!(!resize_changed(unchanged));
+        assert!(!resize_changed("{}"));
     }
 }

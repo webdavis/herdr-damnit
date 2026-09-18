@@ -201,19 +201,23 @@ mod tests {
             .expect_err("refuses")
             .to_string();
         assert!(error.contains("right"), "{error}");
-        assert!(error.contains("left"), "{error}");
         assert!(error.contains("down"), "{error}");
-        assert!(error.contains("up"), "{error}");
+    }
+
+    /// `herdr plugin pane open --direction` only splits rightward or downward, and a same-tab
+    /// `herdr pane move` cannot reposition a pane afterward, so left and up are not sides this
+    /// plugin can place a pane on at all.
+    #[test]
+    fn a_side_herdr_cannot_split_toward_is_a_parse_error() {
+        for text in ["left", "up"] {
+            let error = Config::parse(&format!("side = \"{text}\"")).expect_err("refuses");
+            assert!(error.contains("unknown variant"), "{text}: {error}");
+        }
     }
 
     #[test]
     fn every_side_is_read() {
-        for (text, side) in [
-            ("right", Side::Right),
-            ("left", Side::Left),
-            ("down", Side::Down),
-            ("up", Side::Up),
-        ] {
+        for (text, side) in [("right", Side::Right), ("down", Side::Down)] {
             let config = Config::parse(&format!("side = \"{text}\"")).expect("parses");
             assert_eq!(config.side, side);
         }

@@ -158,7 +158,7 @@ fn note_then_open(
 fn open_and_remember(workspace: &str, config: &Config, focus: Focus) -> Result<String, String> {
     let neighbor = std::env::var("HERDR_PANE_ID").unwrap_or_default();
     let pane = herdr::open_plugin_pane(workspace, &neighbor, focus.as_flag(), config)?;
-    let (pane, note) = arrange_pane(&pane, &neighbor, config);
+    let note = arrange_pane(&neighbor, config);
     state::remember_pane(workspace, &pane);
     Ok(match note {
         Some(note) => format!("opened {pane}, {note}"),
@@ -166,26 +166,22 @@ fn open_and_remember(workspace: &str, config: &Config, focus: Focus) -> Result<S
     })
 }
 
-/// Put the pane on its configured side at its configured width, which herdr's own open cannot do:
-/// it splits rightward or downward at an even ratio and takes no ratio of its own. A refused move
-/// leaves the pane where the open put it and says so, because a pane in the wrong place still
-/// lists tasks.
-fn arrange_pane(pane: &str, neighbor: &str, config: &Config) -> (String, Option<String>) {
-    let tab = std::env::var("HERDR_TAB_ID").unwrap_or_default();
-    if config.placement != Placement::Split || tab.is_empty() {
-        return (pane.to_string(), None);
+/// Give the pane its configured width, which herdr's own open cannot do: it splits at an even
+/// ratio and takes no ratio of its own. This resizes the calling pane rather than the one just
+/// opened, since a same-tab `herdr pane move` is a no-op and a resize is the only call that
+/// actually changes the split. A refused resize leaves the pane at the even split and says so,
+/// because a pane at the wrong width still lists tasks.
+fn arrange_pane(neighbor: &str, config: &Config) -> Option<String> {
+    if config.placement != Placement::Split || neighbor.is_empty() {
+        return None;
     }
-    let Some(arrangement) = placement::arrange(config.side, config.width, pane, neighbor) else {
-        return (pane.to_string(), None);
-    };
-    let moves_the_pane = arrangement.source == pane;
-    match herdr::move_pane(&arrangement, &tab) {
-        Ok(moved) if moves_the_pane => (moved, None),
-        Ok(_) => (pane.to_string(), None),
-        Err(error) => (
-            pane.to_string(),
-            Some(format!("placement refused: {error}")),
-        ),
+    let width = config.width?;
+    let target_ratio = placement::leading_share(width);
+    let direction = config.side.split_direction();
+    match herdr::resize_leading_pane(neighbor, direction, target_ratio) {
+        Ok(true) => None,
+        Ok(false) => Some("placement refused: herdr did not resize the pane".to_string()),
+        Err(error) => Some(format!("placement refused: {error}")),
     }
 }
 
