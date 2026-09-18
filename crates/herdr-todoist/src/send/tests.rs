@@ -65,7 +65,12 @@ impl Herdr {
 
 fn a_task(json: &str) -> List {
     let project = serde_json::from_str(r#"{"id":"p1","name":"First"}"#).expect("project");
-    List::new(list::build(&[task(json)], &[project], &[]))
+    List::new(list::build(
+        &[task(json)],
+        &[project],
+        &[],
+        &crate::list::tests::marks(),
+    ))
 }
 
 /// The task the brief cases are built from, with every field the brief can carry.

@@ -56,10 +56,13 @@ pub fn task_url(id: &str) -> String {
 }
 
 /// A task's due date. `date` is a date or a date and time; the list shows its first ten
-/// characters, which are the date either way.
+/// characters, which are the date either way. `is_recurring` says the task repeats, which the
+/// vendor's own v1 client documents as a boolean defaulting to false.
 #[derive(Debug, Deserialize)]
 pub struct Due {
     pub date: String,
+    #[serde(default)]
+    pub is_recurring: bool,
 }
 
 #[derive(Debug, Deserialize)]

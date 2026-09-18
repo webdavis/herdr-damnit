@@ -6,6 +6,7 @@ use todoist::{Client, Error as TodoistError};
 use crate::config::Config;
 use crate::connection::Connection;
 use crate::cursor::List;
+use crate::icons::Marks;
 use crate::list::{self, Row};
 use crate::views::Views;
 
@@ -43,8 +44,11 @@ impl Screen<'_> {
     /// screen alone and says so in the status line.
     pub async fn read(&mut self, reload: Reload) -> String {
         let filter = self.views.current().filter.clone();
+        // The day the due marks are read against is taken once per read, so every row of one
+        // drawing agrees about what today is.
+        let marks = Marks::today(self.config.icons);
         let rows = self
-            .request(async |client: &Client| fetch(client, filter.as_deref()).await)
+            .request(async |client: &Client| fetch(client, filter.as_deref(), &marks).await)
             .await;
         match rows {
             Ok(rows) => {
@@ -80,7 +84,11 @@ impl Screen<'_> {
 
 /// The three lists the view is built from, read at once. `filter` is the showing view's query,
 /// absent on the unfiltered list.
-async fn fetch(client: &Client, filter: Option<&str>) -> Result<Vec<Row>, TodoistError> {
+async fn fetch(
+    client: &Client,
+    filter: Option<&str>,
+    marks: &Marks,
+) -> Result<Vec<Row>, TodoistError> {
     let tasks = async {
         match filter {
             Some(query) => client.tasks_matching(query).await,
@@ -89,7 +97,7 @@ async fn fetch(client: &Client, filter: Option<&str>) -> Result<Vec<Row>, Todois
     };
     let (tasks, projects, sections) =
         tokio::try_join!(tasks, client.projects(), client.sections())?;
-    Ok(list::build(&tasks, &projects, &sections))
+    Ok(list::build(&tasks, &projects, &sections, marks))
 }
 
 #[cfg(test)]
@@ -118,6 +126,7 @@ pub(crate) mod tests {
             &[task(r#"{"id":"1","content":"keep me","project_id":"p1"}"#)],
             &[project],
             &[],
+            &crate::list::tests::marks(),
         ))
     }
 

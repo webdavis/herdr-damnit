@@ -12,6 +12,7 @@ mod edit;
 mod editor;
 mod herdr;
 mod history;
+mod icons;
 mod list;
 mod markdown;
 mod pane;
@@ -21,6 +22,7 @@ mod reload;
 mod render;
 mod send;
 mod state;
+mod theme;
 mod tui;
 mod views;
 
