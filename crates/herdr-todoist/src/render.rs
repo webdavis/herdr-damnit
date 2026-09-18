@@ -12,24 +12,20 @@ use crate::views::{Picker, Views};
 const HINTS: &str = "j/k move   v views   1-9 view   R refresh   q close";
 const PICKER_HINTS: &str = "j/k move   <CR> show   <Esc> cancel";
 
-/// What the status line says. Every failure the client can report (a rejected token, a rate limit
-/// with its retry delay, a network outage) arrives here as its own message.
-pub struct Status(pub String);
-
-impl Status {
-    /// The status line names the showing view, so a message about a refused filter says which
-    /// view was refused.
-    fn line(&self, view: &str) -> Line<'_> {
-        Line::from(vec![
-            Span::styled("todoist", Style::new().add_modifier(Modifier::BOLD)),
-            Span::raw(format!("  {view}  {}", self.0)),
-        ])
-    }
+/// The status line, naming the showing view. Every failure the client can report (a rejected
+/// token, a rate limit with its retry delay, a network outage) arrives in `status` as its own
+/// message, so a message about a refused filter says which view was refused.
+fn status_line(status: &str, view: &str) -> Line<'static> {
+    Line::from(vec![
+        Span::styled("todoist", Style::new().add_modifier(Modifier::BOLD)),
+        Span::raw(format!("  {view}  {status}")),
+    ])
 }
+
 /// The pane's whole frame: the status line, the list, the picker when it is open, and the hints.
 pub fn draw(
     frame: &mut ratatui::Frame<'_>,
-    status: &Status,
+    status: &str,
     views: &Views,
     list: &List,
     row: &mut ListState,
@@ -42,7 +38,7 @@ pub fn draw(
     ])
     .areas(frame.area());
     frame.render_widget(
-        Paragraph::new(status.line(&views.current().name)),
+        Paragraph::new(status_line(status, &views.current().name)),
         status_area,
     );
     row.select(list.selected_id().map(|_| list.selected()));
@@ -133,16 +129,7 @@ mod tests {
             ratatui::Terminal::new(ratatui::backend::TestBackend::new(40, 8)).expect("terminal");
         let mut state = ListState::default();
         terminal
-            .draw(|frame| {
-                draw(
-                    frame,
-                    &Status("2 open tasks".to_string()),
-                    views,
-                    list,
-                    &mut state,
-                    picker,
-                )
-            })
+            .draw(|frame| draw(frame, "2 open tasks", views, list, &mut state, picker))
             .expect("draw");
         let buffer = terminal.backend().buffer().clone();
         (0..buffer.area.height)
@@ -165,7 +152,7 @@ mod tests {
             .draw(|frame| {
                 draw(
                     frame,
-                    &Status("2 open tasks".to_string()),
+                    "2 open tasks",
                     &views_of(&[]),
                     list,
                     &mut state,

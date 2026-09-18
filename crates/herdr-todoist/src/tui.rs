@@ -9,7 +9,7 @@ use todoist::{Client, Error as TodoistError};
 use crate::config::Config;
 use crate::cursor::List;
 use crate::list::{self, Row};
-use crate::render::{Status, draw};
+use crate::render::draw;
 use crate::views::{Picker, Views};
 
 /// The connection the pane holds between refreshes: a built client, or the reason building one
@@ -26,7 +26,7 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
     }
     let mut connection = build(config, base_url).await;
     let mut list = List::new(Vec::new());
-    let mut status = Status(show(&mut connection, config, base_url, &mut list, &views).await);
+    let mut status = show(&mut connection, config, base_url, &mut list, &views).await;
     let mut picker: Option<Picker> = None;
     let mut row = ListState::default();
     let mut terminal = ratatui::init();
@@ -40,7 +40,7 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
         if let Some(name) = crate::pane::take_requested_view()
             && views.select_named(&name)
         {
-            status = Status(show(&mut connection, config, base_url, &mut list, &views).await);
+            status = show(&mut connection, config, base_url, &mut list, &views).await;
         }
         let key = match next_key().map_err(|error| error.to_string()) {
             Err(error) => break Err(error),
@@ -55,9 +55,7 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
                     let chosen = open.at();
                     picker = None;
                     if views.select(chosen) {
-                        status = Status(
-                            show(&mut connection, config, base_url, &mut list, &views).await,
-                        );
+                        status = show(&mut connection, config, base_url, &mut list, &views).await;
                     }
                 }
                 KeyCode::Esc | KeyCode::Char('q') => picker = None,
@@ -66,17 +64,15 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
             None => match key {
                 KeyCode::Char('q') | KeyCode::Esc => break Ok(()),
                 KeyCode::Char('r' | 'R') => {
-                    status = Status(
-                        check(
-                            &mut connection,
-                            config,
-                            base_url,
-                            &mut list,
-                            views.current().filter.as_deref(),
-                            Change::Refresh,
-                        )
-                        .await,
-                    );
+                    status = check(
+                        &mut connection,
+                        config,
+                        base_url,
+                        &mut list,
+                        views.current().filter.as_deref(),
+                        Change::Refresh,
+                    )
+                    .await;
                 }
                 KeyCode::Char('j') | KeyCode::Down => list.move_cursor(1),
                 KeyCode::Char('k') | KeyCode::Up => list.move_cursor(-1),
@@ -85,9 +81,7 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
                     if let Some(index) = Views::by_number(digit)
                         && views.select(index)
                     {
-                        status = Status(
-                            show(&mut connection, config, base_url, &mut list, &views).await,
-                        );
+                        status = show(&mut connection, config, base_url, &mut list, &views).await;
                     }
                 }
                 _ => {}
