@@ -71,7 +71,8 @@ impl History {
         self.collected.sort_by(|left, right| {
             right
                 .completed_at
-                .cmp(&left.completed_at)
+                .as_deref()
+                .cmp(&left.completed_at.as_deref())
                 .then(right.id.cmp(&left.id))
         });
         match page.next_cursor {
@@ -125,7 +126,8 @@ impl History {
 
 /// A task's line: the completion date first, so the dates line up down the pane.
 fn line(task: &CompletedTask) -> String {
-    let day = task.completed_at.get(..10).unwrap_or(&task.completed_at);
+    let completed_at = task.completed_at.as_deref().unwrap_or("");
+    let day = completed_at.get(..10).unwrap_or(completed_at);
     format!("{day:10}  {}", task.content)
 }
 
@@ -309,7 +311,7 @@ mod tests {
         history.accept(page(
             vec![
                 completed(r#"{"id":"1","content":"dated","completed_at":"2026-09-17T06:05:00Z"}"#),
-                completed(r#"{"id":"2","content":"undated"}"#),
+                completed(r#"{"id":"2","content":"undated","completed_at":null}"#),
             ],
             None,
         ));

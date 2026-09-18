@@ -272,7 +272,10 @@ async fn a_completed_page_is_one_request_that_hands_back_its_cursor() {
 
     assert_eq!(page.tasks.len(), 1);
     assert_eq!(page.tasks[0].content, "paid rent");
-    assert_eq!(page.tasks[0].completed_at, "2026-09-16T18:04:00Z");
+    assert_eq!(
+        page.tasks[0].completed_at.as_deref(),
+        Some("2026-09-16T18:04:00Z")
+    );
     assert_eq!(page.next_cursor.as_deref(), Some("second-page"));
     let targets = double.targets.lock().expect("lock").clone();
     assert_eq!(
@@ -318,10 +321,10 @@ async fn the_cursor_of_a_completed_page_is_sent_with_the_same_window() {
 }
 
 #[tokio::test]
-async fn a_completed_task_missing_its_completion_time_still_parses() {
+async fn a_completed_task_with_a_null_completion_time_still_parses() {
     let double = support::serve_routes(&[(
         "/tasks/completed",
-        r#"{"items":[{"id":"1","content":"bare"}],"next_cursor":null}"#,
+        r#"{"items":[{"id":"1","content":"bare","completed_at":null}],"next_cursor":null}"#,
     )])
     .await;
     let client = Client::new(&double.base_url, token().await).expect("client");
@@ -331,7 +334,7 @@ async fn a_completed_task_missing_its_completion_time_still_parses() {
         .await
         .expect("request succeeds");
 
-    assert_eq!(page.tasks[0].completed_at, "");
+    assert_eq!(page.tasks[0].completed_at, None);
 }
 
 #[tokio::test]

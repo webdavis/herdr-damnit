@@ -69,12 +69,13 @@ pub struct Section {
     pub order: i64,
 }
 
-/// A completed task. `completed_at` is the completion timestamp the list draws; it is defaulted
-/// rather than required so one task missing it does not fail the whole page.
+/// A completed task. The vendor schema sends `completed_at` as `null` for an active (not yet
+/// completed) task rather than omitting it, so the field is optional, not defaulted: a default
+/// only covers an absent key and a null still fails to parse as a plain `String`.
 #[derive(Debug, Deserialize)]
 pub struct CompletedTask {
     pub id: String,
     pub content: String,
     #[serde(default)]
-    pub completed_at: String,
+    pub completed_at: Option<String>,
 }
