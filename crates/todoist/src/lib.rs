@@ -8,9 +8,9 @@ mod error;
 mod model;
 mod token;
 
-pub use client::{Client, User};
+pub use client::{Client, CompletedPage, User};
 pub use error::Error;
-pub use model::{Due, Project, Section, Task};
+pub use model::{CompletedTask, Due, Project, Section, Task};
 pub use token::{Token, TokenError, TokenSource, resolve, resolve_with};
 
 /// The default API base. Every request path is joined onto it, and tests point the client at a

@@ -254,3 +254,116 @@ async fn a_filter_matching_nothing_is_an_empty_list_rather_than_an_error() {
 
     assert!(tasks.is_empty());
 }
+
+#[tokio::test]
+async fn a_completed_page_is_one_request_that_hands_back_its_cursor() {
+    let double = support::serve_routes(&[(
+        "/tasks/completed/by_completion_date",
+        r#"{"items":[{"id":"1","content":"paid rent","completed_at":"2026-09-16T18:04:00Z"}],
+             "next_cursor":"second-page"}"#,
+    )])
+    .await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    let page = client
+        .completed("2026-06-18T00:00:00Z", "2026-09-19T00:00:00Z", None)
+        .await
+        .expect("request succeeds");
+
+    assert_eq!(page.tasks.len(), 1);
+    assert_eq!(page.tasks[0].content, "paid rent");
+    assert_eq!(page.tasks[0].completed_at, "2026-09-16T18:04:00Z");
+    assert_eq!(page.next_cursor.as_deref(), Some("second-page"));
+    let targets = double.targets.lock().expect("lock").clone();
+    assert_eq!(
+        targets.len(),
+        1,
+        "one page has to be one request, not a walk: {targets:?}"
+    );
+    assert!(
+        targets[0].contains("since=2026-06-18T00%3A00%3A00Z"),
+        "{targets:?}"
+    );
+    assert!(
+        targets[0].contains("until=2026-09-19T00%3A00%3A00Z"),
+        "{targets:?}"
+    );
+    assert!(targets[0].contains("limit=50"), "{targets:?}");
+}
+
+#[tokio::test]
+async fn the_cursor_of_a_completed_page_is_sent_with_the_same_window() {
+    let double = support::serve_routes(&[(
+        "/tasks/completed/by_completion_date",
+        r#"{"items":[],"next_cursor":null}"#,
+    )])
+    .await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    client
+        .completed(
+            "2026-06-18T00:00:00Z",
+            "2026-09-19T00:00:00Z",
+            Some("second-page"),
+        )
+        .await
+        .expect("request succeeds");
+
+    let targets = double.targets.lock().expect("lock").clone();
+    assert!(targets[0].contains("cursor=second-page"), "{targets:?}");
+    assert!(
+        targets[0].contains("since=2026-06-18T00%3A00%3A00Z"),
+        "{targets:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_completed_task_missing_its_completion_time_still_parses() {
+    let double = support::serve_routes(&[(
+        "/tasks/completed",
+        r#"{"items":[{"id":"1","content":"bare"}],"next_cursor":null}"#,
+    )])
+    .await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    let page = client
+        .completed("2026-06-18T00:00:00Z", "2026-09-19T00:00:00Z", None)
+        .await
+        .expect("request succeeds");
+
+    assert_eq!(page.tasks[0].completed_at, "");
+}
+
+#[tokio::test]
+async fn reopening_a_task_posts_to_its_reopen_path() {
+    let double = support::serve_once("200 OK", &[], "{}").await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    client.reopen("6X").await.expect("reopen succeeds");
+
+    let request = double.request.lock().expect("lock").clone();
+    assert!(request.starts_with("POST /tasks/6X/reopen "), "{request}");
+    assert!(
+        request.contains("authorization: Bearer test-token"),
+        "{request}"
+    );
+}
+
+#[tokio::test]
+async fn a_refused_reopen_carries_the_api_s_own_message() {
+    let double = support::serve_once(
+        "400 Bad Request",
+        &[],
+        r#"{"error":"Invalid argument value",
+             "error_extra":{"explanation":"Task is not completed"}}"#,
+    )
+    .await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    let error = client.reopen("6X").await.unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "Invalid argument value: Task is not completed"
+    );
+}

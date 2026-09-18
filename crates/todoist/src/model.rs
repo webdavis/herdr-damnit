@@ -10,6 +10,13 @@ pub(crate) struct Page<T> {
     pub next_cursor: Option<String>,
 }
 
+/// One page of a completed-task endpoint, which names its rows `items` rather than `results`.
+#[derive(Debug, Deserialize)]
+pub(crate) struct Items<T> {
+    pub items: Vec<T>,
+    pub next_cursor: Option<String>,
+}
+
 /// An open task. `parent_id` is how the API expresses a subtask: it holds the parent task's id,
 /// and is absent on a top-level task.
 #[derive(Debug, Deserialize)]
@@ -60,4 +67,14 @@ pub struct Section {
     pub project_id: String,
     #[serde(default, alias = "section_order")]
     pub order: i64,
+}
+
+/// A completed task. `completed_at` is the completion timestamp the list draws; it is defaulted
+/// rather than required so one task missing it does not fail the whole page.
+#[derive(Debug, Deserialize)]
+pub struct CompletedTask {
+    pub id: String,
+    pub content: String,
+    #[serde(default)]
+    pub completed_at: String,
 }
