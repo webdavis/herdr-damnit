@@ -90,7 +90,7 @@ pub async fn prompt_key(
             _ => Outcome::quiet(),
         };
     }
-    if open.draft_mut().is_some() {
+    if let Prompt::Note { .. } = open {
         // The note box is the comment box's widget, so it takes the same keys: `<CR>` opens a
         // line and SEND hands the brief over.
         if key == crate::prompt::SEND {
