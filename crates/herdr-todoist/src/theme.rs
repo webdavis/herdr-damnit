@@ -1,15 +1,15 @@
 //! The pane's colors: the theme names herdr and reviewr use, resolved to the same palette slots
 //! those two resolve them to, so a color named `blue` here is the color named `blue` there and the
-//! two panes read as one workspace. A theme is a few anchor colors; the surfaces and the dim steps
-//! are derived from them by the same rules reviewr derives its own. The pane background stays the
-//! terminal's: only foregrounds are painted.
+//! two panes read as one workspace. A theme is a few anchor colors; the dim step is derived from
+//! them by the same rule reviewr derives its own. The pane background stays the terminal's: only
+//! foregrounds are painted.
 
 // This file is a color table; 6-digit `0xRRGGBB` literals read better grouped as one value.
 #![allow(clippy::unreadable_literal)]
 
 use ratatui::style::Color;
 
-/// A theme's intrinsic cast, which sets the direction the surfaces step in.
+/// A theme's intrinsic cast, which sets the direction the dim step goes in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Appearance {
     Dark,
@@ -32,13 +32,7 @@ pub enum Slot {
 /// The resolved colors the pane paints with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Palette {
-    pub base: Color,
-    pub surface0: Color,
-    pub surface1: Color,
-    pub surface2: Color,
-    pub dim2: Color,
     pub dim1: Color,
-    pub dim0: Color,
     pub text: Color,
     pub red: Color,
     pub green: Color,
@@ -126,13 +120,7 @@ fn build(name: &str) -> Option<Palette> {
 /// Catppuccin Mocha, pinned to its canonical values, which is how reviewr carries it.
 fn catppuccin() -> Palette {
     Palette {
-        base: Color::Rgb(0x1e, 0x1e, 0x2e),
-        surface0: Color::Rgb(0x31, 0x32, 0x44),
-        surface1: Color::Rgb(0x45, 0x47, 0x5a),
-        surface2: Color::Rgb(0x58, 0x5b, 0x70),
-        dim2: Color::Rgb(0x6c, 0x70, 0x86),
         dim1: Color::Rgb(0x7f, 0x84, 0x9c),
-        dim0: Color::Rgb(0xa6, 0xad, 0xc8),
         text: Color::Rgb(0xcd, 0xd6, 0xf4),
         red: Color::Rgb(0xf3, 0x8b, 0xa8),
         green: Color::Rgb(0xa6, 0xe3, 0xa1),
@@ -143,7 +131,7 @@ fn catppuccin() -> Palette {
     }
 }
 
-/// The anchor colors a theme names; the surfaces and dim steps are computed from these.
+/// The anchor colors a theme names; the dim step is computed from these.
 #[derive(Clone, Copy, Debug)]
 struct Anchors {
     base: Color,
@@ -236,22 +224,15 @@ const fn hex(rgb: u32) -> Color {
     Color::Rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
 }
 
-/// A full palette from anchors: the surfaces step the base toward the contrast pole, lighter for a
-/// dark theme and darker for a light one, at the same fractions reviewr steps them.
+/// A full palette from anchors: `dim1` steps the base toward the contrast pole, lighter for a
+/// dark theme and darker for a light one, at the same fraction reviewr steps it.
 fn derive(a: Anchors, appearance: Appearance) -> Palette {
     let pole = match appearance {
         Appearance::Dark => WHITE,
         Appearance::Light => BLACK,
     };
-    let surface = |t: f64| blend(a.base, pole, t);
     Palette {
-        base: a.base,
-        surface0: surface(0.045),
-        surface1: surface(0.09),
-        surface2: surface(0.14),
-        dim2: surface(0.26),
-        dim1: surface(0.34),
-        dim0: blend(a.text, a.base, 0.18),
+        dim1: blend(a.base, pole, 0.34),
         text: a.text,
         red: a.red,
         green: a.green,
@@ -299,13 +280,11 @@ mod tests {
     }
 
     #[test]
-    fn a_derived_theme_keeps_its_anchors_and_steps_its_surfaces_from_the_base() {
-        // gruvbox: the anchors reviewr lists, and the surface ramp its derivation produces.
+    fn a_derived_theme_keeps_its_anchors_and_steps_dim1_from_the_base() {
+        // gruvbox: the anchor reviewr lists, and the dim1 step its derivation produces.
         let palette = resolve(Some("gruvbox"));
 
-        assert_eq!(palette.base, Color::Rgb(0x28, 0x28, 0x28));
         assert_eq!(palette.red, Color::Rgb(0xfb, 0x49, 0x34));
-        assert_eq!(palette.surface0, Color::Rgb(0x32, 0x32, 0x32));
         assert_eq!(palette.dim1, Color::Rgb(0x71, 0x71, 0x71));
     }
 
@@ -319,12 +298,10 @@ mod tests {
     }
 
     #[test]
-    fn a_light_theme_steps_its_surfaces_darker_than_its_base() {
+    fn a_light_theme_steps_dim1_darker_than_its_base() {
         let palette = resolve(Some("github-light"));
 
-        assert_eq!(palette.base, Color::Rgb(0xff, 0xff, 0xff));
-        assert_eq!(palette.surface0, Color::Rgb(0xf4, 0xf4, 0xf4));
-        assert_eq!(palette.surface2, Color::Rgb(0xdb, 0xdb, 0xdb));
+        assert_eq!(palette.dim1, Color::Rgb(0xa8, 0xa8, 0xa8));
     }
 
     #[test]
