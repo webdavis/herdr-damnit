@@ -69,6 +69,18 @@ impl List {
             .unwrap_or(0);
     }
 
+    /// Replace the rows with another view's, keeping the cursor on its task when that task is in
+    /// the new view too. When it is not, the cursor takes the new view's first task: a neighbour
+    /// from the old view says nothing about where to land in a different list.
+    pub fn switch(&mut self, rows: Vec<Row>) {
+        let anchor = self.selected_id().map(str::to_string);
+        self.rows = rows;
+        self.selected = anchor
+            .and_then(|id| self.locate(&id))
+            .or_else(|| self.first_task())
+            .unwrap_or(0);
+    }
+
     fn locate(&self, id: &str) -> Option<usize> {
         self.rows.iter().position(|row| row.task_id() == Some(id))
     }
@@ -191,6 +203,36 @@ mod tests {
         refresh(&mut list, &["x", "y"]);
 
         assert_eq!(list.selected_id(), Some("x"));
+    }
+
+    #[test]
+    fn a_view_switch_keeps_the_cursor_on_a_task_that_is_in_both_views() {
+        let mut list = list(&["a", "b", "c"]);
+        list.move_cursor(2);
+
+        list.switch(list::build(&tasks(&["x", "c"]), &project(), &[]));
+
+        assert_eq!(list.selected_id(), Some("c"));
+    }
+
+    #[test]
+    fn a_view_switch_lands_on_the_first_task_when_the_cursor_s_task_is_not_there() {
+        let mut list = list(&["a", "b", "c"]);
+        list.move_cursor(1);
+
+        list.switch(list::build(&tasks(&["x", "y"]), &project(), &[]));
+
+        assert_eq!(list.selected_id(), Some("x"));
+    }
+
+    #[test]
+    fn a_switch_to_an_empty_view_points_at_nothing() {
+        let mut list = list(&["a"]);
+
+        list.switch(Vec::new());
+
+        assert_eq!(list.selected_id(), None);
+        assert_eq!(list.task_count(), 0);
     }
 
     #[test]

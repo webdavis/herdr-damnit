@@ -19,6 +19,18 @@ pub struct Config {
     /// Which way a `split` placement splits.
     #[serde(default)]
     pub direction: Direction,
+    /// Named filter views, in the order the pane numbers them.
+    #[serde(default)]
+    pub views: Vec<View>,
+}
+
+/// One named view: a name to pick it by and a Todoist filter query, the language the app's
+/// Filters feature uses.
+#[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct View {
+    pub name: String,
+    pub filter: String,
 }
 
 /// The pane placements `herdr plugin pane open --placement` accepts. An unrecognized value is a
@@ -73,8 +85,36 @@ impl Config {
         }
     }
 
-    pub fn parse(text: &str) -> Result<Self, toml::de::Error> {
-        toml::from_str(text)
+    pub fn parse(text: &str) -> Result<Self, String> {
+        let config: Self = toml::from_str(text).map_err(|error| error.to_string())?;
+        config.check_view_names()?;
+        Ok(config)
+    }
+
+    /// Two views with one name would make a picker entry and a `view` action ambiguous, so the
+    /// second one is a config error naming the collision. The pane's own unfiltered list holds
+    /// the first name, so a view may not take it either.
+    fn check_view_names(&self) -> Result<(), String> {
+        let mut seen: Vec<&str> = Vec::new();
+        for view in &self.views {
+            if view.name.trim().is_empty() {
+                return Err("a view needs a name".to_string());
+            }
+            if view.filter.trim().is_empty() {
+                return Err(format!("view '{}' has an empty filter", view.name));
+            }
+            if view.name == crate::views::ALL {
+                return Err(format!(
+                    "a view cannot be named '{}': that is the pane's own unfiltered list",
+                    crate::views::ALL
+                ));
+            }
+            if seen.contains(&view.name.as_str()) {
+                return Err(format!("two views are named '{}'", view.name));
+            }
+            seen.push(&view.name);
+        }
+        Ok(())
     }
 
     /// Where the token comes from. `token_command` wins when both keys are set.
@@ -183,6 +223,81 @@ mod tests {
     #[test]
     fn a_token_value_in_the_file_is_refused() {
         let error = Config::parse(r#"token = "a-secret""#).expect_err("refuses");
-        assert!(error.to_string().contains("unknown field"), "{error}");
+        assert!(error.contains("unknown field"), "{error}");
+    }
+
+    #[test]
+    fn views_are_read_in_the_order_they_are_written() {
+        let config = Config::parse(
+            "[[views]]\nname = \"today\"\nfilter = \"today | overdue\"\n\
+             [[views]]\nname = \"work\"\nfilter = \"#Work & !@waiting\"\n",
+        )
+        .expect("parses");
+
+        assert_eq!(
+            config.views,
+            vec![
+                View {
+                    name: "today".to_string(),
+                    filter: "today | overdue".to_string()
+                },
+                View {
+                    name: "work".to_string(),
+                    filter: "#Work & !@waiting".to_string()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn two_views_with_one_name_are_a_config_error() {
+        let error = Config::parse(
+            "[[views]]\nname = \"today\"\nfilter = \"today\"\n\
+             [[views]]\nname = \"today\"\nfilter = \"overdue\"\n",
+        )
+        .expect_err("refuses");
+
+        assert!(error.contains("two views are named 'today'"), "{error}");
+    }
+
+    #[test]
+    fn a_view_named_after_the_unfiltered_list_is_a_config_error() {
+        let error =
+            Config::parse("[[views]]\nname = \"all\"\nfilter = \"today\"\n").expect_err("refuses");
+
+        assert!(error.contains("cannot be named 'all'"), "{error}");
+    }
+
+    #[test]
+    fn a_view_without_a_filter_is_a_config_error_naming_the_field() {
+        let error = Config::parse("[[views]]\nname = \"today\"\n").expect_err("refuses");
+
+        assert!(error.contains("filter"), "{error}");
+    }
+
+    #[test]
+    fn a_view_without_a_name_is_a_config_error_naming_the_field() {
+        let error = Config::parse("[[views]]\nfilter = \"today\"\n").expect_err("refuses");
+
+        assert!(error.contains("name"), "{error}");
+    }
+
+    #[test]
+    fn a_view_with_an_empty_name_is_a_config_error() {
+        let error =
+            Config::parse("[[views]]\nname = \"\"\nfilter = \"today\"\n").expect_err("refuses");
+
+        assert!(error.contains("needs a name"), "{error}");
+    }
+
+    #[test]
+    fn a_view_with_an_empty_filter_is_a_config_error_naming_the_view() {
+        let error =
+            Config::parse("[[views]]\nname = \"today\"\nfilter = \"\"\n").expect_err("refuses");
+
+        assert!(
+            error.contains("view 'today' has an empty filter"),
+            "{error}"
+        );
     }
 }
