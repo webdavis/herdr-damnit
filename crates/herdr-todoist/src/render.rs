@@ -15,7 +15,7 @@ use crate::views::{MAX_NUMBERED_VIEW, Views};
 const COMPLETED_HINTS: &str = "j/k  u reopen  <Tab> open  R  q";
 
 /// The detail screen's own keys.
-const DETAIL_HINTS: &str = "j/k  c comment  <Esc> back  R";
+const DETAIL_HINTS: &str = "j/k  c comment  <Esc> back  R  q";
 
 /// What the status line calls the detail screen.
 const DETAIL_LABEL: &str = "task";
