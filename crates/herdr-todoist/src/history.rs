@@ -126,6 +126,7 @@ impl History {
                     priority: crate::list::LOWEST_PRIORITY,
                     labels: Vec::new(),
                     due: None,
+                    waiting: false,
                 })
             })
             .collect()

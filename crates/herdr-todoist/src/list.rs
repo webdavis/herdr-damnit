@@ -61,6 +61,10 @@ pub struct TaskRow {
     pub labels: Vec<String>,
     /// The due date as the API's own first ten characters, absent when the task has none.
     pub due: Option<String>,
+    /// Whether the row already carries the waiting mark, so a second read of the same queue does
+    /// not add it twice and a task whose own title happens to start with `+` is not mistaken for
+    /// one.
+    pub waiting: bool,
 }
 
 impl Row {
@@ -230,6 +234,7 @@ fn emit<'a>(
             priority: task.priority.clamp(LOWEST_PRIORITY, HIGHEST_PRIORITY),
             labels: task.labels.clone(),
             due: task.due.as_ref().map(|due| date_of(&due.date)),
+            waiting: false,
         }));
         if let Some(subtasks) = children.get(task.id.as_str()) {
             emit(rows, subtasks.iter().copied(), depth + 1, children, marks);
@@ -289,13 +294,10 @@ pub fn mark_waiting(rows: &mut [Row], ids: &[&str]) {
         let Row::Task(task) = row else {
             continue;
         };
-        let marked = task
-            .text
-            .get(1)
-            .is_some_and(|segment| segment.text.starts_with(WAITING));
-        if marked || !ids.contains(&task.id.as_str()) {
+        if task.waiting || !ids.contains(&task.id.as_str()) {
             continue;
         }
+        task.waiting = true;
         task.text
             .insert(1, Segment::new(format!("{WAITING} "), Slot::Orange));
     }
