@@ -295,6 +295,9 @@ mod tests {
         let error =
             Config::parse("[[views]]\nname = \"today\"\nfilter = \"\"\n").expect_err("refuses");
 
-        assert!(error.contains("view 'today' has an empty filter"), "{error}");
+        assert!(
+            error.contains("view 'today' has an empty filter"),
+            "{error}"
+        );
     }
 }
