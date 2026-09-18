@@ -1,10 +1,12 @@
 //! The plugin binary. With no arguments it is the pane; the subcommands are the plugin actions.
 
+mod completed;
 mod config;
 mod connection;
 mod cursor;
 mod doctor;
 mod herdr;
+mod history;
 mod list;
 mod pane;
 mod placement;

@@ -6,6 +6,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::widgets::ListState;
 use todoist::{Client, Error as TodoistError};
 
+use crate::completed::Completed;
 use crate::config::Config;
 use crate::connection::Connection;
 use crate::cursor::List;
@@ -24,18 +25,37 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
     let mut list = List::new(Vec::new());
     let mut status = show(&mut connection, config, base_url, &mut list, &views).await;
     let mut picker: Option<Picker> = None;
+    // The completed list is a second screen rather than a tenth view: the numbered views are the
+    // operator's own filter queries, and this one has no filter, no grouping and keys of its own.
+    // It is built on its first use and kept, so leaving and returning does not re-read the API.
+    let mut completed: Option<Completed> = None;
+    let mut showing_completed = false;
     let mut row = ListState::default();
     let mut terminal = ratatui::init();
     let outcome = loop {
-        if let Err(error) =
-            terminal.draw(|frame| draw(frame, &status, &views, &list, &mut row, picker.as_ref()))
-        {
+        let showing = completed
+            .as_ref()
+            .filter(|_| showing_completed)
+            .map(|screen| (screen.status(), screen.list()));
+        let (drawn_status, drawn_list) = showing.unwrap_or((status.as_str(), &list));
+        if let Err(error) = terminal.draw(|frame| {
+            draw(
+                frame,
+                drawn_status,
+                &views,
+                drawn_list,
+                &mut row,
+                picker.as_ref(),
+                showing_completed,
+            )
+        }) {
             break Err(error.to_string());
         }
         // A `view` action runs as its own process, so its request arrives here rather than as a key.
         if let Some(name) = crate::state::take_requested_view(&crate::state::view_request_path())
             && views.select_named(&name)
         {
+            showing_completed = false;
             status = show(&mut connection, config, base_url, &mut list, &views).await;
         }
         let key = match next_key().map_err(|error| error.to_string()) {
@@ -44,6 +64,35 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
             Ok(Some(key)) => key,
         };
         match &mut picker {
+            None if showing_completed => {
+                let screen = completed.as_mut().expect("the completed list is built");
+                match key {
+                    KeyCode::Char('q') | KeyCode::Esc => break Ok(()),
+                    KeyCode::Tab | KeyCode::BackTab => showing_completed = false,
+                    KeyCode::Char('j') | KeyCode::Down => {
+                        screen.down(&mut connection, config, base_url).await;
+                    }
+                    KeyCode::Char('k') | KeyCode::Up => screen.up(),
+                    KeyCode::Char('u') => {
+                        screen.reopen(&mut connection, config, base_url).await;
+                    }
+                    KeyCode::Char('r' | 'R') => {
+                        *screen = Completed::open(&mut connection, config, base_url).await;
+                    }
+                    // A number key names an open-task view, so it leaves the completed list for
+                    // that view, and a number with no view behind it does nothing here either.
+                    KeyCode::Char(digit) => {
+                        if let Some(index) = Views::by_number(digit).filter(|at| *at < views.len())
+                        {
+                            views.select(index);
+                            showing_completed = false;
+                            status =
+                                show(&mut connection, config, base_url, &mut list, &views).await;
+                        }
+                    }
+                    _ => {}
+                }
+            }
             Some(open) => match key {
                 KeyCode::Char('j') | KeyCode::Down => open.move_cursor(1),
                 KeyCode::Char('k') | KeyCode::Up => open.move_cursor(-1),
@@ -70,9 +119,19 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
                     )
                     .await;
                 }
-                KeyCode::Char('j') | KeyCode::Down => list.move_cursor(1),
-                KeyCode::Char('k') | KeyCode::Up => list.move_cursor(-1),
+                KeyCode::Char('j') | KeyCode::Down => {
+                    list.move_cursor(1);
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    list.move_cursor(-1);
+                }
                 KeyCode::Char('v') => picker = Some(Picker::open(&views)),
+                KeyCode::Tab | KeyCode::BackTab => {
+                    if completed.is_none() {
+                        completed = Some(Completed::open(&mut connection, config, base_url).await);
+                    }
+                    showing_completed = true;
+                }
                 KeyCode::Char(digit) => {
                     if let Some(index) = Views::by_number(digit)
                         && views.select(index)
