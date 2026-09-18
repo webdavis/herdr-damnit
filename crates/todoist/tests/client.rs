@@ -370,3 +370,194 @@ async fn a_refused_reopen_carries_the_api_s_own_message() {
         "Invalid argument value: Task is not completed"
     );
 }
+
+#[tokio::test]
+async fn completing_a_task_posts_to_its_close_path() {
+    let double = support::serve_once("200 OK", &[], "{}").await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    client.close("6X").await.expect("close succeeds");
+
+    let request = double.request.lock().expect("lock").clone();
+    assert!(request.starts_with("POST /tasks/6X/close "), "{request}");
+}
+
+#[tokio::test]
+async fn deleting_a_task_sends_a_delete_to_the_task_itself() {
+    let double = support::serve_once("200 OK", &[], "{}").await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    client.delete("6X").await.expect("delete succeeds");
+
+    let request = double.request.lock().expect("lock").clone();
+    assert!(request.starts_with("DELETE /tasks/6X "), "{request}");
+}
+
+#[tokio::test]
+async fn an_update_sends_only_the_fields_it_was_given() {
+    let double = support::serve_once("200 OK", &[], "{}").await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    client
+        .update(
+            "6X",
+            &todoist::Change {
+                priority: Some(4),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("update succeeds");
+
+    let request = double.request.lock().expect("lock").clone();
+    assert!(request.starts_with("POST /tasks/6X "), "{request}");
+    assert!(
+        request.contains("content-type: application/json"),
+        "{request}"
+    );
+    assert!(request.ends_with(r#"{"priority":4}"#), "{request}");
+}
+
+#[tokio::test]
+async fn a_due_date_is_sent_as_the_natural_language_string_the_api_parses() {
+    let double = support::serve_once("200 OK", &[], "{}").await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    client
+        .update(
+            "6X",
+            &todoist::Change {
+                due_string: Some("every 2 weeks".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("update succeeds");
+
+    let request = double.request.lock().expect("lock").clone();
+    assert!(
+        request.ends_with(r#"{"due_string":"every 2 weeks"}"#),
+        "{request}"
+    );
+}
+
+#[tokio::test]
+async fn an_update_writes_the_whole_label_set() {
+    let double = support::serve_once("200 OK", &[], "{}").await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    client
+        .update(
+            "6X",
+            &todoist::Change {
+                labels: Some(vec!["home".to_string(), "errands".to_string()]),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("update succeeds");
+
+    let request = double.request.lock().expect("lock").clone();
+    assert!(
+        request.ends_with(r#"{"labels":["home","errands"]}"#),
+        "{request}"
+    );
+}
+
+#[tokio::test]
+async fn a_move_names_the_project_or_the_section_it_moves_to() {
+    let double = support::serve_once("200 OK", &[], "{}").await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    client
+        .move_task("6X", &todoist::Destination::Project("p1".to_string()))
+        .await
+        .expect("move succeeds");
+
+    let request = double.request.lock().expect("lock").clone();
+    assert!(request.starts_with("POST /tasks/6X/move "), "{request}");
+    assert!(request.ends_with(r#"{"project_id":"p1"}"#), "{request}");
+
+    let double = support::serve_once("200 OK", &[], "{}").await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    client
+        .move_task("6X", &todoist::Destination::Section("s1".to_string()))
+        .await
+        .expect("move succeeds");
+
+    let request = double.request.lock().expect("lock").clone();
+    assert!(request.ends_with(r#"{"section_id":"s1"}"#), "{request}");
+}
+
+#[tokio::test]
+async fn quick_add_sends_the_line_verbatim_and_reads_back_the_task_todoist_made() {
+    let double = support::serve_once(
+        "200 OK",
+        &["Content-Type: application/json"],
+        r#"{"id":"7","content":"Pay rent","due":{"date":"2026-09-19"},"priority":4}"#,
+    )
+    .await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    let task = client
+        .quick_add("Pay rent tomorrow 9am p1 #Finances @home")
+        .await
+        .expect("quick add succeeds");
+
+    assert_eq!(task.content, "Pay rent");
+    assert_eq!(task.priority, 4);
+    let request = double.request.lock().expect("lock").clone();
+    assert!(request.starts_with("POST /tasks/quick "), "{request}");
+    assert!(
+        request.ends_with(r#"{"text":"Pay rent tomorrow 9am p1 #Finances @home"}"#),
+        "{request}"
+    );
+}
+
+#[tokio::test]
+async fn the_labels_a_picker_offers_are_read_by_name() {
+    let double = support::serve_once(
+        "200 OK",
+        &["Content-Type: application/json"],
+        r#"{"results":[{"id":"1","name":"home","item_order":2},
+            {"id":"2","name":"errands","item_order":1}],"next_cursor":null}"#,
+    )
+    .await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    let labels = client.labels().await.expect("labels read");
+
+    assert_eq!(labels.len(), 2);
+    assert_eq!(labels[0].name, "home");
+    let request = double.request.lock().expect("lock").clone();
+    assert!(request.starts_with("GET /labels?"), "{request}");
+}
+
+#[tokio::test]
+async fn a_refused_write_carries_the_api_s_own_message() {
+    let double = support::serve_once(
+        "400 Bad Request",
+        &[],
+        r#"{"error":"Invalid argument value",
+             "error_extra":{"explanation":"Unable to parse the due date"}}"#,
+    )
+    .await;
+    let client = Client::new(&double.base_url, token().await).expect("client");
+
+    let error = client
+        .update(
+            "6X",
+            &todoist::Change {
+                due_string: Some("wenesday".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "Invalid argument value: Unable to parse the due date"
+    );
+}

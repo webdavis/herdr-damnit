@@ -1,7 +1,7 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::model::{Items, Page};
-use crate::{CompletedTask, Error, Project, Section, Task, Token};
+use crate::{CompletedTask, Error, Label, Project, Section, Task, Token};
 
 /// The authenticated user, as much of it as the pane needs.
 #[derive(Debug, Deserialize)]
@@ -81,10 +81,53 @@ impl Client {
         })
     }
 
+    /// Complete the task. Its answer carries nothing the pane reads.
+    pub async fn close(&self, id: &str) -> Result<(), Error> {
+        self.post(&format!("/tasks/{id}/close"), None).await
+    }
+
+    /// Delete the task and every subtask under it. There is no undo, which is why the pane asks
+    /// before calling this.
+    pub async fn delete(&self, id: &str) -> Result<(), Error> {
+        self.send(reqwest::Method::DELETE, &format!("/tasks/{id}"), &[], None)
+            .await?;
+        Ok(())
+    }
+
+    /// Change the fields [`Change`] names and leave every other field of the task alone.
+    pub async fn update(&self, id: &str, change: &Change) -> Result<(), Error> {
+        self.post(&format!("/tasks/{id}"), Some(json(change)?))
+            .await
+    }
+
+    /// Move the task to another project or section.
+    pub async fn move_task(&self, id: &str, to: &Destination) -> Result<(), Error> {
+        self.post(&format!("/tasks/{id}/move"), Some(json(to)?))
+            .await
+    }
+
+    /// Add a task from a line of Quick Add syntax. Todoist parses the text and answers with the
+    /// task it made of it, which is what the pane reports rather than its own reading of the line.
+    pub async fn quick_add(&self, text: &str) -> Result<Task, Error> {
+        let body = json(&QuickAdd { text })?;
+        let response = self
+            .send(reqwest::Method::POST, "/tasks/quick", &[], Some(body))
+            .await?;
+        response
+            .json()
+            .await
+            .map_err(|error| Error::Malformed(strip_url(&error.to_string())))
+    }
+
+    /// Every label the account has, which is what the label picker offers.
+    pub async fn labels(&self) -> Result<Vec<Label>, Error> {
+        self.collect("/labels", &[]).await
+    }
+
     /// Reopen a completed task. Its answer carries nothing the pane reads, so only a refusal,
     /// which arrives in the API's own words, is worth reporting.
     pub async fn reopen(&self, id: &str) -> Result<(), Error> {
-        self.post(&format!("/tasks/{id}/reopen")).await
+        self.post(&format!("/tasks/{id}/reopen"), None).await
     }
 
     pub async fn projects(&self) -> Result<Vec<Project>, Error> {
@@ -124,7 +167,7 @@ impl Client {
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T, Error> {
-        let response = self.send(reqwest::Method::GET, path, query).await?;
+        let response = self.send(reqwest::Method::GET, path, query, None).await?;
         response
             .json()
             .await
@@ -133,8 +176,8 @@ impl Client {
 
     /// A write whose answer the pane does not read. The body is left unparsed, so an empty answer
     /// and a document are both a success.
-    async fn post(&self, path: &str) -> Result<(), Error> {
-        self.send(reqwest::Method::POST, path, &[]).await?;
+    async fn post(&self, path: &str, body: Option<String>) -> Result<(), Error> {
+        self.send(reqwest::Method::POST, path, &[], body).await?;
         Ok(())
     }
 
@@ -145,16 +188,23 @@ impl Client {
         method: reqwest::Method,
         path: &str,
         query: &[(&str, String)],
+        body: Option<String>,
     ) -> Result<reqwest::Response, Error> {
         let mut url = reqwest::Url::parse(&format!("{}{path}", self.base_url))
             .map_err(|error| Error::Network(error.to_string()))?;
         if !query.is_empty() {
             url.query_pairs_mut().extend_pairs(query);
         }
-        let response = self
+        let mut request = self
             .http
             .request(method, url)
-            .header(reqwest::header::AUTHORIZATION, self.token.header_value())
+            .header(reqwest::header::AUTHORIZATION, self.token.header_value());
+        if let Some(body) = body {
+            request = request
+                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .body(body);
+        }
+        let response = request
             .send()
             .await
             .map_err(|error| Error::Network(strip_url(&error.to_string())))?;
@@ -170,6 +220,40 @@ impl Client {
         }
         Ok(response)
     }
+}
+
+/// The fields of a task an update writes. Every one left `None` is left out of the request, which
+/// is how the API is told to keep that field unchanged.
+#[derive(Debug, Default, Serialize)]
+pub struct Change {
+    /// 1 to 4, where 4 is the app's p1 and 1 its p4.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub priority: Option<u8>,
+    /// A due date in Todoist's own natural language, which the API parses.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due_string: Option<String>,
+    /// The task's whole label set, names not ids.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub labels: Option<Vec<String>>,
+}
+
+/// Where a move puts the task. The API takes one id, so a section move names the section alone and
+/// the task follows it into that section's project.
+#[derive(Debug, Serialize)]
+pub enum Destination {
+    #[serde(rename = "project_id")]
+    Project(String),
+    #[serde(rename = "section_id")]
+    Section(String),
+}
+
+#[derive(Serialize)]
+struct QuickAdd<'a> {
+    text: &'a str,
+}
+
+fn json<T: Serialize>(body: &T) -> Result<String, Error> {
+    serde_json::to_string(body).map_err(|error| Error::Malformed(error.to_string()))
 }
 
 /// One page of completed tasks, with the cursor that reads the page after it.
