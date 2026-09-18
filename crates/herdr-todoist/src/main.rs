@@ -3,9 +3,12 @@
 mod config;
 mod cursor;
 mod doctor;
+mod herdr;
 mod list;
 mod pane;
+mod placement;
 mod render;
+mod state;
 mod tui;
 mod views;
 
@@ -19,6 +22,7 @@ usage: herdr-todoist [<command>]
   open           open the pane in this workspace, or focus it when it is already open
   toggle         open the pane, or close it when it is already open
   focus          focus the pane in this workspace
+  auto-open      open the pane when the config asks for it, the workspace-focus hook
   view <n>       show the nth configured view, opening the pane when it is closed
   doctor         check that the token resolves and one API request succeeds
 ";
@@ -46,6 +50,7 @@ async fn main() -> std::process::ExitCode {
             "open" => with_config(|config| pane::run(Mode::Open, config)),
             "toggle" => with_config(|config| pane::run(Mode::Toggle, config)),
             "focus" => with_config(|config| pane::run(Mode::Focus, config)),
+            "auto-open" => with_config(pane::auto_open),
             other => fail(&format!("unknown command '{other}'\n{USAGE}")),
         },
         [command, argument] if command == "view" => {

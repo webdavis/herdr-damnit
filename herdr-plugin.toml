@@ -23,6 +23,12 @@ title = "todoist"
 placement = "split"
 command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\""]
 
+# A workspace gained focus. The command reads the config and exits when `auto_open` is off, which
+# is the default, so the pane stays closed until an action asks for it.
+[[events]]
+on = "workspace.focused"
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" auto-open"]
+
 [[actions]]
 id = "open"
 title = "todoist: open pane"
