@@ -1,5 +1,32 @@
 use super::*;
 
+#[tokio::test]
+async fn a_refresh_interval_of_zero_still_reads_once_when_the_pane_opens() {
+    let base_url =
+        crate::reload::tests::serve_forever("200 OK", crate::reload::tests::EMPTY_PAGE).await;
+    let config = Config::parse(
+        "refresh_seconds = 0\ntoken_command = [\"sh\", \"-c\", \"printf test-token\"]",
+    )
+    .expect("parses");
+    let mut list = List::new(Vec::new());
+    let mut views = Views::new(&[]);
+    let (mut cache, mut queue) = crate::reload::tests::stores("tui-open-zero-interval");
+
+    let (_, schedule, status) = open(
+        &config, &base_url, &mut list, &mut views, &mut cache, &mut queue,
+    )
+    .await;
+
+    assert_eq!(
+        status, "0 open tasks",
+        "refresh_seconds = 0 must not skip the opening read"
+    );
+    assert!(
+        !schedule.due(crate::cache::now() + 1_000_000, false),
+        "the interval itself stays off"
+    );
+}
+
 #[test]
 fn ctrl_d_folds_to_the_send_key_the_comment_box_listens_for() {
     assert_eq!(

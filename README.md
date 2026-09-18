@@ -119,15 +119,17 @@ focus off the pane you switched to. It is `false` by default, which keeps the pa
 
 ## Cache, refresh and writes made offline
 
-The pane opens on the view it last read, so the first draw happens before any request. That local
-copy is one file per view in a `cache` directory under the plugin's state directory, which herdr
-names in `HERDR_PLUGIN_STATE_DIR` and which is
+The pane opens on the view it last read, so its local copy fills the rows before anything is
+asked of the API. That local copy is one file per view in a `cache` directory under the plugin's
+state directory, which herdr names in `HERDR_PLUGIN_STATE_DIR` and which is
 `~/.local/state/herdr/plugins/state/herdr-todoist` for a run outside herdr. Each file holds the
 API's own task, project and section documents. Every successful read replaces the file for
 that view. A file that cannot be read, because it was half written or came from an older version
 of the plugin, is treated as no cache at all: the pane opens empty rather than refusing to open.
 
-The pane reads again every `refresh_seconds`, and after every write, and on `R`. The interval is
+The pane reads once as soon as it opens, whatever `refresh_seconds` is set to, and again every
+`refresh_seconds`, after every write, and on `R`. Setting `refresh_seconds` to `0` turns off only
+that interval; the opening read, the read after a write and `R` still happen. The interval is
 driven by the pane's own draw loop, so it stops when the pane does, and it is held back while a
 prompt is open: redrawing the list under a half-typed comment would take the words away.
 

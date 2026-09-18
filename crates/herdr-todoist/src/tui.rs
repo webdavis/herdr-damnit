@@ -27,11 +27,11 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
     if let Some(name) = opening_view(config, &crate::state::view_request_path()) {
         views.select_named(&name);
     }
-    // The pane opens on the view's local copy, so the first draw happens before any request; the
-    // schedule is due at once, which is what reads the API just after it.
+    // The pane opens on the view's local copy, so the rows are ready before anything is asked of
+    // the API.
     let mut cache = Cache::in_state_dir();
     let mut queue = Queue::in_state_dir();
-    let (rows, mut status) = reload::opening(
+    let (rows, _) = reload::opening(
         &mut cache,
         &queue,
         &views.current().name.clone(),
@@ -39,8 +39,10 @@ pub async fn run(config: &Config, base_url: &str) -> Result<(), String> {
         cache::now(),
     );
     let mut list = List::new(rows);
-    let mut connection = Connection::build(config, base_url).await;
-    let mut schedule = Schedule::new(config.refresh_seconds(), cache::now());
+    let (mut connection, mut schedule, mut status) = open(
+        config, base_url, &mut list, &mut views, &mut cache, &mut queue,
+    )
+    .await;
     let mut prompt: Option<Prompt> = None;
     // The completed list is built on its first use and kept, so leaving and returning does not
     // re-read the API. The detail is not: it is about one task and is read when that task is
@@ -289,6 +291,27 @@ fn screen<'a>(
         cache,
         queue,
     }
+}
+
+/// Build the connection and read once before the first draw, whatever `refresh_seconds` is: it
+/// turns off the interval that follows, never the read that proves the cache right or wrong the
+/// moment the pane opens.
+#[allow(clippy::too_many_arguments)]
+async fn open(
+    config: &Config,
+    base_url: &str,
+    list: &mut List,
+    views: &mut Views,
+    cache: &mut Cache,
+    queue: &mut Queue,
+) -> (Connection, Schedule, String) {
+    let mut connection = Connection::build(config, base_url).await;
+    let status = screen(&mut connection, config, base_url, list, views, cache, queue)
+        .refresh()
+        .await;
+    let mut schedule = Schedule::new(config.refresh_seconds(), cache::now());
+    schedule.mark(cache::now());
+    (connection, schedule, status)
 }
 
 /// One key press on the completed list. `u` and `X` both reopen, since `X` reopens wherever the
