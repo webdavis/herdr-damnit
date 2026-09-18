@@ -110,7 +110,7 @@ action outranks it: the action notes the view it was pressed for and the pane re
 
 `auto_open = true` opens the pane in a workspace as that workspace gains focus, without taking the
 focus off the pane you switched to. It is `false` by default, which keeps the pane closed until
-`open`, `toggle`, `focus` or a `view` action asks for it.
+`open`, `toggle` or a `view` action asks for it.
 
 ## Views
 
