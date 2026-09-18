@@ -23,12 +23,13 @@ const DETAIL_LABEL: &str = "task";
 /// What the status line calls the completed list, which has no filter query of its own.
 const COMPLETED_LABEL: &str = "completed";
 
-/// The open list's own keys, inside the 32 columns a side pane opens at: the eight edits, `e`
-/// into the editor, `<CR>` into the detail, the view picker and `<Tab>` to the completed list.
-/// The view numbers are left to the picker, which lists them; j/k, R, `q` and the arrow keys are
-/// left unsaid, `q` because `<Esc>` closes the pane too and both other screens name it.
+/// The open list's own keys, inside the 32 columns a side pane opens at: the eight edits, `S` to
+/// hand the task to an agent, `e` into the editor, `<CR>` into the detail, the view picker and
+/// `Tab` to the completed list, written bare so the line still fits. The view numbers are left to
+/// the picker, which lists them; j/k, R, `q` and the arrow keys are left unsaid, `q` because
+/// `<Esc>` closes the pane too and both other screens name it.
 fn hints() -> &'static str {
-    "x X dd p s l m a e <CR> v <Tab>"
+    "x X dd p s l m a S e <CR> v Tab"
 }
 
 /// The status line, naming the showing view. Every failure the client can report (a rejected
@@ -342,6 +343,7 @@ mod tests {
             Prompt::add(),
             Prompt::labels("1", &["home".to_string()], &[]),
             Prompt::move_to("1", &[], &[]),
+            Prompt::note(),
         ];
 
         let expected = hints();
@@ -419,8 +421,8 @@ mod tests {
         let frame = frame_of(&views_of(&[]), &list_of_two(), None);
         let hints = frame.last().expect("a hint line");
 
-        assert!(hints.contains("x X dd p s l m a e"), "{frame:?}");
+        assert!(hints.contains("x X dd p s l m a S e"), "{frame:?}");
         assert!(hints.contains("<CR>"), "{frame:?}");
-        assert!(hints.contains("<Tab>"), "{frame:?}");
+        assert!(hints.contains("Tab"), "{frame:?}");
     }
 }

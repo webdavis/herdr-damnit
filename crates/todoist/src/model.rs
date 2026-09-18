@@ -49,6 +49,12 @@ fn lowest_priority() -> u8 {
     1
 }
 
+/// The app URL of a task. The v1 task object carries no `url` field of its own: the vendor removed
+/// it and documents this form instead (Migrating from v9, "Task URLs").
+pub fn task_url(id: &str) -> String {
+    format!("https://app.todoist.com/app/task/{id}")
+}
+
 /// A task's due date. `date` is a date or a date and time; the list shows its first ten
 /// characters, which are the date either way.
 #[derive(Debug, Deserialize)]

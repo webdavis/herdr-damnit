@@ -206,6 +206,7 @@ tasks.
 | `l`           | toggle a label from a picker                        |
 | `m`           | move the task to a project or section from a picker |
 | `a`           | Quick Add a task from a whole line of its syntax    |
+| `S`           | hand the task to this workspace's agent pane        |
 | `e`           | edit the task in your editor, or in the pane's box  |
 | `q`, `<Esc>`  | close the pane                                      |
 
@@ -258,6 +259,48 @@ so the order and the timestamp drawn are the server's own. A REFUSED post leaves
 every line still in it and the API's own message in the status line: a person has just typed
 several lines and losing them to a refusal would be the worst thing this screen could do.
 
+## Sending a task to the agent
+
+`S` hands the task under the cursor to the agent working in this workspace. It opens the same
+multi-line box a comment is typed in, for an optional note: `<C-d>` sends, `<Esc>` cancels, and a
+box submitted blank sends the brief with no note rather than refusing. NOTHING here happens on its
+own: no timer, no event hook, no hand-off the operator did not press `S` for.
+
+The brief is plain text, because an agent pane is a shell rather than a structure:
+
+```
+Todoist task: file taxes
+url: https://app.todoist.com/app/task/6cfCrxxxxxxxxxxx
+due: 2026-09-20
+priority: p1
+labels: home, slow
+
+receipts are in the drawer
+
+note: start with the receipts
+```
+
+A field the task has nothing for is LEFT OUT rather than written empty, so the brief carries no
+line an agent has to discount. The URL is built from the task id: the v1 task object has no `url`
+field, and `https://app.todoist.com/app/task/<id>` is the form the vendor documents in its place.
+
+The brief reaches the pane through `herdr pane send-text`, which writes literal text into a pane's
+input WITHOUT a return, so the agent holds the brief until the operator submits it; `herdr agent
+focus` then puts the cursor there. It is sent as one bracketed paste, so a multi-line brief is
+inserted verbatim instead of being read key by key, and a paste terminator inside the text cannot
+end the frame early. A refused focus does not fail the send, since the brief is already delivered.
+
+WHICH pane is the agent pane comes from `herdr agent list`: a pane herdr names an agent for, in
+this workspace, other than this one. A workspace with no such pane refuses by saying so, and where
+there are several the first herdr names wins and the status line says which agent got it.
+
+A comment on the task then records the hand-off (`Handed to the agent <name> from the herdr Todoist
+pane.`). It names the AGENT rather than its pane, which means nothing a day later, and WHEN is the
+comment's own posted date, which Todoist stamps and the detail screen draws. The comment is written
+only after the send succeeded, so a refused send leaves no record of a hand-off that did not
+happen. A refused comment says `sent to <name>, comment refused: <the API's message>` rather than
+pretending the send failed: the agent has the work either way, and that is what the operator needs
+to know.
 ## Editing a task in an editor
 
 `e` on a task runs the editor in this pane, waits for it, and reads the list again once it has

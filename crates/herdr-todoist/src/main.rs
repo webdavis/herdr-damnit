@@ -19,6 +19,7 @@ mod placement;
 mod prompt;
 mod reload;
 mod render;
+mod send;
 mod state;
 mod tui;
 mod views;

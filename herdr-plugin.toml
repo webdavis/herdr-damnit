@@ -2,8 +2,9 @@ id = "herdr-todoist"
 name = "Todoist"
 version = "0.1.0"
 # `herdr plugin pane open --entrypoint` and the plugin pane registry this plugin's actions drive
-# are present from 0.7.0.
-min_herdr_version = "0.7.0"
+# are present from 0.7.0. `S` also reads `herdr agent list`, whose `pane_id`, `workspace_id` and
+# `agent` fields are documented from 0.7.5, which is what sets the floor.
+min_herdr_version = "0.7.5"
 platforms = ["macos", "linux"]
 description = "A Todoist pane: the terminal UI, and a doctor check for the API token."
 

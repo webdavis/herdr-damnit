@@ -9,6 +9,7 @@ use crossterm::event::KeyCode;
 use crate::apply::{self, Ask, Edit};
 use crate::prompt::Prompt;
 use crate::reload::Screen;
+use crate::send;
 use crate::views::Views;
 
 /// What the pane does after a key press.
@@ -62,6 +63,7 @@ pub async fn key(key: KeyCode, screen: &mut Screen<'_>, prompt: &mut Option<Prom
             }
             None => Outcome::quiet(),
         },
+        KeyCode::Char('S') => send::ask(screen, prompt),
         KeyCode::Char('a') => {
             *prompt = Some(Prompt::add());
             Outcome::quiet()
@@ -103,10 +105,19 @@ pub async fn prompt_key(
         };
     }
     // A multi-line box takes every printable key the way an input does, and `<CR>` opens a line
-    // in it rather than sending, so the send key is its own.
-    if open.draft_mut().is_some() {
+    // in it rather than sending, so the send key is its own. The two boxes the list opens send
+    // different ways: a note goes to an agent pane, a task's own words go to Todoist.
+    let to_agent = match open {
+        Prompt::Note { .. } => Some(true),
+        Prompt::Edit { .. } => Some(false),
+        _ => None,
+    };
+    if let Some(to_agent) = to_agent {
         if key == crate::prompt::SEND {
-            return apply::send(screen, prompt).await;
+            return match to_agent {
+                true => send::send(screen, prompt, &send::Host::from_env(&send::cli)).await,
+                false => apply::send(screen, prompt).await,
+            };
         }
         if key == KeyCode::Esc {
             *prompt = None;

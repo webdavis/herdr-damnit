@@ -6,6 +6,11 @@ use std::process::Command;
 
 use crate::config::{Config, Placement};
 
+/// One `herdr` call by its arguments, for a caller that spells its own.
+pub fn call(args: &[&str]) -> Result<String, String> {
+    run(args)
+}
+
 pub fn focus_plugin_pane(pane: &str) -> Result<String, String> {
     run(&["plugin", "pane", "focus", pane])
 }
