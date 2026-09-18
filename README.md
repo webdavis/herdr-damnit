@@ -84,6 +84,7 @@ herdr plugin action invoke doctor --plugin herdr-todoist
 | `editor`        | `nvim`    | argv, or `[]` for none              | the editor `e` enters on a task, in this pane           |
 | `theme`         | `"catppuccin"` | a herdr theme name             | the palette the pane paints with                        |
 | `icons`         | `"nerd-font"` | `nerd-font`, `ascii`            | which set of marks a task line carries                  |
+| `refresh_seconds` | `300`   | whole seconds, `0` to turn it off   | how often the pane reads the API on its own             |
 | `[[views]]`     | none      | `name` and `filter`                 | the named filter views, in the order they are written   |
 
 An unrecognized `placement` or `side` is a config parse error naming the values above, and so is a
@@ -115,6 +116,36 @@ action outranks it: the action notes the view it was pressed for and the pane re
 `auto_open = true` opens the pane in a workspace as that workspace gains focus, without taking the
 focus off the pane you switched to. It is `false` by default, which keeps the pane closed until
 `open`, `toggle` or a `view` action asks for it.
+
+## Cache, refresh and writes made offline
+
+The pane opens on the view it last read, so the first draw happens before any request. That local
+copy is one file per view in a `cache` directory under the plugin's state directory, which herdr
+names in `HERDR_PLUGIN_STATE_DIR` and which is
+`~/.local/state/herdr/plugins/state/herdr-todoist` for a run outside herdr. Each file holds the
+API's own task, project and section documents. Every successful read replaces the file for
+that view. A file that cannot be read, because it was half written or came from an older version
+of the plugin, is treated as no cache at all: the pane opens empty rather than refusing to open.
+
+The pane reads again every `refresh_seconds`, and after every write, and on `R`. The interval is
+driven by the pane's own draw loop, so it stops when the pane does, and it is held back while a
+prompt is open: redrawing the list under a half-typed comment would take the words away.
+
+When a read cannot reach the API, the rows stay on screen and the status line says how old they
+are, `stale 5m`. Every other failure keeps its own message, so a rejected token or a refused
+filter still reads as itself.
+
+A write made while the network is down is not sent and not drawn onto its row, which would put
+something on screen the server has not agreed to. It goes to the back of a queue in
+`queue.json` beside the cache, its row takes a `+` mark, and the status line counts what is
+waiting (`stale 5m +2`). The queue is written to disk the moment a write joins it, so a task
+completed on a train is still waiting to be sent after the pane is closed and opened again.
+
+The next read that reaches the API sends the queue, oldest first, one write at a time. A write the
+API refuses, a task somebody else deleted for instance, is dropped with the API's own message
+(`dropped 1: Task not found  sent 7`) and the writes behind it still go: one write nobody can make
+any more is not a reason to strand the seven behind it. A write that fails because the network is
+still down stays at the head of the queue with everything behind it, in order, for the next try.
 
 ## Views
 
