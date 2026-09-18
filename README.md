@@ -173,10 +173,12 @@ this list has no filter and no grouping. `1` to `9` and the view picker go back 
 the view they name, so a `view:<n>` keybinding behaves the same whichever list is on screen.
 
 Completed tasks are newest first, one line each, the completion date first so the dates line up
-down the pane. The list is paged: the first screen is one request, and reaching the bottom row asks
-for the next page. `u` reopens the task under the cursor, which drops its row at once, since a
-reopened task is no longer completed; the cursor takes the row below it. A refused reopen leaves
-every row where it is and reports the API's own message in the status line.
+down the pane. The list is paged: the first screen is one request when the newest window has rows,
+and reaching the bottom row asks for the next page. An account whose newest windows hold nothing
+walks back through them before the first screen draws, since each page is a request of its own.
+`u` reopens the task under the cursor, which drops its row at once, since a reopened task is no
+longer completed; the cursor takes the row below it. A refused reopen leaves every row where it is
+and reports the API's own message in the status line.
 
 The API reads completed tasks in a window of at most three months at a time, so the list walks back
 one window per page. It stops about three years back and the status line says so along with the day
