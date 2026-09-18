@@ -91,11 +91,18 @@ impl Config {
         Ok(config)
     }
 
-    /// Two views with one name would make a number key and a picker entry ambiguous, so the
-    /// second one is a config error naming the collision.
+    /// Two views with one name would make a picker entry and a `view` action ambiguous, so the
+    /// second one is a config error naming the collision. The pane's own unfiltered list holds
+    /// the first name, so a view may not take it either.
     fn check_view_names(&self) -> Result<(), String> {
         let mut seen: Vec<&str> = Vec::new();
         for view in &self.views {
+            if view.name == crate::views::ALL {
+                return Err(format!(
+                    "a view cannot be named '{}': that is the pane's own unfiltered list",
+                    crate::views::ALL
+                ));
+            }
             if seen.contains(&view.name.as_str()) {
                 return Err(format!("two views are named '{}'", view.name));
             }
@@ -245,6 +252,14 @@ mod tests {
         .expect_err("refuses");
 
         assert!(error.contains("two views are named 'today'"), "{error}");
+    }
+
+    #[test]
+    fn a_view_named_after_the_unfiltered_list_is_a_config_error() {
+        let error =
+            Config::parse("[[views]]\nname = \"all\"\nfilter = \"today\"\n").expect_err("refuses");
+
+        assert!(error.contains("cannot be named 'all'"), "{error}");
     }
 
     #[test]
