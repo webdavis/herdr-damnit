@@ -94,8 +94,9 @@ filter = "#Work & !@waiting"
 ```
 
 View 1 is always `all`, the unfiltered list of every open task, and the configured views follow in
-the order they are written. Two views with one name is a config error, as is a view missing its
-`name` or its `filter`.
+the order they are written. Two views with one name is a config error, as is a view named `all`,
+which the unfiltered list already answers to, and as is a view missing its `name` or its
+`filter`.
 
 Press `v` for the picker or a number key to switch. A view keeps the cursor on its task when that
 task is in the view being switched to, and lands on the view's first task when it is not.
@@ -112,10 +113,11 @@ configured view: the views are config and the manifest is not. The actions are n
 `view:1` to `view:9`, each showing the view at that number:
 
 ```toml
-[[keybindings]]
+[[keys.command]]
 key = "prefix+ctrl+t"
 type = "plugin_action"
-action = "herdr-todoist.view:2"
+command = "herdr-todoist.view:2"
+description = "todoist: show view 2"
 ```
 
 A number with no view behind it exits non-zero saying how many views the config has.
