@@ -2185,6 +2185,10 @@ two staged changes and one unstaged one, it reads `2 staged  1 changed  1 unpush
 spec's Status screen mockup heads the same screen `3 staged  2 changed`; that header is stale
 against the two Staged rows and one Working row drawn under it, and the arrays win.
 
+Three of the fixture's oids run past seven characters, one per row builder that calls `Oid::short`,
+so a row drawn from the whole oid instead of its prefix fails rather than reading the same either
+way.
+
 `Change::fields` is the list of changed field names, which `dam` 0.2.0 carries on every change
 document as `fields` and Task 23 maps straight across. An update names the fields that moved, a
 create names the fields the new object carries beyond its defaults, and a delete names none, so a
@@ -2211,7 +2215,7 @@ fn full() -> Stage {
         staged: vec![
             change("1a2b3c4", Op::Create, "ship the pin bump", &[]),
             change(
-                "5d6e7f8",
+                "5d6e7f8a9b0",
                 Op::Update,
                 "refresh the roster row",
                 &["due", "priority"],
@@ -2236,14 +2240,14 @@ fn full() -> Stage {
             },
         ],
         conflicts: vec![Conflict {
-            oid: Oid::new("3d4e5f6"),
+            oid: Oid::new("3d4e5f6a1b2"),
             remote: "todoist".to_string(),
             ours: "mine".to_string(),
             theirs: "theirs".to_string(),
         }],
         notices: vec![Notice {
             kind: "removed_upstream".to_string(),
-            oid: Some(Oid::new("7a8b9c0")),
+            oid: Some(Oid::new("7a8b9c0d1e2")),
             remote: Some("todoist".to_string()),
             message: "removed on todoist: \"old task\" is kept here".to_string(),
         }],
@@ -2318,7 +2322,10 @@ fn an_empty_stage_says_so_in_dams_own_words() {
 fn a_conflict_outranks_staged_and_staged_outranks_working() {
     let stage = full();
     assert_eq!(stage.staged_count(), 2);
-    assert_eq!(stage.mark_of(&Oid::new("3d4e5f6")), Some(Mark::Conflict));
+    assert_eq!(
+        stage.mark_of(&Oid::new("3d4e5f6a1b2")),
+        Some(Mark::Conflict)
+    );
     assert_eq!(stage.mark_of(&Oid::new("1a2b3c4")), Some(Mark::Staged));
     assert_eq!(stage.mark_of(&Oid::new("9a0b1c2")), Some(Mark::Working));
     assert_eq!(stage.mark_of(&Oid::new("nothing")), None);
@@ -2353,12 +2360,15 @@ fn a_dam_that_sends_no_oids_leaves_the_unpushed_set_empty() {
 fn an_object_both_staged_and_in_conflict_shows_the_conflict_mark() {
     let mut stage = full();
     stage.staged.push(change(
-        "3d4e5f6",
+        "3d4e5f6a1b2",
         Op::Update,
         "the conflicted one",
         &["due"],
     ));
-    assert_eq!(stage.mark_of(&Oid::new("3d4e5f6")), Some(Mark::Conflict));
+    assert_eq!(
+        stage.mark_of(&Oid::new("3d4e5f6a1b2")),
+        Some(Mark::Conflict)
+    );
 }
 
 #[test]
@@ -2419,7 +2429,7 @@ fn a_notice_that_names_an_object_carries_its_mark() {
     let marked = full()
         .rows()
         .into_iter()
-        .find(|row| matches!(row, StatusRow::Change { oid, .. } if oid.as_str() == "7a8b9c0"));
+        .find(|row| matches!(row, StatusRow::Change { oid, .. } if oid.as_str() == "7a8b9c0d1e2"));
     let Some(StatusRow::Change { mark, .. }) = marked else {
         panic!("the notice row is not a cursor target");
     };
