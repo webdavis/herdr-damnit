@@ -9,24 +9,13 @@
 
 use ratatui::style::Color;
 
+pub use herdr_damnit_domain::Slot;
+
 /// A theme's intrinsic cast, which sets the direction the dim step goes in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Appearance {
     Dark,
     Light,
-}
-
-/// The palette slot a drawn piece of the pane asks for by name.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Slot {
-    Text,
-    Dim1,
-    Red,
-    Green,
-    Yellow,
-    Orange,
-    Purple,
-    Blue,
 }
 
 /// The resolved colors the pane paints with.
