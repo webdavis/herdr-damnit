@@ -5519,10 +5519,12 @@ documents into the domain types.
     for a refusal is the whole error document `dam` prints under `--json`), and `FAKE_DAM_SLEEP_MS`
     (a sleep before answering). It installs a `SIGINT` handler that appends a `{"signal":"SIGINT"}`
     line to the log and exits 3.
-  - Fifteen fixtures: `ls.json`, `ls-empty.json`, `ls-done.json`, `status-clean.json`,
-    `status-full.json`, `show-task.json`, `show-event.json`, `log.json`, `push-ok.json`,
-    `push-partial-failure.json`, `pull-ok.json`, `pull-conflict.json`, `commit.json`, `new.json`,
-    `version.txt`.
+  - Sixteen fixtures: `ls.json`, `ls-empty.json`, `ls-done.json`, `status-clean.json`,
+    `status-full.json`, `show-task.json`, `show-event.json`, `log.json`, `log-completion.json`,
+    `push-ok.json`, `push-partial-failure.json`, `pull-ok.json`, `pull-conflict.json`,
+    `commit.json`, `new.json`, `version.txt`. `log-completion.json` is the log of a store whose
+    task was completed and committed, which is the only fixture that carries the shape
+    `completions` walks.
 
 Fixtures are owned by this repository and are byte copies of documents the built `dam` actually
 produced. A `dam` change that moves the bytes fails a test here, which is the point: the pane pins
@@ -5545,10 +5547,22 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-git clone --quiet https://github.com/webdavis/damnit "$work/damnit"
-git -C "$work/damnit" checkout --quiet "$revision"
-(cd "$work/damnit" && cargo build --release --locked --quiet)
-dam="$work/damnit/target/release/dam"
+if [[ -n "${DAM_BIN:-}" ]]; then
+  dam="$DAM_BIN"
+else
+  git clone --quiet https://github.com/webdavis/damnit "$work/damnit"
+  git -C "$work/damnit" checkout --quiet "$revision"
+  (cd "$work/damnit" && cargo build --release --locked --quiet)
+  dam="$work/damnit/target/release/dam"
+fi
+
+# dam reads the store and the config from these when its flags name none, and it stamps an event
+# with the local zone, so the capture runs in UTC against a store nothing else can reach.
+export HOME="$work/home"
+export XDG_CONFIG_HOME="$work/home/.config"
+export XDG_DATA_HOME="$work/home/.local/share"
+export TZ=UTC
+mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
 
 export DAM_STORE="$work/store.sqlite"
 export DAM_CONFIG="$work/config.toml"
@@ -5559,23 +5573,35 @@ CONFIG
 
 "$dam" --version >"$here/version.txt"
 
+# A clean status is one with nothing staged, nothing working and no unpushed commit, which is the
+# empty store: the first commit below leaves one commit unpushed for the life of the capture.
+"$dam" status --json >"$here/status-clean.json"
+
 "$dam" new "ship the pin bump" --path "proj/dotfiles" -p 1 --due 2026-09-18 >/dev/null
 "$dam" new "refresh the roster row" --path "proj/dotfiles" --label slow >/dev/null
-"$dam" new "water the plants" --path "proj/home" --recurrence "every week" >/dev/null
+"$dam" new "water the plants" --path "proj/home" >/dev/null
+plants="$("$dam" ls "path:proj/home/" --json |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["objects"][0]["oid"])')"
+# Recurrence is an edit flag rather than a new flag, so the weekly task takes two calls.
+"$dam" edit "$plants" --recurrence "every week" >/dev/null
 "$dam" ls "!done" --json >"$here/ls.json"
 "$dam" ls "path:nowhere/" --json >"$here/ls-empty.json"
 "$dam" status --json >"$here/status-full.json"
 
 "$dam" add -A >/dev/null
 "$dam" commit -m "the first commit" --json >"$here/commit.json"
-"$dam" status --json >"$here/status-clean.json"
 "$dam" log --json >"$here/log.json"
 
-first="$("$dam" ls "!done" --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["objects"][0]["oid"])')"
+first="$("$dam" ls "!done" --json |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["objects"][0]["oid"])')"
 "$dam" show "$first" --json >"$here/show-task.json"
 "$dam" done "$first" >/dev/null
+"$dam" add -A >/dev/null
+"$dam" commit -m "the completion" --json >/dev/null
+"$dam" log --json >"$here/log-completion.json"
 "$dam" ls "done" --json >"$here/ls-done.json"
-"$dam" new "stand-up" --event --start 2026-09-21T09:00 --end 2026-09-21T09:15 --json >"$here/new.json"
+"$dam" new "stand-up" --event --start 2026-09-21T09:00 --end 2026-09-21T09:15 --json \
+  >"$here/new.json"
 event="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["oid"])' "$here/new.json")"
 "$dam" show "$event" --json >"$here/show-event.json"
 
@@ -5897,15 +5923,24 @@ fn append(line: &str) {
 /// `dam` maps a cancelled run to exit 3 whatever the abandoned work reported, so the fake does the
 /// same and records the signal for the test to assert on.
 fn install_interrupt_handler() {
+    if std::env::var_os("FAKE_DAM_IGNORE_SIGINT").is_some() {
+        unsafe { libc::signal(libc::SIGINT, libc::SIG_IGN) };
+        return;
+    }
     unsafe extern "C" fn on_interrupt(_: libc::c_int) {
         append(r#"{"signal":"SIGINT"}"#);
         std::process::exit(3);
     }
     unsafe {
-        libc::signal(libc::SIGINT, on_interrupt as libc::sighandler_t);
+        libc::signal(libc::SIGINT, on_interrupt as *const () as libc::sighandler_t);
     }
 }
 ```
+
+The cast through `*const ()` is load-bearing: clippy's `function_casts_as_integer` refuses a
+function item cast straight to an integer type, and this crate builds under `-D warnings`. The
+fifth knob, `FAKE_DAM_IGNORE_SIGINT`, plays a `dam` that never notices the interrupt, which is what
+Task 22 drives the kill escalation with.
 
 The `fake-dam` binary needs `serde_json` and `libc`, which the crate already depends on.
 
@@ -6077,8 +6112,40 @@ fn the_configured_argv_leads_and_the_commands_arguments_follow_it() {
 ```
 
 Each test sets the fake's environment on the process it shares with every other test in the file, so
-run this file single-threaded: `cargo test -p herdr-damnit-adapters --locked --test dam_runner --
---test-threads=1`. Put that flag in the test command of every later step that names this file.
+every test in it opens by taking one file-local lock that also clears all five knobs:
+
+```rust
+/// The fake's knobs live in this process's environment, which every test in this file shares.
+/// A test holds this lock for its whole body and starts from a cleared environment.
+fn fake_env() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let guard = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    for knob in [
+        "FAKE_DAM_FIXTURE_DIR",
+        "FAKE_DAM_FIXTURE",
+        "FAKE_DAM_EXIT",
+        "FAKE_DAM_STDERR",
+        "FAKE_DAM_SLEEP_MS",
+        "FAKE_DAM_LOG",
+        "FAKE_DAM_IGNORE_SIGINT",
+    ] {
+        unsafe { std::env::remove_var(knob) };
+    }
+    guard
+}
+```
+
+The lock rather than `--test-threads=1`, because CI runs the plain
+`cargo test --workspace --locked` and nothing there passes that flag; the poison recovery is what
+keeps one failing test from cascading into the rest of the file. Clearing on entry rather than on
+exit is the other half: a test that panics mid-body never reaches its own cleanup, and under the
+plan's original per-test cleanup that leaked `FAKE_DAM_EXIT` into every later test in the file.
+
+Two more tests beyond the plan's five. The argv test above has to hand `ProcessDamRunner::new` a
+configured argv of **two** words, one of them a leading argument, or it cannot fail when `spawn`
+drops `.args(leading)`: with a one-word argv the assertion holds either way. And an argv with no
+word in it at all is its own arm, `split_first().ok_or(SpawnError::NotFound)`, which needs
+`an_empty_argv_is_a_not_found_rather_than_a_panic`.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
@@ -6238,6 +6305,32 @@ and kills its child before returning, and `main` maps a cancelled run to exit 3.
 `SIGTERM` handler, so a `SIGTERM` is death at an arbitrary point with no chance to reap the helper.
 The group matters because `dam push` spawns the remote helper, which is where the time actually goes.
 
+**Nothing in this file waits for a guessed interval.** Three amendments to the tests below, all of
+them measured:
+
+1. **No elapsed budget is asserted.** `finished.elapsed < Duration::from_secs(2)` and its
+   one-second sibling are wall-clock upper bounds on a machine that runs many agents at once. What
+   they are for, proving the cancellation fired rather than the fake finishing on its own, is
+   carried instead by a fake that sleeps far past every deadline and grace under test
+   (`FAKE_DAM_SLEEP_MS` of 30000) against a `recv_timeout` of 20 seconds: a run that was not
+   cancelled times out and fails. That is both stricter and load-proof.
+1. **`sleep(150ms)` before cancelling becomes a blocking wait on the fake's own argv line.** The
+   fake logs its argv before it sleeps, so a line in the log proves the child is past its startup
+   and has its handler installed. Under the sleep a loaded machine can interrupt a child that has
+   not installed one yet, whose default action kills it: code `None` rather than `Some(3)`.
+1. **The kill half of this task's own interface gains a test.** `Finished::code` of `None` for a
+   `dam` that took the kill is stated above and pinned by nothing. It cannot be driven through
+   `spawn`, because the production grace is two seconds and no test here may take that long, so
+   `Cancel` takes its grace at construction: `Cancel::of(pid)` keeps the constant and
+   `Cancel::with_grace(pid, grace)` is what the test drives, with a 100 ms grace and the fake in
+   its `FAKE_DAM_IGNORE_SIGINT` mode.
+
+Four tests beyond the plan's three: the kill escalation above, a group that has already gone (the
+`alive` poll's early return, so an interrupted `dam` is never killed on top of the interrupt),
+`the_interrupt_reaches_the_group_rather_than_its_leader_alone` over a second fake joined to the
+first's group with `process_group(leader)`, which is the only thing that catches a `kill` sent to a
+positive pid, and a job with no deadline at all, which is what `spawn` hands down.
+
 - [ ] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-adapters/tests/cancel.rs`:
@@ -6376,17 +6469,27 @@ const TICK: Duration = Duration::from_millis(50);
 #[derive(Clone, Copy, Debug)]
 pub struct Cancel {
     group: i32,
+    grace: Duration,
 }
 
 impl Cancel {
     pub fn of(pid: u32) -> Self {
-        Self { group: pid as i32 }
+        Self::with_grace(pid, GRACE)
     }
 
-    /// `SIGINT` to the group, a two-second grace, then `SIGKILL` to the group.
+    /// The same signalling with a grace of the caller's choosing, which is how a test drives the
+    /// escalation without waiting out the production one.
+    pub fn with_grace(pid: u32, grace: Duration) -> Self {
+        Self {
+            group: pid as i32,
+            grace,
+        }
+    }
+
+    /// `SIGINT` to the group, the grace, then `SIGKILL` to the group.
     pub fn interrupt(self) {
         self.signal(libc::SIGINT);
-        let deadline = Instant::now() + GRACE;
+        let deadline = Instant::now() + self.grace;
         while Instant::now() < deadline {
             if !self.alive() {
                 return;
@@ -6510,9 +6613,16 @@ carries beyond its defaults, and a delete names none.
 
 `completions` is how the Done screen gets its dates, and it reads `dam log --json`, whose change
 documents carry no `before` and `after` either. The commit that completed a task is the one whose
-change names `done` among its `fields` and whose row carries `done` of true, and that commit's `at`
-is the date. A task completed in the working layer and not yet committed has no commit and therefore
-no date.
+change names `done` among its `fields` and whose row carries `done` of true. The date is that
+change's own `completed_at`, which `dam` 0.2.0 sets when `done` becomes true, and the commit's `at`
+for a `dam` that sends none. A task completed in the working layer and not yet committed has no
+commit and therefore no date.
+
+**Both halves of that gate are load-bearing and each needs its own test.** Dropping the `fields`
+check makes every later edit of an already-complete task a fresh completion, which re-dates it;
+dropping the `done` check makes a `dam edit --undone` a completion, because a reopen is a change
+that names `done` and leaves the task open (measured: `fields ["done"]`, `done false`,
+`completed_at null`). A mutation sweep found both survivors against the plan's own test set.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -6643,12 +6753,11 @@ fn a_removed_upstream_notice_reads_as_a_sentence_rather_than_a_kind() {
 fn a_log_names_the_day_each_completion_was_committed_on() {
     let document = r#"{"commits":[
       {"id":"c1","at":"2026-09-19T08:00:00Z","message":"first","changes":[
-        {"oid":"1","op":"create","before":null,
-         "after":{"oid":"1","kind":"task","subject":"a","task":{"done":false,"priority":4}}}]},
+        {"oid":"1","op":"create","fields":["subject"],"kind":"task","subject":"a",
+         "done":false,"completed_at":null,"priority":4}]},
       {"id":"c2","at":"2026-09-20T09:30:00Z","message":"second","changes":[
-        {"oid":"1","op":"update",
-         "before":{"oid":"1","kind":"task","subject":"a","task":{"done":false,"priority":4}},
-         "after":{"oid":"1","kind":"task","subject":"a","task":{"done":true,"priority":4}}}]}
+        {"oid":"1","op":"update","fields":["done"],"kind":"task","subject":"a",
+         "done":true,"completed_at":"2026-09-20T09:29:11Z","priority":4}]}
     ]}"#;
     let completed = completions(document).expect("it parsed");
 
@@ -6827,9 +6936,17 @@ fn read<T: serde::de::DeserializeOwned>(json: &str) -> Result<T, String> {
 mod tests;
 ```
 
+`kind_changed` is the fifth kind and the plan first listed only four arms for it: a real one
+carries `ours` and `theirs` as kind words and no `why` at all, so the fallback drew
+`kind_changed: ` with nothing after the colon.
+
 The status, log and sync readers go in a sibling file to keep both inside the line cap:
 `crates/herdr-damnit-adapters/src/wire/reports.rs`, re-exported from `wire.rs` with
-`mod reports; pub use reports::{completions, pull_summary, push_summary, stage};`.
+`mod reports; pub use reports::{completions, pull_summary, push_summary, stage};`. The error
+document is a third sibling, `wire/failures.rs`, exporting `error_document`, which the Interfaces
+block names and the plan's code listing left out. Each of the three keeps its own
+`#[cfg(test)] mod tests;` beside it rather than one shared test file: the tests in one file reached
+404 lines, past the point the Rust standard asks for decomposition.
 
 ```rust
 //! `dam status --json`, `dam log --json` and the two sync reports.
@@ -6856,6 +6973,13 @@ struct WireChange {
     subject: String,
     #[serde(default)]
     fields: Vec<String>,
+    /// True on the object as the change leaves it, which is what marks a completion in a log.
+    #[serde(default)]
+    done: bool,
+    /// The instant the task was completed, since `dam` 0.2.0. A `dam` without it leaves the
+    /// commit's own day as the completion date.
+    #[serde(default)]
+    completed_at: Option<String>,
     /// Present only under `--full`, which this pane never asks for.
     #[serde(default)]
     after: Option<WireObject>,
@@ -6941,6 +7065,11 @@ fn into_notice(wire: &serde_json::Value) -> Notice {
         "event_cancelled" => format!("event cancelled: {subject:?}"),
         "push_failed" => format!("{remote}: push failed: {why}"),
         "pull_failed" => format!("{remote}: pull failed: {why}"),
+        "kind_changed" => format!(
+            "kind changed: a {} here and an {} upstream",
+            text("ours"),
+            text("theirs")
+        ),
         other => format!("{other}: {why}"),
     };
     Notice {
@@ -6970,21 +7099,16 @@ pub fn completions(json: &str) -> Result<HashMap<Oid, Date>, String> {
     let log: WireLog = read(json)?;
     let mut completed = HashMap::new();
     for commit in log.commits {
-        let Some(at) = herdr_damnit_domain::parse_date(&commit.at) else {
-            continue;
-        };
         for change in commit.changes {
-            let was_done = change
-                .before
-                .as_ref()
-                .and_then(|object| object.task.as_ref())
-                .is_some_and(|task| task.done);
-            let is_done = change
-                .after
-                .as_ref()
-                .and_then(|object| object.task.as_ref())
-                .is_some_and(|task| task.done);
-            if is_done && !was_done {
+            if !change.done || !change.fields.iter().any(|field| field == "done") {
+                continue;
+            }
+            let at = change
+                .completed_at
+                .as_deref()
+                .and_then(parse_date)
+                .or_else(|| parse_date(&commit.at));
+            if let Some(at) = at {
                 completed.insert(Oid::new(change.oid), at);
             }
         }
@@ -7072,10 +7196,10 @@ Expected: PASS, fourteen tests. If a fixture assertion fails on a subject or a p
 assertion to what `capture.sh` actually produced rather than editing the fixture: the fixture is the
 byte record and the test is what reads it.
 
-- [ ] **Step 5: Check both files are inside the cap**
+- [ ] **Step 5: Check every file is inside the cap**
 
-Run: `wc -l crates/herdr-damnit-adapters/src/wire.rs crates/herdr-damnit-adapters/src/wire/reports.rs crates/herdr-damnit-adapters/src/wire/tests.rs`
-Expected: all three under 400, none over 500.
+Run: `wc -l crates/herdr-damnit-adapters/src/wire.rs crates/herdr-damnit-adapters/src/wire/reports.rs crates/herdr-damnit-adapters/src/wire/failures.rs crates/herdr-damnit-adapters/src/wire/tests.rs crates/herdr-damnit-adapters/src/wire/reports/tests.rs crates/herdr-damnit-adapters/src/wire/failures/tests.rs`
+Expected: all six inside the 300 line ideal, none over 500.
 
 - [ ] **Step 6: Commit**
 
@@ -7107,23 +7231,37 @@ pub struct Config {
     pub default_view: Option<String>,
     pub auto_open: bool,
     pub theme: Option<String>,
-    pub icons: IconSet,
+    pub icons: Icons,
     pub refresh_seconds: Option<u64>,
     pub handoff_label: String,
-    pub views: Vec<View>,
+    pub views: Vec<ConfigView>,
 }
 
 pub enum Placement { Overlay, Split, Tab, Zoomed }
 pub enum Side { Right, Down }
+pub enum Icons { NerdFont, Ascii }
+pub struct ConfigView { pub name: String, pub query: String }
 
 impl Config {
     pub fn load() -> Result<Config, String>;
     pub fn parse(text: &str) -> Result<Config, String>;
     pub fn refresh_seconds(&self) -> u64;
+    pub fn views(&self) -> Vec<View>;
+    pub fn icons(&self) -> IconSet;
+    pub fn check_theme_against(&self, names: &[&str]) -> Result<(), String>;
 }
 
 pub const DEFAULT_REFRESH_SECONDS: u64 = 300;
 ```
+
+`icons` and `views` are the config's own serde types rather than the domain's, because
+`IconSet` and `View` carry no serde derive and the domain crate takes no serde dependency. The two
+reader methods, `Config::icons()` and `Config::views()`, are what the rest of the pane calls, so
+the tests for those keys assert on the reader rather than on the field.
+
+`Side` here is the pane's placement side, Right or Down. It shares a name with
+`herdr_damnit_application::Side`, which is the side a conflict resolves toward; nothing imports
+both into one scope.
 
 What changed from the Todoist config: `token_command` and `token_env` are gone, because the token is
 `dam`'s; `editor` is gone, because `dam edit -e` chooses the editor and falls back to `vi`; each
@@ -7393,8 +7531,8 @@ mod tests;
 
 `Placement` and `Side` carry over from `crates/herdr-damnit/src/placement.rs` and
 `crates/herdr-damnit/src/config.rs` unchanged, including `Side::split_direction` and
-`Placement::as_str`. `Config::parse` runs the same five checks the old one did, with `ALL` replaced
-by `OPEN` and `filter` replaced by `query`:
+`Placement::as_str`. `Config::parse` runs four checks, with `ALL` replaced by `OPEN` and `filter`
+replaced by `query`:
 
 ```rust
     pub fn parse(text: &str) -> Result<Self, String> {
@@ -7403,7 +7541,6 @@ by `OPEN` and `filter` replaced by `query`:
         config.check_view_names()?;
         config.check_width()?;
         config.check_default_view()?;
-        config.check_theme()?;
         Ok(config)
     }
 
@@ -7416,15 +7553,26 @@ by `OPEN` and `filter` replaced by `query`:
 ```
 
 `Config::views()` is what the rest of the pane reads, mapping each `ConfigView` onto the domain's
-`View`, and `Config::icons()` returns `IconSet`. The `check_theme` call keeps reading the binary
-crate's theme names, so it takes them as an argument: `parse` gains no dependency on ratatui, and the
-binary passes `herdr_damnit::theme::NAMES` into a `Config::check_theme_against(&self, names: &[&str])`
-that `load` calls after the parse.
+`View`, and `Config::icons()` returns `IconSet`.
+
+**The theme check is not one of the four.** Its vocabulary belongs to the crate that paints, so
+neither `parse` nor `load` can run it without taking a dependency on the binary crate, and `load`
+takes no arguments in the Interfaces block above. The composition root calls
+`config.check_theme_against(herdr_damnit::theme::NAMES)?` after `Config::load()`, which is where
+the palettes are. `parse` gains no dependency on ratatui either way.
+
+`check_dam` also refuses a first word that is only whitespace, not just an empty list:
+`Command::new("")` fails at the first read rather than at load time, which is the wrong place to
+learn it.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-adapters --locked config`
-Expected: PASS, fourteen tests.
+Expected: PASS, twenty-three tests. Nine beyond the plan's fourteen, each closing a behaviour the
+plan states in prose and pins with no test: a blank `dam` binary, a leading-argument `dam` argv,
+`open` as an opening view, every side's own direction, every placement's own word, `nerd-font` by
+name, a refresh interval of zero staying zero, the theme check against a handed-in vocabulary, and
+a config naming no theme at all.
 
 - [ ] **Step 5: Commit**
 
