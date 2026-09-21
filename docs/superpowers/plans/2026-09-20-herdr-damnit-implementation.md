@@ -3570,9 +3570,6 @@ mod rule;
 pub use kind::ErrorKind;
 pub use rule::Rule;
 
-#[cfg(test)]
-mod tests;
-
 /// The read deadline the pane cancels a local read at. A SQLite read that takes this long is a
 /// wedged store rather than a slow one.
 pub const READ_DEADLINE_SECONDS: u64 = 30;
@@ -3617,7 +3614,9 @@ pub fn classify(code: Option<i32>, error: Option<ErrorDocument>, fallback: &str)
     };
     match (code, error) {
         (Some(REFUSED), Some(document)) => Failure::Refused {
-            rule: document.rule.unwrap_or_else(|| Rule::Unknown(String::new())),
+            rule: document
+                .rule
+                .unwrap_or_else(|| Rule::Unknown(String::new())),
             said: document.message,
             oids: document.oids,
         },
@@ -3676,6 +3675,9 @@ fn is_store(error: &Option<ErrorDocument>, fallback: &str) -> bool {
     .to_ascii_lowercase();
     said.contains("database is locked") || said.contains("database table is locked")
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 Add to `crates/herdr-damnit-domain/src/lib.rs`:
