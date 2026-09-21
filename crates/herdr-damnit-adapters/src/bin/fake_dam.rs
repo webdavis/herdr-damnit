@@ -72,6 +72,13 @@ fn append(line: &str) {
 /// `dam` maps a cancelled run to exit 3 whatever the abandoned work reported, so the fake does the
 /// same and records the signal for the test to assert on.
 fn install_interrupt_handler() {
+    if std::env::var_os("FAKE_DAM_IGNORE_SIGINT").is_some() {
+        // Safety: `SIG_IGN` on SIGINT has no memory effects. This stands in for a `dam` that
+        // never notices the interrupt, so the caller's grace runs out and the kill lands.
+        unsafe { libc::signal(libc::SIGINT, libc::SIG_IGN) };
+        return;
+    }
+
     /// # Safety
     ///
     /// The append and the exit are not async-signal-safe. This binary is a test double whose only

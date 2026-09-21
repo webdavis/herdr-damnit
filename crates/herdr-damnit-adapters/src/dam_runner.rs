@@ -4,7 +4,7 @@
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::channel;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use herdr_damnit_application::{DamRunner, Finished, RunningJob, SpawnError};
 
@@ -21,10 +21,14 @@ impl ProcessDamRunner {
     pub fn new(dam: Vec<String>) -> Self {
         Self { dam }
     }
-}
 
-impl DamRunner for ProcessDamRunner {
-    fn spawn(&self, argv: &[String]) -> Result<RunningJob, SpawnError> {
+    /// A run that cancels itself once `deadline` passes. A read carries one; an exclusive job does
+    /// not, because `dam`'s own per-remote deadline bounds it.
+    pub fn spawn_with_deadline(
+        &self,
+        argv: &[String],
+        deadline: Option<Duration>,
+    ) -> Result<RunningJob, SpawnError> {
         let (binary, leading) = self.dam.split_first().ok_or(SpawnError::NotFound)?;
         let mut command = Command::new(binary);
         command
@@ -41,6 +45,14 @@ impl DamRunner for ProcessDamRunner {
         })?;
 
         let cancel = Cancel::of(child.id());
+        if let Some(deadline) = deadline {
+            std::thread::spawn(move || {
+                std::thread::sleep(deadline);
+                if cancel.alive_group() {
+                    cancel.interrupt();
+                }
+            });
+        }
         let (sender, results) = channel();
         let started = Instant::now();
         std::thread::spawn(move || {
@@ -67,5 +79,11 @@ impl DamRunner for ProcessDamRunner {
             cancel: Box::new(move || cancel.interrupt()),
             results,
         })
+    }
+}
+
+impl DamRunner for ProcessDamRunner {
+    fn spawn(&self, argv: &[String]) -> Result<RunningJob, SpawnError> {
+        self.spawn_with_deadline(argv, None)
     }
 }
