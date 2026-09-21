@@ -250,6 +250,11 @@ mod tests {
 
     #[test]
     fn a_cancelled_run_is_never_an_error_banner() {
+        assert_eq!(
+            classify(Some(3), None, ""),
+            Failure::Cancelled { killed: false }
+        );
+        assert!(leaves_model_untouched(&classify(Some(3), None, "")));
         assert_eq!(message(&classify(Some(3), None, "")), "cancelled");
         assert_eq!(
             message(&Failure::Cancelled { killed: true }),
