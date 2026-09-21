@@ -257,31 +257,64 @@ yet shipped, the discard key in section 4.
 
 ### Error mapping
 
-**Exit codes**, from `crates/dam-cli/src/error.rs` and confirmed by running the binary:
+**Exit codes**, from `dam` 0.2.0's own contract (its README and its design spec, `Exit codes`):
 
-| Code | Meaning | Measured example |
+| Code | Meaning | Example |
 |---|---|---|
 | 0 | The command did what it said | any successful read |
-| 1 | Everything else: a parse error, a store error, a helper error, a credential error, an editor error, a config or open error, a usage error, an ambiguous prefix, an I/O error | `dam commit -m ""` on an empty stage exits 1 with `dam: nothing to commit` |
-| 2 | A refusal: a rule `dam` enforces said no | `dam ls bogus:x` exits 2 with `dam: "bogus" is not a declared category`; `dam show zzzzzzz` exits 2 with `dam: no object matches "zzzzzzz"` |
-| 3 | Cancelled: an interrupt arrived, or a prompt hit end of input | See cancellation in section 5 |
+| 1 | `dam` failed: a store, config, helper, credential, editor or io failure | a store another writer holds past its busy timeout |
+| 2 | The command line was wrong: an unknown argument or subcommand, a flag value `dam` refuses to read, or an oid prefix naming more than one object | a subcommand that does not exist |
+| 3 | Cancelled: an interrupt arrived, or a prompt could not be answered | See cancellation in section 5 |
+| 4 | `dam` refused by one of its own rules, and the document names the rule | `dam done` on a task with an open child, rule `blocked` |
 
-**The error shape is plain text on standard error, even with `--json`.** `main.rs` prints
-`eprintln!("dam: {e}")` and exits; `--json` selects the format of the **report**, and a failing
-command produces no report at all. Both measured examples above were run with `--json`.
+**Every rule `dam` keeps reports 4 and nothing else does**, so the pane maps the code once rather
+than per verb. Code 2 is the command line alone, which for this pane means a flag typo it shipped
+rather than anything the operator did.
+
+**Under `--json` a failure is one document on standard error and nothing else**, so the pane parses
+the stream rather than hunting a line in it:
+
+```json
+{"error": {"kind": "refused", "rule": "blocked",
+ "message": "98d8780 cannot be completed: child a9db854 is open",
+ "oids": ["98d878013fb0e026d37170e7ceed6707192ae99a",
+          "a9db854060d1943ef9eb9f6d7a8ac0b1ace45d77"]}}
+```
+
+`kind` is one of `refused`, `store`, `helper`, `credential`, `parse`, `usage` and `cancelled`.
+`rule` is one stable snake_case word on a refusal and null on every other kind: `blocked`, `cycle`,
+`exclusive_label`, `unknown_category`, `no_such_object`, `no_working_object`, `no_such_remote`,
+`not_a_task`, `not_an_event`, `not_completed`, `not_committed`, `dirty_on_pull`,
+`move_inside_itself`, `nothing_to_commit`, `needs_an_answer`, `needs_an_editor`,
+`unresolved_conflicts` and `missing_credential`. `message` is the sentence the human form prints
+after `dam: `. `oids` names the objects the message names, in full and in the order it names them,
+which is what lets the pane highlight the blockers a `done` refusal names instead of printing a
+sentence about them. Standard output stays empty on a failure, and a run that succeeds writes
+nothing on standard error.
+
+The one exception is an argument clap rejects before `dam` runs: that prints clap's own usage text
+and exits 2 whatever the format flag says, so the pane reads no document there.
 
 So the pane's mapping is:
 
 1. Exit 0: parse standard output as JSON. A parse failure is itself an error, reported as
    `dam answered with something this pane could not read`, with the first line of output in the
    pane's own log.
-1. Non-zero: take standard error, strip a leading `dam: `, take the first line, and put it in the
-   status line as it stands. `dam`'s refusals already name the rule and the objects (spec 394), so
-   rewording them would only lose information.
-1. Exit 2 additionally leaves the pane's model untouched and, where the key had a prompt open,
-   leaves the prompt open with its text, the way a refused write does today.
+1. Non-zero: parse standard error as the error document and put its `message` in the status line as
+   it stands. `dam`'s refusals already name the rule and the objects, so rewording them would only
+   lose information. Standard error that is not a document, which is clap's usage text at exit 2 or
+   a `dam` too old to print one, falls back to its first line with a leading `dam: ` stripped.
+1. Exit 4 additionally leaves the pane's model untouched and, where the key had a prompt open,
+   leaves the prompt open with its text, the way a refused write does today. The `rule` is what the
+   pane branches on when it does more than print: `blocked` highlights the oids the document names,
+   `no_such_object` refreshes the list because the row is gone.
 1. Exit 3 is reported as `cancelled` and is never an error banner, because the operator asked for
    it.
+1. Exit 1 with `kind` of `store` takes the retry sentence below.
+
+**An editor never runs under a machine format.** `dam edit -e --json` is refused as
+`needs_an_editor` rather than run, so the pane spells its editor round trip without `--json` and
+reads the plain `dam: <message>` line if that run fails. A dead editor is exit 1, not a refusal.
 
 **`dam` missing.** The spawn fails with `NotFound`. The pane draws its empty frame and one status
 line: `dam is not on PATH; install it with cargo install damnit, then press R.` Every key that would
@@ -438,7 +471,7 @@ existing behaviour for a cursor on a heading.
 | `P` | no exclusive job in flight | pressed | `dam push --json` starts on a worker thread; the header shows a spinner and the elapsed time |
 | `P` | a push or pull is already running | pressed | the status line says `a push is already running; <C-c> cancels it` and nothing is spawned |
 | `L` | no exclusive job in flight | pressed | `dam pull --json` starts the same way |
-| `x` | a task row | pressed | `dam done <oid>` runs; a refusal (exit 2) lists the blockers in the status line and changes nothing |
+| `x` | a task row | pressed | `dam done <oid>` runs; a refusal (exit 4, rule `blocked`) lists the blockers the document's `oids` names in the status line and changes nothing |
 | `X` | a task row | pressed | `dam done <oid> --force` runs, completing past open children and dependencies |
 | `dd` | a row naming an oid | first `d` | a confirm names the object |
 | `dd` | the confirm is up | second `d` | `dam rm <oid>` runs, removing it from the working layer; any other key dismisses the confirm |
@@ -514,8 +547,9 @@ These six were verified against the built binary on the scratch store:
 | `!done & @l2` | 59 |
 | `kind:task & !done & p1` | 74 |
 
-A query `dam` refuses comes back as exit 2 with its own message, which goes in the status line while
-the rows already on screen stay put: a typo in one view leaves the pane readable. Two views with one
+A query `dam` refuses comes back as exit 4 with its own message, usually under rule
+`unknown_category`, which goes in the status line while the rows already on screen stay put: a typo
+in one view leaves the pane readable. Two views with one
 name is a config error, as is a view named `all` or one missing its `name` or `query`.
 
 ### The label and path pickers
@@ -529,7 +563,7 @@ The one thing that cannot be derived is the **category catalogue**. A category i
 label values with an exclusivity rule, declared in `dam`'s config (spec 114 to 130), and `dam`
 refuses a write that would put two values of an exclusive category on one object. The pane cannot
 group or pre-refuse without that catalogue, so in version one it offers every label flat and lets
-`dam` refuse: exit 2, the rule named, the picker left open. Reading the catalogue is in section 8.
+`dam` refuse: exit 4, rule `exclusive_label`, the picker left open. Reading the catalogue is in section 8.
 
 ### The detail screen
 
@@ -957,10 +991,10 @@ screen rather than a path.
   further call, asserted against the argv log.
 - **The handshake warning**: a fake printing a version above `DAM_KNOWN` draws the list and the
   warning once, not once per read.
-- **Error mapping**, one test per row of the exit-code table: exit 2 with `dam: no object matches
-  "zzzzzzz"` puts `no object matches "zzzzzzz"` in the status line and leaves the model untouched;
-  exit 1 with a store message adds the retry sentence; exit 3 reads `cancelled`; a spawn failure
-  draws the install line.
+- **Error mapping**, one test per row of the exit-code table: exit 4 with an error document of rule
+  `no_such_object` puts its `message` in the status line and leaves the model untouched; exit 1 with
+  a `store` document adds the retry sentence; exit 3 reads `cancelled`; exit 2 with clap's usage text
+  and no document falls back to its first line; a spawn failure draws the install line.
 - **Every key**, asserted as the argv it produces, against the argv log. This is the cheapest test in
   the suite and it is the one that catches a flag typo: `p` on a priority-2 task produces exactly
   `["dam", "edit", "<oid>", "-p", "1", "--json"]`.
@@ -1016,7 +1050,7 @@ One sentence each: what happened, and what to do. No error names a flag the oper
 | `dam` not on `PATH` | `dam is not on PATH; install it with cargo install damnit, then press R.` |
 | `dam` older than the floor | `dam 0.1.0 is older than the 0.2 this pane needs; run cargo install damnit to update it.` |
 | `dam` newer than known | `dam 0.4.0 is newer than this pane knows; some keys may be refused.` |
-| A refusal (exit 2) | `dam`'s own sentence, with the `dam: ` prefix stripped |
+| A refusal (exit 4) | the error document's `message`, as it stands |
 | Store held by another writer | `<sqlite's message>; another dam is writing, press R to retry.` |
 | A second push | `a push is already running; <C-c> cancels it.` |
 | A cancelled job | `cancelled`, or `cancelled (killed)` when it took the second signal |
@@ -1140,19 +1174,16 @@ The pane binds `!` only when the version the handshake read is at or above the o
 it. That gate is the only place a key depends on a `dam` version, and it exists because a confirm
 followed by a refusal is the worst shape a destructive key can have.
 
-**3. A JSON error envelope under `--json`.** A failing command prints `dam: <message>` on standard
-error and produces no document, with `--json` or without (`crates/dam-cli/src/main.rs`, measured).
-Every client therefore parses human text to recover a machine fact. Proposed: with `--json`, print
-`{"error": {"kind": "refused|store|helper|credential|editor|parse|usage|cancelled", "message":
-"...", "oids": ["..."]}}` on standard error and keep the exit code. The `kind` is already an enum
-(`crates/dam-application/src/errors.rs`, `UseCaseError`), and the `oids` field is what would let a
-client highlight the blockers a `done` refusal names instead of printing a sentence about them.
+**3. A JSON error envelope under `--json`. DELIVERED in `dam` 0.2.0.** Under `--json` and `--toon`
+a failure is one document on standard error and nothing else,
+`{"error": {"kind", "message", "rule", "oids"}}`, with standard output empty. It carries more than
+this section asked for: a `rule`, one stable snake_case word per rule, so a client tells a blocked
+completion from an object that is gone. An editor failure is not a kind of its own, because `-e`
+under a machine format is refused as `needs_an_editor` rather than run. The mapping is in section 3.
 
-**4. Exit code 2 for every refusal.** Exit 2 means `UseCaseError::Refused` and nothing else, so
-`dam commit -m ""` on an empty stage exits **1** with `dam: nothing to commit`, because that path
-returns `UseCaseError::Parse` (`crates/dam-application/src/use_cases/commit.rs`, measured). Two
-refusals with two exit codes makes the pane's mapping guess. Proposed: add
-`Refusal::NothingToCommit` and return it there.
+**4. One exit code for every refusal. DELIVERED in `dam` 0.2.0.** Every rule `dam` keeps exits 4 and
+nothing else does, `nothing_to_commit` among them. Exit 2 is now the command line alone, exit 1 is
+every other failure including a dead editor, and exit 3 is cancelled.
 
 **5. A completion timestamp.** The Done screen wants a completion date per task and the object
 document has none (`crates/dam-protocol/src/messages.rs`, `WireTask` carries `done`, `priority`,
@@ -1167,11 +1198,16 @@ declared categories with their values and their `exclusive` flag, and the saved 
 their queries. Reading the config file directly is the alternative and it is wrong: the pane would
 own a second parser for a file `dam` owns.
 
-**7. A `status` that does not embed whole objects.** `dam status --json` returns the full `before`
-and `after` object per change, which measured 146,985 bytes for 300 uncommitted creates and 91 bytes
-once committed. The steady state is small, so this is a comfort rather than a need, and it only
-bites on a first import. Proposed, if it ever bites: `dam status --json --brief`, with oids,
-operations and changed field names and no objects.
+**7. A `status` that does not embed whole objects. DELIVERED in `dam` 0.2.0, as the default.**
+`dam status --json` and `dam diff --json` answer one change document per change carrying the oid,
+the operation, a `fields` list of what the change touches and the state the change left behind, with
+no embedded object. `--full` adds `before` and `after` for a client that wants them; this pane does
+not, because it polls `status` per render, which is the measurement that moved the default.
+
+`dam` 0.2.0 carries two more facts this pane does not consume: `dam remote add --json` answers with
+a `warnings` list, which matters to a client that adds a remote and this pane never does, and
+`--toon` prints the same error document as `--json`, which this pane has no use for because it reads
+JSON.
 
 **8. Richer date words.** `--due` accepts `today`, `tomorrow`, `YYYY-MM-DD` and `YYYY-MM-DDTHH:MM`;
 `dam` refuses `next mon` with a message naming exactly that set (measured). The old pane leaned on

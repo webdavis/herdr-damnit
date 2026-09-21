@@ -9,24 +9,26 @@
 
 use ratatui::style::Color;
 
+pub use herdr_damnit_domain::Slot;
+
+mod anchors;
+mod hue;
+
+/// How far apart two painted marks must sit to read as two colours at a glyph's width. A row can
+/// carry an unpushed mark beside an upcoming one or a staged one, so the cyan slot is held this far
+/// from the blue and the green.
+const SEPARATION: f64 = 30.0;
+
+/// How far a cyan that repeats a neighbour is carried around the hue circle, away from it. One step
+/// is what clears `SEPARATION` on every theme that needs it, which is what keeps the rule to a
+/// single move.
+const ROTATION: f64 = 30.0;
+
 /// A theme's intrinsic cast, which sets the direction the dim step goes in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Appearance {
     Dark,
     Light,
-}
-
-/// The palette slot a drawn piece of the pane asks for by name.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Slot {
-    Text,
-    Dim1,
-    Red,
-    Green,
-    Yellow,
-    Orange,
-    Purple,
-    Blue,
 }
 
 /// The resolved colors the pane paints with.
@@ -40,6 +42,7 @@ pub struct Palette {
     pub orange: Color,
     pub purple: Color,
     pub blue: Color,
+    pub cyan: Color,
 }
 
 impl Palette {
@@ -54,6 +57,7 @@ impl Palette {
             Slot::Orange => self.orange,
             Slot::Purple => self.purple,
             Slot::Blue => self.blue,
+            Slot::Cyan => self.cyan,
         }
     }
 }
@@ -94,6 +98,11 @@ pub const NAMES: &[&str] = &[
 /// value copied from a herdr config resolves to the same colors in all three.
 fn build(name: &str) -> Option<Palette> {
     use Appearance::{Dark, Light};
+    use anchors::{
+        CATPPUCCIN_LATTE, DRACULA, FRAPPE, GITHUB_LIGHT, GRUVBOX, GRUVBOX_LIGHT, MACCHIATO,
+        MONOKAI, NORD, ONE_DARK, ONE_LIGHT, ROSE_PINE, ROSE_PINE_DAWN, SOLARIZED, SOLARIZED_LIGHT,
+        TOKYO_NIGHT, TOKYO_NIGHT_DAY,
+    };
     Some(match name {
         "catppuccin" => catppuccin(),
         "catppuccin-latte" => derive(CATPPUCCIN_LATTE, Light),
@@ -119,114 +128,24 @@ fn build(name: &str) -> Option<Palette> {
 
 /// Catppuccin Mocha, pinned to its canonical values, which is how reviewr carries it.
 fn catppuccin() -> Palette {
+    let green = Color::Rgb(0xa6, 0xe3, 0xa1);
+    let blue = Color::Rgb(0xb4, 0xbe, 0xfe);
     Palette {
         dim1: Color::Rgb(0x7f, 0x84, 0x9c),
         text: Color::Rgb(0xcd, 0xd6, 0xf4),
         red: Color::Rgb(0xf3, 0x8b, 0xa8),
-        green: Color::Rgb(0xa6, 0xe3, 0xa1),
+        green,
         yellow: Color::Rgb(0xf9, 0xe2, 0xaf),
         orange: Color::Rgb(0xfa, 0xb3, 0x87),
         purple: Color::Rgb(0xcb, 0xa6, 0xf7),
-        blue: Color::Rgb(0xb4, 0xbe, 0xfe),
+        blue,
+        cyan: separated(Color::Rgb(0x94, 0xe2, 0xd5), blue, green),
     }
-}
-
-/// The anchor colors a theme names; the dim step is computed from these.
-#[derive(Clone, Copy, Debug)]
-struct Anchors {
-    base: Color,
-    text: Color,
-    red: Color,
-    green: Color,
-    yellow: Color,
-    orange: Color,
-    purple: Color,
-    blue: Color,
-}
-
-const CATPPUCCIN_LATTE: Anchors = anchors(
-    0xeff1f5, 0x4c4f69, 0xd20f39, 0x40a02b, 0xdf8e1d, 0xfe640b, 0x8839ef, 0x7287fd,
-);
-const DRACULA: Anchors = anchors(
-    0x282a36, 0xf8f8f2, 0xff5555, 0x50fa7b, 0xf1fa8c, 0xffb86c, 0xbd93f9, 0x8be9fd,
-);
-const NORD: Anchors = anchors(
-    0x2e3440, 0xd8dee9, 0xbf616a, 0xa3be8c, 0xebcb8b, 0xd08770, 0xb48ead, 0x81a1c1,
-);
-const GRUVBOX: Anchors = anchors(
-    0x282828, 0xebdbb2, 0xfb4934, 0xb8bb26, 0xfabd2f, 0xfe8019, 0xd3869b, 0x83a598,
-);
-const GRUVBOX_LIGHT: Anchors = anchors(
-    0xfbf1c7, 0x3c3836, 0x9d0006, 0x79740e, 0xb57614, 0xaf3a03, 0x8f3f71, 0x076678,
-);
-const ONE_DARK: Anchors = anchors(
-    0x282c34, 0xabb2bf, 0xe06c75, 0x98c379, 0xe5c07b, 0xd19a66, 0xc678dd, 0x61afef,
-);
-const ONE_LIGHT: Anchors = anchors(
-    0xfafafa, 0x383a42, 0xe45649, 0x50a14f, 0xc18401, 0x986801, 0xa626a4, 0x4078f2,
-);
-const SOLARIZED: Anchors = anchors(
-    0x002b36, 0x93a1a1, 0xdc322f, 0x859900, 0xb58900, 0xcb4b16, 0x6c71c4, 0x268bd2,
-);
-const SOLARIZED_LIGHT: Anchors = anchors(
-    0xfdf6e3, 0x586e75, 0xdc322f, 0x859900, 0xb58900, 0xcb4b16, 0x6c71c4, 0x268bd2,
-);
-const FRAPPE: Anchors = anchors(
-    0x303446, 0xc6d0f5, 0xe78284, 0xa6d189, 0xe5c890, 0xef9f76, 0xca9ee6, 0xbabbf1,
-);
-const MACCHIATO: Anchors = anchors(
-    0x24273a, 0xcad3f5, 0xed8796, 0xa6da95, 0xeed49f, 0xf5a97f, 0xc6a0f6, 0xb7bdf8,
-);
-const GITHUB_LIGHT: Anchors = anchors(
-    0xffffff, 0x1f2328, 0xcf222e, 0x1a7f37, 0x9a6700, 0xbc4c00, 0x8250df, 0x0969da,
-);
-const MONOKAI: Anchors = anchors(
-    0x272822, 0xf8f8f2, 0xf92672, 0xa6e22e, 0xe6db74, 0xfd971f, 0xae81ff, 0x66d9ef,
-);
-const TOKYO_NIGHT: Anchors = anchors(
-    0x1a1b26, 0xc0caf5, 0xf7768e, 0x9ece6a, 0xe0af68, 0xff9e64, 0xbb9af7, 0x7aa2f7,
-);
-const TOKYO_NIGHT_DAY: Anchors = anchors(
-    0xe1e2e7, 0x3760bf, 0xf52a65, 0x587539, 0x8c6c3e, 0xb15c00, 0x9854f1, 0x2e7de9,
-);
-const ROSE_PINE: Anchors = anchors(
-    0x191724, 0xe0def4, 0xeb6f92, 0x9ccfd8, 0xf6c177, 0xebbcba, 0xc4a7e7, 0x31748f,
-);
-const ROSE_PINE_DAWN: Anchors = anchors(
-    0xfaf4ed, 0x575279, 0xb4637a, 0x56949f, 0xea9d34, 0xd7827e, 0x907aa9, 0x286983,
-);
-
-/// Build `Anchors` from `0xRRGGBB` literals: base, text, then the six accents.
-#[allow(clippy::too_many_arguments)]
-const fn anchors(
-    base: u32,
-    text: u32,
-    red: u32,
-    green: u32,
-    yellow: u32,
-    orange: u32,
-    purple: u32,
-    blue: u32,
-) -> Anchors {
-    Anchors {
-        base: hex(base),
-        text: hex(text),
-        red: hex(red),
-        green: hex(green),
-        yellow: hex(yellow),
-        orange: hex(orange),
-        purple: hex(purple),
-        blue: hex(blue),
-    }
-}
-
-const fn hex(rgb: u32) -> Color {
-    Color::Rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
 }
 
 /// A full palette from anchors: `dim1` steps the base toward the contrast pole, lighter for a
 /// dark theme and darker for a light one, at the same fraction reviewr steps it.
-fn derive(a: Anchors, appearance: Appearance) -> Palette {
+fn derive(a: anchors::Anchors, appearance: Appearance) -> Palette {
     let pole = match appearance {
         Appearance::Dark => WHITE,
         Appearance::Light => BLACK,
@@ -240,6 +159,26 @@ fn derive(a: Anchors, appearance: Appearance) -> Palette {
         orange: a.orange,
         purple: a.purple,
         blue: a.blue,
+        cyan: separated(a.cyan, a.blue, a.green),
+    }
+}
+
+/// The cyan a theme paints. A published cyan that stands apart from the blue and the green beside
+/// it is painted as it is; one that repeats either is carried one `ROTATION` away from it, toward
+/// green when it repeats the blue and toward blue when it repeats the green. A cyan too close to
+/// both leaves the nearer.
+fn separated(cyan: Color, blue: Color, green: Color) -> Color {
+    let to_blue = hue::distance(cyan, blue);
+    let to_green = hue::distance(cyan, green);
+    let toward_blue = match (to_blue < SEPARATION, to_green < SEPARATION) {
+        (false, false) => return cyan,
+        (true, true) => to_green < to_blue,
+        (true, false) => false,
+        (false, true) => true,
+    };
+    match toward_blue {
+        true => hue::rotate(cyan, ROTATION),
+        false => hue::rotate(cyan, -ROTATION),
     }
 }
 
@@ -248,22 +187,16 @@ const BLACK: Color = Color::Rgb(0x00, 0x00, 0x00);
 
 /// Linear per-channel blend: `t` of the way from `from` to `to`.
 fn blend(from: Color, to: Color, t: f64) -> Color {
-    let (fr, fg, fb) = channels(from);
-    let (tr, tg, tb) = channels(to);
+    let (fr, fg, fb) = hue::channels(from);
+    let (tr, tg, tb) = hue::channels(to);
     let mix = |lhs: u8, rhs: u8| (f64::from(lhs) * (1.0 - t) + f64::from(rhs) * t).round() as u8;
     Color::Rgb(mix(fr, tr), mix(fg, tg), mix(fb, tb))
-}
-
-fn channels(color: Color) -> (u8, u8, u8) {
-    match color {
-        Color::Rgb(r, g, b) => (r, g, b),
-        _ => (0, 0, 0),
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anchors::hex;
 
     #[test]
     fn the_default_palette_is_reviewrs_own_mocha() {
@@ -277,39 +210,125 @@ mod tests {
         assert_eq!(palette.purple, Color::Rgb(0xcb, 0xa6, 0xf7));
         assert_eq!(palette.blue, Color::Rgb(0xb4, 0xbe, 0xfe));
         assert_eq!(palette.dim1, Color::Rgb(0x7f, 0x84, 0x9c));
+        assert_eq!(palette.cyan, Color::Rgb(0x94, 0xe2, 0xd5));
     }
 
-    #[test]
-    fn a_derived_theme_keeps_its_anchors_and_steps_dim1_from_the_base() {
-        // gruvbox: the anchor reviewr lists, and the dim1 step its derivation produces.
-        let palette = resolve(Some("gruvbox"));
+    /// The separation the rule is ruled to hold, written out rather than read from the constant
+    /// the rule itself reads, so moving that constant in either direction fails here.
+    const RULED_SEPARATION: f64 = 30.0;
 
-        assert_eq!(palette.red, Color::Rgb(0xfb, 0x49, 0x34));
-        assert_eq!(palette.dim1, Color::Rgb(0x71, 0x71, 0x71));
-    }
-
+    /// No two marks a row can carry at once may read as one colour, so every theme's cyan stands
+    /// at least `RULED_SEPARATION` from the blue and the green beside it.
     #[test]
-    fn every_named_theme_resolves_and_an_unknown_one_is_not_known() {
+    fn every_theme_paints_a_cyan_no_mark_is_mistaken_for() {
         for name in NAMES {
-            assert!(is_known(name), "{name} should resolve");
+            let palette = resolve(Some(name));
+
+            assert!(
+                hue::distance(palette.cyan, palette.blue) >= RULED_SEPARATION,
+                "{name}: cyan sits on its blue"
+            );
+            assert!(
+                hue::distance(palette.cyan, palette.green) >= RULED_SEPARATION,
+                "{name}: cyan sits on its green"
+            );
         }
-        assert!(!is_known("nope"));
-        assert_eq!(resolve(Some("nope")), resolve(None));
+    }
+
+    /// A theme whose published cyan already stands apart is painted with it, untouched.
+    #[test]
+    fn a_published_cyan_that_stands_apart_is_the_one_painted() {
+        for (name, cyan) in [
+            ("catppuccin", 0x94e2d5),
+            ("catppuccin-latte", 0x179299),
+            ("catppuccin-frappe", 0x81c8be),
+            ("catppuccin-macchiato", 0x8bd5ca),
+            ("github-light", 0x1b7c83),
+            ("gruvbox", 0x8ec07c),
+            ("gruvbox-light", 0x427b58),
+            ("nord", 0x88c0d0),
+            ("one-dark", 0x56b6c2),
+            ("one-light", 0x0184bc),
+            ("solarized", 0x2aa198),
+            ("solarized-light", 0x2aa198),
+            ("tokyo-night", 0x7dcfff),
+            ("tokyo-night-day", 0x007197),
+        ] {
+            assert_eq!(resolve(Some(name)).cyan, hex(cyan), "{name}");
+        }
+    }
+
+    /// Four themes publish one colour where this pane paints two. Dracula and monokai name their
+    /// cyan as the blue this pane draws upcoming marks in; both Rose Pine variants put foam in the
+    /// green slot. Each takes its published cyan rotated a step away from the neighbour it repeats.
+    #[test]
+    fn a_published_cyan_that_repeats_a_neighbour_is_rotated_off_it() {
+        for (name, published, painted) in [
+            ("dracula", 0x8be9fd, 0x8bfdd8),
+            ("monokai", 0x66d9ef, 0x66efc1),
+            ("rose-pine", 0x9ccfd8, 0x9cb1d8),
+            ("rose-pine-dawn", 0x56949f, 0x56709f),
+        ] {
+            let painted_cyan = resolve(Some(name)).cyan;
+
+            assert_eq!(painted_cyan, hex(painted), "{name}");
+            assert_ne!(
+                painted_cyan,
+                hex(published),
+                "{name} kept a cyan it repeats"
+            );
+        }
+    }
+
+    /// The ruled separation, either side of it. No shipped theme sits in that band, so the number
+    /// itself is held here rather than through a palette.
+    #[test]
+    fn a_cyan_is_rotated_below_the_ruled_separation_and_left_alone_at_it() {
+        let cyan = Color::Rgb(0x80, 0xc0, 0xc0);
+        let far = Color::Rgb(0x20, 0x20, 0x20);
+        let inside = Color::Rgb(0x80, 0xdb, 0xc0);
+        let outside = Color::Rgb(0x80, 0xe1, 0xc0);
+
+        assert_eq!(hue::distance(cyan, inside).round(), RULED_SEPARATION - 3.0);
+        assert_eq!(hue::distance(cyan, outside).round(), RULED_SEPARATION + 3.0);
+        assert_eq!(
+            separated(cyan, far, inside),
+            hue::rotate(cyan, ROTATION),
+            "a green inside the separation is left"
+        );
+        assert_eq!(
+            separated(cyan, far, outside),
+            cyan,
+            "a green outside the separation is lived with"
+        );
+    }
+
+    /// No theme ships a cyan that repeats both its neighbours, so the rule that picks which one to
+    /// leave is exercised here rather than through a palette.
+    #[test]
+    fn a_cyan_too_close_to_both_neighbours_leaves_the_nearer_one() {
+        let cyan = Color::Rgb(0x80, 0xc0, 0xc0);
+        let near = Color::Rgb(0x84, 0xc4, 0xc4);
+        let far = Color::Rgb(0x76, 0xb6, 0xb6);
+
+        assert_eq!(
+            separated(cyan, far, near),
+            hue::rotate(cyan, ROTATION),
+            "a nearer green is left toward blue"
+        );
+        assert_eq!(
+            separated(cyan, near, far),
+            hue::rotate(cyan, -ROTATION),
+            "a nearer blue is left toward green"
+        );
     }
 
     #[test]
-    fn a_light_theme_steps_dim1_darker_than_its_base() {
-        let palette = resolve(Some("github-light"));
-
-        assert_eq!(palette.dim1, Color::Rgb(0xa8, 0xa8, 0xa8));
-    }
-
-    #[test]
-    fn a_slot_names_the_color_it_paints() {
-        let palette = resolve(None);
-
-        assert_eq!(palette.color(Slot::Red), palette.red);
-        assert_eq!(palette.color(Slot::Dim1), palette.dim1);
-        assert_eq!(palette.color(Slot::Text), palette.text);
+    fn every_theme_carries_a_cyan_of_its_own() {
+        assert_eq!(
+            NAMES.len(),
+            18,
+            "a theme was added; give it a published cyan and a row in the tests above"
+        );
     }
 }

@@ -1,0 +1,10 @@
+[package]
+name = "herdr-damnit-domain"
+description = "The pane's rules: rows, marks, the staging model, views, the cursor and the brief."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+jiff.workspace = true
