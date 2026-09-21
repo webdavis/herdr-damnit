@@ -11,4 +11,5 @@ pub enum Slot {
     Orange,
     Purple,
     Blue,
+    Cyan,
 }

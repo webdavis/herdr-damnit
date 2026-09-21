@@ -29,6 +29,7 @@ pub struct Palette {
     pub orange: Color,
     pub purple: Color,
     pub blue: Color,
+    pub cyan: Color,
 }
 
 impl Palette {
@@ -43,6 +44,7 @@ impl Palette {
             Slot::Orange => self.orange,
             Slot::Purple => self.purple,
             Slot::Blue => self.blue,
+            Slot::Cyan => self.cyan,
         }
     }
 }
@@ -117,6 +119,7 @@ fn catppuccin() -> Palette {
         orange: Color::Rgb(0xfa, 0xb3, 0x87),
         purple: Color::Rgb(0xcb, 0xa6, 0xf7),
         blue: Color::Rgb(0xb4, 0xbe, 0xfe),
+        cyan: Color::Rgb(0x94, 0xe2, 0xd5),
     }
 }
 
@@ -229,8 +232,12 @@ fn derive(a: Anchors, appearance: Appearance) -> Palette {
         orange: a.orange,
         purple: a.purple,
         blue: a.blue,
+        cyan: blend(a.blue, a.green, CYAN_STEP),
     }
 }
+
+/// How far a theme's blue is carried toward its green to reach the cyan slot.
+const CYAN_STEP: f64 = 0.5;
 
 const WHITE: Color = Color::Rgb(0xff, 0xff, 0xff);
 const BLACK: Color = Color::Rgb(0x00, 0x00, 0x00);
@@ -300,5 +307,6 @@ mod tests {
         assert_eq!(palette.color(Slot::Red), palette.red);
         assert_eq!(palette.color(Slot::Dim1), palette.dim1);
         assert_eq!(palette.color(Slot::Text), palette.text);
+        assert_eq!(palette.color(Slot::Cyan), palette.cyan);
     }
 }
