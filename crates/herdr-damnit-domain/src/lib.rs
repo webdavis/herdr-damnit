@@ -10,6 +10,7 @@ mod priority;
 mod rows;
 mod slot;
 mod stage;
+mod version;
 mod views;
 
 pub use brief::brief;
@@ -22,4 +23,7 @@ pub use priority::Priority;
 pub use rows::{ObjectRow, Row, RowStyle, Segment, StagingMarks, rows};
 pub use slot::Slot;
 pub use stage::{Change, Conflict, Notice, Op, Stage, StatusRow, Unpushed};
+pub use version::{
+    DAM_KNOWN, DAM_MINIMUM, DAM_RESTORE, DamVersion, Verdict, parse_version, verdict,
+};
 pub use views::{DONE_QUERY, MAX_NUMBERED_VIEW, OPEN, OPEN_QUERY, View, Views};
