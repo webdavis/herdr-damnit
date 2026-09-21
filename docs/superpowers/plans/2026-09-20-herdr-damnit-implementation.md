@@ -731,7 +731,8 @@ SKIP_AI_COMMIT=1 git commit -m "feat(domain): add the domain crate with the oid,
   - `DueState`, an enum of `Overdue`, `Today`, `Upcoming` and `None`.
   - `due_state(due: Option<Date>, today: Date) -> DueState`.
   - `parse_date(text: &str) -> Option<Date>`, which reads both `YYYY-MM-DD` and a
-    `YYYY-MM-DDTHH:MM[:SS][offset]` timestamp down to its civil date.
+    `YYYY-MM-DDTHH:MM[:SS][offset]` timestamp down to the civil date it leads with, so an offset
+    carries no day of its own.
   - `short(date: Date) -> String`, the `MM-DD` a row draws.
   - `long(date: Date) -> String`, the `YYYY-MM-DD` the Detail screen draws.
   - `Date` is re-exported from `jiff::civil::Date` as `herdr_damnit_domain::Date`.
@@ -763,6 +764,18 @@ mod tests {
         assert_eq!(parse_date("2026-09-20T14:30"), Some(day("2026-09-20")));
         assert_eq!(parse_date("2026-09-20T14:30:00Z"), Some(day("2026-09-20")));
         assert_eq!(parse_date("2026-09-20T14:30:00-07:00"), Some(day("2026-09-20")));
+    }
+
+    #[test]
+    fn an_offset_that_crosses_midnight_keeps_the_day_it_names() {
+        assert_eq!(
+            parse_date("2026-09-20T23:00:00-07:00"),
+            Some(day("2026-09-20"))
+        );
+        assert_eq!(
+            parse_date("2026-09-20T01:00:00+09:00"),
+            Some(day("2026-09-20"))
+        );
     }
 
     #[test]
@@ -813,17 +826,13 @@ pub fn due_state(due: Option<Date>, today: Date) -> DueState {
     }
 }
 
-/// A `dam` date or timestamp read down to the civil day it falls on.
+/// The length of the `YYYY-MM-DD` every `dam` date and timestamp leads with.
+const CIVIL_DATE: usize = 10;
+
+/// A `dam` date or timestamp read down to the civil day it names. The day is the text's own
+/// leading `YYYY-MM-DD`, so a timestamp names the same day whatever offset it carries.
 pub fn parse_date(text: &str) -> Option<Date> {
-    if let Ok(date) = text.parse::<Date>() {
-        return Some(date);
-    }
-    if let Ok(stamp) = text.parse::<jiff::Timestamp>() {
-        return Some(stamp.to_zoned(jiff::tz::TimeZone::UTC).date());
-    }
-    text.parse::<jiff::civil::DateTime>()
-        .ok()
-        .map(|moment| moment.date())
+    text.get(..CIVIL_DATE)?.parse::<Date>().ok()
 }
 
 /// The `MM-DD` a row draws beside a due mark.
@@ -848,7 +857,7 @@ pub use dates::{Date, DueState, due_state, long, parse_date, short};
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-domain --locked`
-Expected: PASS, seven tests.
+Expected: PASS, ten tests: the five from Task 4 and the five here.
 
 - [ ] **Step 5: Commit**
 
