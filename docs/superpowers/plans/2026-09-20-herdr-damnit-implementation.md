@@ -5502,6 +5502,7 @@ documents into the domain types.
 - Create: `crates/herdr-damnit-adapters/Cargo.toml`
 - Create: `crates/herdr-damnit-adapters/src/lib.rs`
 - Create: `crates/herdr-damnit-adapters/src/bin/fake_dam.rs`
+- Create: `crates/herdr-damnit-adapters/tests/support/mod.rs`
 - Create: `crates/herdr-damnit-adapters/tests/fixtures/capture.sh`
 - Create: `crates/herdr-damnit-adapters/tests/fixtures/*.json` (the fifteen documents below)
 - Create: `crates/herdr-damnit-adapters/tests/fake_dam.rs`
@@ -5699,7 +5700,62 @@ chmod +x crates/herdr-damnit-adapters/tests/fixtures/capture.sh
 crates/herdr-damnit-adapters/tests/fixtures/capture.sh
 ```
 
-- [ ] **Step 3: Write the failing test for the fake**
+- [ ] **Step 3: Write the shared scratch fixture**
+
+Every temp path a test in this crate writes goes inside a directory that test owns, so a run leaves
+nothing behind in the system temp directory. A `<name>-<pid>` path per test does not: this lane's
+own runs left twenty-odd `herdr-damnit-*` files there before the fixture existed, because nothing
+ever removed one.
+
+`crates/herdr-damnit-adapters/tests/support/mod.rs`:
+
+```rust
+//! Fixtures the integration tests of this crate share.
+
+use std::path::{Path, PathBuf};
+
+/// A directory of one test's own, removed when the value drops. Every temp path a test writes goes
+/// inside it, so a run leaves nothing behind in the system temp directory, and a panicking test
+/// cleans up on the way out because `Drop` runs while the stack unwinds.
+pub struct Scratch {
+    dir: PathBuf,
+}
+
+impl Scratch {
+    /// `name` distinguishes the scratches of one test binary from each other; the process id
+    /// distinguishes concurrent binaries.
+    pub fn new(name: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("herdr-damnit-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a scratch directory");
+        Self { dir }
+    }
+
+    // Each test binary compiles its own copy of this module, so a method only one of them calls
+    // reads as dead code in the others.
+    #[allow(dead_code)]
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    /// A path inside this scratch. Nothing outside this test writes there.
+    pub fn file(&self, name: &str) -> PathBuf {
+        self.dir.join(name)
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+```
+
+Each integration test file reaches it with `mod support;` and `use support::Scratch;`. Cargo builds
+one copy per test binary, which is why `dir` carries a narrow `allow(dead_code)`: a method only one
+binary calls is dead code in the others.
+
+- [ ] **Step 4: Write the failing test for the fake**
 
 `crates/herdr-damnit-adapters/tests/fake_dam.rs`:
 
@@ -5842,12 +5898,12 @@ fn the_version_flag_answers_the_captured_line() {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they fail**
+- [ ] **Step 5: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-adapters --locked`
 Expected: FAIL, `couldn't read src/bin/fake_dam.rs`
 
-- [ ] **Step 5: Write the fake**
+- [ ] **Step 6: Write the fake**
 
 `crates/herdr-damnit-adapters/src/bin/fake_dam.rs`:
 
@@ -5944,12 +6000,12 @@ Task 22 drives the kill escalation with.
 
 The `fake-dam` binary needs `serde_json` and `libc`, which the crate already depends on.
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [ ] **Step 7: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-adapters --locked`
 Expected: PASS, six tests.
 
-- [ ] **Step 7: Prove the fixtures carry no personal data**
+- [ ] **Step 8: Prove the fixtures carry no personal data**
 
 ```bash
 ! grep -rniE 'stephen|webdavis|/Users/|todoist api|token' crates/herdr-damnit-adapters/tests/fixtures/*.json
@@ -5958,7 +6014,7 @@ Expected: PASS, six tests.
 Expected: no match. A fixture that matches was captured against a real store and must be recaptured
 by `capture.sh`.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add -A
