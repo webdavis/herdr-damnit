@@ -3,6 +3,7 @@
 mod brief;
 mod cursor;
 mod dates;
+mod failure;
 mod marks;
 mod object;
 mod oid;
@@ -16,6 +17,10 @@ mod views;
 pub use brief::brief;
 pub use cursor::Cursor;
 pub use dates::{Date, DueState, due_state, long, parse_date, short};
+pub use failure::{
+    ErrorDocument, ErrorKind, Failure, READ_DEADLINE_SECONDS, Rule, classify,
+    leaves_model_untouched, message,
+};
 pub use marks::{IconSet, Mark};
 pub use object::{Attendee, EventFields, Kind, Object, TaskFields};
 pub use oid::Oid;
