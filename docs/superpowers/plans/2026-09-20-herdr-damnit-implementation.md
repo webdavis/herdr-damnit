@@ -2136,7 +2136,7 @@ SKIP_AI_COMMIT=1 git commit -m "feat(domain): number the views over dam queries 
 pub enum Op { Create, Update, Delete }
 
 pub struct Change { pub oid: Oid, pub op: Op, pub subject: String, pub fields: Vec<String> }
-pub struct Unpushed { pub remote: String, pub commits: u64 }
+pub struct Unpushed { pub remote: String, pub commits: u64, pub oids: Vec<Oid> }
 pub struct Conflict { pub oid: Oid, pub remote: String, pub ours: String, pub theirs: String }
 pub struct Notice { pub kind: String, pub oid: Option<Oid>, pub remote: Option<String>, pub message: String }
 
@@ -2154,6 +2154,7 @@ impl Stage {
     pub fn is_clean(&self) -> bool;
     pub fn is_staged(&self, oid: &Oid) -> bool;
     pub fn staged_count(&self) -> usize;
+    pub fn is_unpushed(&self, oid: &Oid) -> bool;
     pub fn unpushed_commits(&self) -> u64;
     pub fn rows(&self) -> Vec<StatusRow>;
     pub fn summary(&self) -> String;
@@ -2163,7 +2164,11 @@ impl StagingMarks for Stage { fn mark_of(&self, oid: &Oid) -> Option<Mark> }
 ```
 
 `mark_of` resolves in one order, most urgent first: a conflict beats staged, staged beats working,
-and working beats unpushed. `Stage::rows` draws the four sections the spec names, in `dam`'s own order, leaving an
+and working beats unpushed, which is the whole ladder now that an unpushed row names the objects
+its commits touch. An `Unpushed` row carries `oids`, the objects whose changes sit in that remote's
+unpushed commits, and the row a list draws for one of them leads with the up arrow. A `dam` that
+does not publish them leaves the set empty, which costs those rows their mark and nothing else.
+`Stage::rows` draws the four sections the spec names, in `dam`'s own order, leaving an
 empty section out; an entirely empty stage is one line reading `nothing staged, nothing changed`,
 which is `dam`'s own wording.
 
@@ -2222,10 +2227,12 @@ fn full() -> Stage {
             Unpushed {
                 remote: "todoist".to_string(),
                 commits: 1,
+                oids: Vec::new(),
             },
             Unpushed {
                 remote: "work".to_string(),
                 commits: 2,
+                oids: vec![Oid::new("c3d4e5f")],
             },
         ],
         conflicts: vec![Conflict {
@@ -2315,6 +2322,31 @@ fn a_conflict_outranks_staged_and_staged_outranks_working() {
     assert_eq!(stage.mark_of(&Oid::new("1a2b3c4")), Some(Mark::Staged));
     assert_eq!(stage.mark_of(&Oid::new("9a0b1c2")), Some(Mark::Working));
     assert_eq!(stage.mark_of(&Oid::new("nothing")), None);
+}
+
+#[test]
+fn an_object_only_in_an_unpushed_commit_carries_the_unpushed_mark() {
+    assert_eq!(full().mark_of(&Oid::new("c3d4e5f")), Some(Mark::Unpushed));
+}
+
+#[test]
+fn a_working_change_outranks_an_unpushed_commit() {
+    let mut stage = full();
+    stage.unpushed[1].oids.push(Oid::new("9a0b1c2"));
+    assert_eq!(stage.mark_of(&Oid::new("9a0b1c2")), Some(Mark::Working));
+}
+
+#[test]
+fn a_dam_that_sends_no_oids_leaves_the_unpushed_set_empty() {
+    let stage = Stage {
+        unpushed: vec![Unpushed {
+            remote: "work".to_string(),
+            commits: 2,
+            oids: Vec::new(),
+        }],
+        ..full()
+    };
+    assert_eq!(stage.mark_of(&Oid::new("c3d4e5f")), None);
 }
 
 #[test]
@@ -2458,6 +2490,7 @@ fn one_commit_and_two_commits_are_both_spelled_correctly() {
         unpushed: vec![Unpushed {
             remote: "todoist".to_string(),
             commits: 1,
+            oids: Vec::new(),
         }],
         ..full()
     };
@@ -2465,6 +2498,7 @@ fn one_commit_and_two_commits_are_both_spelled_correctly() {
         unpushed: vec![Unpushed {
             remote: "todoist".to_string(),
             commits: 2,
+            oids: Vec::new(),
         }],
         ..full()
     };
@@ -2504,6 +2538,13 @@ impl Stage {
 
     pub fn staged_count(&self) -> usize {
         self.staged.len()
+    }
+
+    /// Whether an object's changes sit in some remote's unpushed commits.
+    pub fn is_unpushed(&self, oid: &Oid) -> bool {
+        self.unpushed
+            .iter()
+            .any(|remote| remote.oids.iter().any(|unpushed| unpushed == oid))
     }
 
     pub fn unpushed_commits(&self) -> u64 {
@@ -2622,6 +2663,9 @@ impl StagingMarks for Stage {
         }
         if self.unstaged.iter().any(|change| &change.oid == oid) {
             return Some(Mark::Working);
+        }
+        if self.is_unpushed(oid) {
+            return Some(Mark::Unpushed);
         }
         None
     }
@@ -6423,6 +6467,10 @@ fn a_conflict_and_a_notice_carry_the_text_the_status_screen_draws() {
     assert_eq!(stage.conflicts[0].ours, "mine");
     assert_eq!(stage.conflicts[0].theirs, "theirs");
     assert_eq!(stage.unpushed[0].commits, 2);
+    assert!(
+        stage.unpushed[0].oids.is_empty(),
+        "a dam that sends no oids leaves the set empty"
+    );
     assert_eq!(stage.notices[0].kind, "pull_failed");
     assert_eq!(
         stage.notices[0].message,
@@ -6675,6 +6723,10 @@ struct WireConflict {
 struct WireUnpushed {
     remote: String,
     commits: u64,
+    /// Added in `dam` 0.2.x. A `dam` that does not send it leaves the set empty, which costs the
+    /// rows their unpushed mark and nothing else.
+    #[serde(default)]
+    oids: Vec<String>,
 }
 
 pub fn stage(json: &str) -> Result<Stage, String> {
@@ -6688,6 +6740,7 @@ pub fn stage(json: &str) -> Result<Stage, String> {
             .map(|remote| Unpushed {
                 remote: remote.remote,
                 commits: remote.commits,
+                oids: remote.oids.into_iter().map(Oid::new).collect(),
             })
             .collect(),
         conflicts: status
