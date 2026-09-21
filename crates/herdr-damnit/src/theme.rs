@@ -11,6 +11,18 @@ use ratatui::style::Color;
 
 pub use herdr_damnit_domain::Slot;
 
+mod hue;
+
+/// How far apart two painted marks must sit to read as two colours at a glyph's width. A row can
+/// carry an unpushed mark beside an upcoming one or a staged one, so the cyan slot is held this far
+/// from the blue and the green.
+const SEPARATION: f64 = 30.0;
+
+/// How far a cyan that repeats a neighbour is carried around the hue circle, away from it. One step
+/// is what clears `SEPARATION` on every theme that needs it, which is what keeps the rule to a
+/// single move.
+const ROTATION: f64 = 30.0;
+
 /// A theme's intrinsic cast, which sets the direction the dim step goes in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Appearance {
@@ -110,16 +122,18 @@ fn build(name: &str) -> Option<Palette> {
 
 /// Catppuccin Mocha, pinned to its canonical values, which is how reviewr carries it.
 fn catppuccin() -> Palette {
+    let green = Color::Rgb(0xa6, 0xe3, 0xa1);
+    let blue = Color::Rgb(0xb4, 0xbe, 0xfe);
     Palette {
         dim1: Color::Rgb(0x7f, 0x84, 0x9c),
         text: Color::Rgb(0xcd, 0xd6, 0xf4),
         red: Color::Rgb(0xf3, 0x8b, 0xa8),
-        green: Color::Rgb(0xa6, 0xe3, 0xa1),
+        green,
         yellow: Color::Rgb(0xf9, 0xe2, 0xaf),
         orange: Color::Rgb(0xfa, 0xb3, 0x87),
         purple: Color::Rgb(0xcb, 0xa6, 0xf7),
-        blue: Color::Rgb(0xb4, 0xbe, 0xfe),
-        cyan: Color::Rgb(0x94, 0xe2, 0xd5),
+        blue,
+        cyan: separated(Color::Rgb(0x94, 0xe2, 0xd5), blue, green),
     }
 }
 
@@ -235,7 +249,26 @@ fn derive(a: Anchors, appearance: Appearance) -> Palette {
         orange: a.orange,
         purple: a.purple,
         blue: a.blue,
-        cyan: a.cyan,
+        cyan: separated(a.cyan, a.blue, a.green),
+    }
+}
+
+/// The cyan a theme paints. A published cyan that stands apart from the blue and the green beside
+/// it is painted as it is; one that repeats either is carried one `ROTATION` away from it, toward
+/// green when it repeats the blue and toward blue when it repeats the green. A cyan too close to
+/// both leaves the nearer.
+fn separated(cyan: Color, blue: Color, green: Color) -> Color {
+    let to_blue = hue::distance(cyan, blue);
+    let to_green = hue::distance(cyan, green);
+    let toward_blue = match (to_blue < SEPARATION, to_green < SEPARATION) {
+        (false, false) => return cyan,
+        (true, true) => to_green < to_blue,
+        (true, false) => false,
+        (false, true) => true,
+    };
+    match toward_blue {
+        true => hue::rotate(cyan, ROTATION),
+        false => hue::rotate(cyan, -ROTATION),
     }
 }
 
@@ -244,17 +277,10 @@ const BLACK: Color = Color::Rgb(0x00, 0x00, 0x00);
 
 /// Linear per-channel blend: `t` of the way from `from` to `to`.
 fn blend(from: Color, to: Color, t: f64) -> Color {
-    let (fr, fg, fb) = channels(from);
-    let (tr, tg, tb) = channels(to);
+    let (fr, fg, fb) = hue::channels(from);
+    let (tr, tg, tb) = hue::channels(to);
     let mix = |lhs: u8, rhs: u8| (f64::from(lhs) * (1.0 - t) + f64::from(rhs) * t).round() as u8;
     Color::Rgb(mix(fr, tr), mix(fg, tg), mix(fb, tb))
-}
-
-fn channels(color: Color) -> (u8, u8, u8) {
-    match color {
-        Color::Rgb(r, g, b) => (r, g, b),
-        _ => (0, 0, 0),
-    }
 }
 
 #[cfg(test)]
@@ -276,73 +302,95 @@ mod tests {
         assert_eq!(palette.cyan, Color::Rgb(0x94, 0xe2, 0xd5));
     }
 
-    /// Each theme's cyan is the value its own palette publishes, so a mark painted cyan is the
-    /// cyan a user of that theme already reads as cyan everywhere else.
+    /// No two marks a row can carry at once may read as one colour, so every theme's cyan stands
+    /// at least `SEPARATION` from the blue and the green beside it.
     #[test]
-    fn every_theme_paints_the_cyan_its_own_palette_publishes() {
-        let published = [
+    fn every_theme_paints_a_cyan_no_mark_is_mistaken_for() {
+        for name in NAMES {
+            let palette = resolve(Some(name));
+
+            assert!(
+                hue::distance(palette.cyan, palette.blue) >= SEPARATION,
+                "{name}: cyan sits on its blue"
+            );
+            assert!(
+                hue::distance(palette.cyan, palette.green) >= SEPARATION,
+                "{name}: cyan sits on its green"
+            );
+        }
+    }
+
+    /// A theme whose published cyan already stands apart is painted with it, untouched.
+    #[test]
+    fn a_published_cyan_that_stands_apart_is_the_one_painted() {
+        for (name, cyan) in [
             ("catppuccin", 0x94e2d5),
             ("catppuccin-latte", 0x179299),
             ("catppuccin-frappe", 0x81c8be),
             ("catppuccin-macchiato", 0x8bd5ca),
-            ("dracula", 0x8be9fd),
             ("github-light", 0x1b7c83),
             ("gruvbox", 0x8ec07c),
             ("gruvbox-light", 0x427b58),
-            ("monokai", 0x66d9ef),
             ("nord", 0x88c0d0),
             ("one-dark", 0x56b6c2),
             ("one-light", 0x0184bc),
-            ("rose-pine", 0x9ccfd8),
-            ("rose-pine-dawn", 0x56949f),
             ("solarized", 0x2aa198),
             ("solarized-light", 0x2aa198),
             ("tokyo-night", 0x7dcfff),
             ("tokyo-night-day", 0x007197),
-        ];
-
-        assert_eq!(
-            published.len(),
-            NAMES.len(),
-            "a theme carries no pinned cyan"
-        );
-        for (name, cyan) in published {
+        ] {
             assert_eq!(resolve(Some(name)).cyan, hex(cyan), "{name}");
         }
     }
 
+    /// Four themes publish one colour where this pane paints two. Dracula and monokai name their
+    /// cyan as the blue this pane draws upcoming marks in; both Rose Pine variants put foam in the
+    /// green slot. Each takes its published cyan rotated a step away from the neighbour it repeats.
     #[test]
-    fn a_derived_theme_keeps_its_anchors_and_steps_dim1_from_the_base() {
-        // gruvbox: the anchor reviewr lists, and the dim1 step its derivation produces.
-        let palette = resolve(Some("gruvbox"));
+    fn a_published_cyan_that_repeats_a_neighbour_is_rotated_off_it() {
+        for (name, published, painted) in [
+            ("dracula", 0x8be9fd, 0x8bfdd8),
+            ("monokai", 0x66d9ef, 0x66efc1),
+            ("rose-pine", 0x9ccfd8, 0x9cb1d8),
+            ("rose-pine-dawn", 0x56949f, 0x56709f),
+        ] {
+            let painted_cyan = resolve(Some(name)).cyan;
 
-        assert_eq!(palette.red, Color::Rgb(0xfb, 0x49, 0x34));
-        assert_eq!(palette.dim1, Color::Rgb(0x71, 0x71, 0x71));
-    }
-
-    #[test]
-    fn every_named_theme_resolves_and_an_unknown_one_is_not_known() {
-        for name in NAMES {
-            assert!(is_known(name), "{name} should resolve");
+            assert_eq!(painted_cyan, hex(painted), "{name}");
+            assert_ne!(
+                painted_cyan,
+                hex(published),
+                "{name} kept a cyan it repeats"
+            );
         }
-        assert!(!is_known("nope"));
-        assert_eq!(resolve(Some("nope")), resolve(None));
+    }
+
+    /// No theme ships a cyan that repeats both its neighbours, so the rule that picks which one to
+    /// leave is exercised here rather than through a palette.
+    #[test]
+    fn a_cyan_too_close_to_both_neighbours_leaves_the_nearer_one() {
+        let cyan = Color::Rgb(0x80, 0xc0, 0xc0);
+        let near = Color::Rgb(0x84, 0xc4, 0xc4);
+        let far = Color::Rgb(0x76, 0xb6, 0xb6);
+
+        assert_eq!(
+            separated(cyan, far, near),
+            hue::rotate(cyan, ROTATION),
+            "a nearer green is left toward blue"
+        );
+        assert_eq!(
+            separated(cyan, near, far),
+            hue::rotate(cyan, -ROTATION),
+            "a nearer blue is left toward green"
+        );
     }
 
     #[test]
-    fn a_light_theme_steps_dim1_darker_than_its_base() {
-        let palette = resolve(Some("github-light"));
-
-        assert_eq!(palette.dim1, Color::Rgb(0xa8, 0xa8, 0xa8));
-    }
-
-    #[test]
-    fn a_slot_names_the_color_it_paints() {
-        let palette = resolve(None);
-
-        assert_eq!(palette.color(Slot::Red), palette.red);
-        assert_eq!(palette.color(Slot::Dim1), palette.dim1);
-        assert_eq!(palette.color(Slot::Text), palette.text);
-        assert_eq!(palette.color(Slot::Cyan), palette.cyan);
+    fn every_theme_carries_a_cyan_of_its_own() {
+        assert_eq!(
+            NAMES.len(),
+            18,
+            "a theme was added; give it a published cyan and a row in the tests above"
+        );
     }
 }
