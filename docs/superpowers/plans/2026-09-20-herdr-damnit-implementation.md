@@ -6936,6 +6936,14 @@ fn read<T: serde::de::DeserializeOwned>(json: &str) -> Result<T, String> {
 mod tests;
 ```
 
+**The settled unpushed row.** `dam` publishes two keys on it: `oids`, the distinct objects the
+unpushed commits touch in order of first appearance walking newest first, and `commit_ids`, the
+commit ids themselves newest first, with `commits` equal to that list's length. This pane reads
+`oids` as object ids and reads neither of the other two beyond `commits`, so `WireUnpushed` declares
+no `deny_unknown_fields` and a 0.2.0 document carrying neither key still parses on the serde
+default. `an_unpushed_row_reads_the_objects_and_ignores_the_commit_ids_beside_them` pins both halves:
+a `deny_unknown_fields` on that struct, or a mapping that reached for the commit ids, fails it.
+
 `kind_changed` is the fifth kind and the plan first listed only four arms for it: a real one
 carries `ours` and `theirs` as kind words and no `why` at all, so the fallback drew
 `kind_changed: ` with nothing after the colon.
@@ -6997,8 +7005,9 @@ struct WireConflict {
 struct WireUnpushed {
     remote: String,
     commits: u64,
-    /// Added in `dam` 0.2.x. A `dam` that does not send it leaves the set empty, which costs the
-    /// rows their unpushed mark and nothing else.
+    /// The distinct objects this remote's unpushed commits touch, newest commit first. A `dam`
+    /// that sends none leaves the set empty, which costs the rows their unpushed mark and nothing
+    /// else.
     #[serde(default)]
     oids: Vec<String>,
 }
