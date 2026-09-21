@@ -144,6 +144,21 @@ fn two_writes_are_two_intentions_and_neither_supersedes_the_other() {
     assert_eq!(harness.jobs.in_flight(), 2);
 }
 
+/// Every job carries an id of its own, because `drain` clears the table by id: two jobs sharing
+/// one would both leave it the moment either answered.
+#[test]
+fn one_job_answering_never_clears_another_that_is_still_running() {
+    let mut harness = harness();
+    harness.submit(JobKind::Write, crate::argv::stage_all());
+    harness.submit(JobKind::Write, crate::argv::unstage_all());
+    harness.answer(0, ok("the first"));
+
+    let completions = harness.jobs.drain();
+    assert_eq!(completions.len(), 1);
+    assert_eq!(completions[0].finished.stdout, "the first");
+    assert_eq!(harness.jobs.in_flight(), 1);
+}
+
 #[test]
 fn a_write_asks_for_a_fresh_status_and_a_fresh_list_rather_than_patching_the_model() {
     let mut harness = harness();
