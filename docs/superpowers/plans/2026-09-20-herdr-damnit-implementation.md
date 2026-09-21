@@ -8729,6 +8729,13 @@ The `view` action runs as its own process, so its request arrives as a file rath
 `App::tick` takes it with `state::take_requested_view` and selects that view. The read is consuming,
 so the pane does not pull itself back to it after the operator has moved on.
 
+**`Views::select` and `Views::select_named` cannot tell a refusal from a no-op.** Both answer `false`
+for an index past the end, a name that is not there, and a selection that was already showing, so
+the number keys must not read that `false` as "no such view": pressing `7` with six views configured
+is the message `the config has 6 views.`, while pressing the number of the view already showing is
+silence. Ask `name_of_number` first, which answers `None` only when the view is absent, and use
+`select` for the move.
+
 The interval read defaults to 300 seconds and is held back while an overlay is open or a screen other
 than List is showing, so a half-typed line is never redrawn away.
 
