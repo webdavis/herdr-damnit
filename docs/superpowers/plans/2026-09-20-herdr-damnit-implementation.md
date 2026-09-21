@@ -7565,6 +7565,10 @@ the palettes are. `parse` gains no dependency on ratatui either way.
 `Command::new("")` fails at the first read rather than at load time, which is the wrong place to
 learn it.
 
+`Placement`, `Side` and `Icons` live in `crates/herdr-damnit-adapters/src/config/kinds.rs`, not in
+`config.rs`: with all three inline the module reached 271 implementation lines, past the point the
+Rust standard asks for decomposition.
+
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-adapters --locked config`
