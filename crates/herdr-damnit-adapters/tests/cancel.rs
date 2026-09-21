@@ -58,6 +58,11 @@ fn set(knob: &str, value: impl AsRef<std::ffi::OsStr>) {
     unsafe { std::env::set_var(knob, value) };
 }
 
+/// How long a signalled fake gets to actually exit. Short next to `PATIENCE` on purpose: past it
+/// the signal ladder is broken, and a broken ladder must read as a red rather than as a suite that
+/// hangs until the fake's own sleep runs out.
+const SIGNAL_PATIENCE: Duration = Duration::from_secs(5);
+
 /// The gap between two looks at an observable event. Nothing here sleeps in place of
 /// synchronization; this is only how often a wait re-reads what it is waiting on.
 const POLL: Duration = Duration::from_millis(5);
@@ -110,8 +115,22 @@ impl Fake {
         panic!("{} logged no argv within {PATIENCE:?}", self.name);
     }
 
-    fn wait(&mut self) -> std::process::ExitStatus {
-        self.child.wait().expect("it exited")
+    /// This fake's exit status, or a failure naming it once `SIGNAL_PATIENCE` runs out. The
+    /// timeout path kills the child so a failing run leaves nothing sleeping behind it.
+    fn await_exit(&mut self) -> std::process::ExitStatus {
+        let deadline = Instant::now() + SIGNAL_PATIENCE;
+        while Instant::now() < deadline {
+            if let Some(status) = self.child.try_wait().expect("the child's state") {
+                return status;
+            }
+            std::thread::sleep(POLL);
+        }
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        panic!(
+            "{} was still running {SIGNAL_PATIENCE:?} after the signal",
+            self.name
+        );
     }
 
     fn interrupts(&self) -> usize {
@@ -239,8 +258,8 @@ fn the_interrupt_reaches_the_group_rather_than_its_leader_alone() {
 
     Cancel::of(leader.pid()).interrupt();
 
-    assert_eq!(leader.wait().code(), Some(3));
-    assert_eq!(helper.wait().code(), Some(3));
+    assert_eq!(leader.await_exit().code(), Some(3));
+    assert_eq!(helper.await_exit().code(), Some(3));
     assert_eq!(leader.interrupts(), 1, "the leader took no interrupt");
     assert_eq!(helper.interrupts(), 1, "the helper was left running");
 }
@@ -262,7 +281,7 @@ fn a_dam_that_ignores_the_interrupt_is_killed_and_carries_no_code() {
     Cancel::with_grace(deaf.pid(), Duration::from_millis(100)).interrupt();
 
     assert_eq!(
-        deaf.wait().code(),
+        deaf.await_exit().code(),
         None,
         "a killed child reports a signal rather than a code"
     );
@@ -282,7 +301,7 @@ fn a_group_that_has_already_gone_is_not_waited_out() {
     let scratch = Scratch::new("already-gone");
     let mut gone = Fake::spawn("the finished dam", &scratch, 0);
     let cancel = Cancel::with_grace(gone.pid(), Duration::from_secs(20));
-    gone.wait();
+    gone.await_exit();
 
     let started = Instant::now();
     cancel.interrupt();
