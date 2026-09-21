@@ -100,12 +100,14 @@ fn an_empty_stage_says_so_in_dams_own_words() {
         notices: Vec::new(),
     };
     assert!(stage.is_clean());
+    assert!(!full().is_clean());
     assert_eq!(drawn(&stage), vec!["nothing staged, nothing changed"]);
 }
 
 #[test]
 fn a_conflict_outranks_staged_and_staged_outranks_working() {
     let stage = full();
+    assert_eq!(stage.staged_count(), 2);
     assert_eq!(stage.mark_of(&Oid::new("3d4e5f6")), Some(Mark::Conflict));
     assert_eq!(stage.mark_of(&Oid::new("1a2b3c4")), Some(Mark::Staged));
     assert_eq!(stage.mark_of(&Oid::new("9a0b1c2")), Some(Mark::Working));

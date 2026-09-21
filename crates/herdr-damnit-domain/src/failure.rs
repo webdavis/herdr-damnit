@@ -220,6 +220,11 @@ mod tests {
             message(&failure),
             "database is locked; another dam is writing, press R to retry."
         );
+        let without_document = classify(Some(1), None, "dam: database is locked\n");
+        assert_eq!(
+            message(&without_document),
+            "database is locked; another dam is writing, press R to retry."
+        );
     }
 
     /// clap answers a bad command line before `dam` runs, so there is no document to read.

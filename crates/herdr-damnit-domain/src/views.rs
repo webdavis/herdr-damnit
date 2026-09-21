@@ -101,6 +101,7 @@ mod tests {
     fn view_one_is_the_open_list_because_dam_ls_with_no_query_includes_done_objects() {
         let views = Views::new(&[]);
         assert_eq!(views.len(), 1);
+        assert!(!views.is_empty());
         assert_eq!(views.current().name, OPEN);
         assert_eq!(views.current().query, OPEN_QUERY);
     }

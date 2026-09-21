@@ -96,6 +96,7 @@ mod tests {
         assert_eq!(parse_version("dam"), None);
         assert_eq!(parse_version("dam 0.1"), None);
         assert_eq!(parse_version("dam version one"), None);
+        assert_eq!(parse_version("dam 0.1.0.4"), None);
     }
 
     #[test]

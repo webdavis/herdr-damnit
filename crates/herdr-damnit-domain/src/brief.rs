@@ -116,6 +116,23 @@ mod tests {
     }
 
     #[test]
+    fn a_deadline_sits_under_the_due_date_when_the_task_carries_one() {
+        let dated = Object {
+            task: Some(TaskFields {
+                deadline: parse_date("2026-10-01"),
+                ..task().task.expect("a task")
+            }),
+            ..task()
+        };
+
+        assert!(
+            brief(&dated, "").contains("due: 2026-09-20\ndeadline: 2026-10-01\n"),
+            "{}",
+            brief(&dated, "")
+        );
+    }
+
+    #[test]
     fn a_blank_note_leaves_no_note_line_behind() {
         assert!(!brief(&task(), "   ").contains("note:"));
     }
