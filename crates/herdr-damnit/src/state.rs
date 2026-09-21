@@ -7,9 +7,14 @@ use std::path::{Path, PathBuf};
 /// herdr hands the plugin its own state directory; the documented path is the fallback for a run
 /// outside herdr.
 pub fn state_dir() -> PathBuf {
-    match std::env::var_os("HERDR_PLUGIN_STATE_DIR") {
-        Some(dir) => PathBuf::from(dir),
-        None => state_home().join("herdr/plugins/state/herdr-damnit"),
+    let given = std::env::var_os("HERDR_PLUGIN_STATE_DIR").map(PathBuf::from);
+    state_dir_in(given.as_deref(), &state_home())
+}
+
+fn state_dir_in(given: Option<&Path>, base: &Path) -> PathBuf {
+    match given {
+        Some(dir) => dir.to_path_buf(),
+        None => base.join("herdr/plugins/state/herdr-damnit"),
     }
 }
 
@@ -103,5 +108,21 @@ mod tests {
         write(&path, "  \n");
 
         assert_eq!(read(&path), None);
+    }
+
+    #[test]
+    fn the_state_directory_is_the_plugins_own_name_under_herdr() {
+        assert_eq!(
+            state_dir_in(None, Path::new("/x/.local/state")),
+            Path::new("/x/.local/state/herdr/plugins/state/herdr-damnit")
+        );
+    }
+
+    #[test]
+    fn herdrs_own_state_directory_wins_when_it_names_one() {
+        assert_eq!(
+            state_dir_in(Some(Path::new("/given")), Path::new("/x/.local/state")),
+            Path::new("/given")
+        );
     }
 }
