@@ -8,6 +8,7 @@ mod oid;
 mod priority;
 mod rows;
 mod slot;
+mod stage;
 mod views;
 
 pub use cursor::Cursor;
@@ -18,4 +19,5 @@ pub use oid::Oid;
 pub use priority::Priority;
 pub use rows::{ObjectRow, Row, RowStyle, Segment, StagingMarks, rows};
 pub use slot::Slot;
+pub use stage::{Change, Conflict, Notice, Op, Stage, StatusRow, Unpushed};
 pub use views::{DONE_QUERY, MAX_NUMBERED_VIEW, OPEN, OPEN_QUERY, View, Views};
