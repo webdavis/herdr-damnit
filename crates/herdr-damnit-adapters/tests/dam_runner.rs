@@ -12,9 +12,13 @@ fn runner() -> ProcessDamRunner {
     ProcessDamRunner::new(vec![env!("CARGO_BIN_EXE_fake-dam").to_string()])
 }
 
-/// Every knob of the fake, cleared. Each test then sets only the ones it needs, so a test that
-/// panics before its own cleanup cannot hand its environment to the next one in this file.
-fn reset_fake_env() {
+/// The fake's knobs live in this process's environment, which every test in this file shares.
+/// A test holds this lock for its whole body and starts from a cleared environment, so the file
+/// is correct under any thread count rather than only under `--test-threads=1`.
+
+fn fake_env() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let guard = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     for knob in [
         "FAKE_DAM_FIXTURE_DIR",
         "FAKE_DAM_FIXTURE",
@@ -22,9 +26,11 @@ fn reset_fake_env() {
         "FAKE_DAM_STDERR",
         "FAKE_DAM_SLEEP_MS",
         "FAKE_DAM_LOG",
+        "FAKE_DAM_IGNORE_SIGINT",
     ] {
         unsafe { std::env::remove_var(knob) };
     }
+    guard
 }
 
 fn words(argv: &[&str]) -> Vec<String> {
@@ -33,7 +39,7 @@ fn words(argv: &[&str]) -> Vec<String> {
 
 #[test]
 fn a_run_answers_once_with_its_code_and_its_output() {
-    reset_fake_env();
+    let _env = fake_env();
     unsafe {
         std::env::set_var("FAKE_DAM_FIXTURE_DIR", fixtures());
         std::env::set_var("FAKE_DAM_FIXTURE", "status-clean");
@@ -57,7 +63,7 @@ fn a_run_answers_once_with_its_code_and_its_output() {
 
 #[test]
 fn spawning_does_not_wait_for_the_child() {
-    reset_fake_env();
+    let _env = fake_env();
     unsafe {
         std::env::set_var("FAKE_DAM_SLEEP_MS", "400");
         std::env::set_var("FAKE_DAM_FIXTURE_DIR", fixtures());
@@ -80,7 +86,7 @@ fn spawning_does_not_wait_for_the_child() {
 
 #[test]
 fn a_failing_run_carries_its_code_and_its_standard_error() {
-    reset_fake_env();
+    let _env = fake_env();
     let document = r#"{"error":{"kind":"refused","rule":"no_such_object","message":"no object matches \"zzzzzzz\"","oids":[]}}"#;
     unsafe {
         std::env::set_var("FAKE_DAM_EXIT", "4");
@@ -100,7 +106,7 @@ fn a_failing_run_carries_its_code_and_its_standard_error() {
 
 #[test]
 fn a_dam_that_is_not_there_is_a_not_found_rather_than_an_error_string() {
-    reset_fake_env();
+    let _env = fake_env();
     let runner = ProcessDamRunner::new(vec!["no-such-dam-anywhere".to_string()]);
     assert!(matches!(
         runner.spawn(&words(&["status"])),
@@ -112,7 +118,7 @@ fn a_dam_that_is_not_there_is_a_not_found_rather_than_an_error_string() {
 /// answers for anyway rather than indexing off the end of the list.
 #[test]
 fn an_empty_argv_is_a_not_found_rather_than_a_panic() {
-    reset_fake_env();
+    let _env = fake_env();
     assert!(matches!(
         ProcessDamRunner::new(Vec::new()).spawn(&words(&["status"])),
         Err(SpawnError::NotFound)
@@ -121,7 +127,7 @@ fn an_empty_argv_is_a_not_found_rather_than_a_panic() {
 
 #[test]
 fn the_configured_argv_leads_and_the_commands_arguments_follow_it() {
-    reset_fake_env();
+    let _env = fake_env();
     let log = std::env::temp_dir().join(format!("herdr-damnit-runner-{}", std::process::id()));
     let _ = std::fs::remove_file(&log);
     unsafe {

@@ -37,9 +37,12 @@ fn words(argv: &[&str]) -> Vec<String> {
     argv.iter().map(|word| word.to_string()).collect()
 }
 
-/// Every knob of the fake, cleared. Each test then sets only the ones it needs, so a test that
-/// panics before its own cleanup cannot hand its environment to the next one in this file.
-fn reset_fake_env() {
+/// The fake's knobs live in this process's environment, which every test in this file shares.
+/// A test holds this lock for its whole body and starts from a cleared environment, so the file
+/// is correct under any thread count rather than only under `--test-threads=1`.
+fn fake_env() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let guard = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     for knob in [
         "FAKE_DAM_FIXTURE_DIR",
         "FAKE_DAM_FIXTURE",
@@ -51,6 +54,7 @@ fn reset_fake_env() {
     ] {
         unsafe { std::env::remove_var(knob) };
     }
+    guard
 }
 
 fn set(knob: &str, value: impl AsRef<std::ffi::OsStr>) {
@@ -97,7 +101,7 @@ fn interrupts(log: &Path) -> usize {
 
 #[test]
 fn cancelling_sends_sigint_and_dam_answers_with_its_cancelled_code() {
-    reset_fake_env();
+    let _env = fake_env();
     let log = scratch("cancel-log");
     set("FAKE_DAM_LOG", &log);
     set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
@@ -117,7 +121,7 @@ fn cancelling_sends_sigint_and_dam_answers_with_its_cancelled_code() {
 
 #[test]
 fn a_read_past_its_deadline_is_cancelled_without_the_pane_asking() {
-    reset_fake_env();
+    let _env = fake_env();
     set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
     set("FAKE_DAM_FIXTURE_DIR", fixtures());
     set("FAKE_DAM_FIXTURE", "ls");
@@ -137,7 +141,7 @@ fn a_read_past_its_deadline_is_cancelled_without_the_pane_asking() {
 
 #[test]
 fn a_job_inside_its_deadline_is_left_alone() {
-    reset_fake_env();
+    let _env = fake_env();
     set("FAKE_DAM_FIXTURE_DIR", fixtures());
     set("FAKE_DAM_FIXTURE", "status-clean");
 
@@ -158,7 +162,7 @@ fn a_job_inside_its_deadline_is_left_alone() {
 /// `dam`'s own per-remote deadline bounds it.
 #[test]
 fn a_job_with_no_deadline_answers_for_itself() {
-    reset_fake_env();
+    let _env = fake_env();
     set("FAKE_DAM_FIXTURE_DIR", fixtures());
     set("FAKE_DAM_FIXTURE", "push-ok");
 
@@ -176,7 +180,7 @@ fn a_job_with_no_deadline_answers_for_itself() {
 /// is doing the waiting, so a second member of the group takes it too.
 #[test]
 fn the_interrupt_reaches_the_group_rather_than_its_leader_alone() {
-    reset_fake_env();
+    let _env = fake_env();
     let log = scratch("group-log");
     set("FAKE_DAM_LOG", &log);
     set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
@@ -198,7 +202,7 @@ fn the_interrupt_reaches_the_group_rather_than_its_leader_alone() {
 /// seconds and no test in this repository may take that long.
 #[test]
 fn a_dam_that_ignores_the_interrupt_is_killed_and_carries_no_code() {
-    reset_fake_env();
+    let _env = fake_env();
     let log = scratch("kill-log");
     set("FAKE_DAM_LOG", &log);
     set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
@@ -227,7 +231,7 @@ fn a_dam_that_ignores_the_interrupt_is_killed_and_carries_no_code() {
 /// interrupted `dam` is never killed on top of the interrupt it already took.
 #[test]
 fn a_group_that_has_already_gone_is_not_waited_out() {
-    reset_fake_env();
+    let _env = fake_env();
     let mut child = fake_in_group(0);
     let cancel = Cancel::with_grace(child.id(), Duration::from_secs(20));
     child.wait().expect("it exited");
