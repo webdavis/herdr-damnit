@@ -3837,6 +3837,7 @@ tested against a fake runner that records the argv it was handed and answers wit
 - Produces:
 
 ```rust
+#[derive(Debug)]
 pub struct Finished {
     pub code: Option<i32>,
     pub stdout: String,
@@ -3844,6 +3845,7 @@ pub struct Finished {
     pub elapsed: std::time::Duration,
 }
 
+#[derive(Debug)]
 pub enum SpawnError { NotFound, Io(String) }
 
 /// A `dam` run in flight: the handle that signals it, and the one result it will send.
@@ -3869,6 +3871,10 @@ pub trait Clock: Send + Sync {
 `RunningJob::cancel` is a closure rather than a process id, because everything the adapter needs to
 signal the child and its group stays inside the adapter, and the application crate never learns that
 `dam` is a process at all.
+
+Both derives are load-bearing. `spawn(...).expect(...)` in this task's own test needs
+`SpawnError: Debug`, and Task 17's `Completion` derives `Debug` while carrying a `Finished`.
+`RunningJob` derives nothing, because no caller asks it for anything.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -4498,10 +4504,11 @@ fn harness() -> Harness {
 }
 
 impl Harness {
+    /// Answer one spawned job. A send to a superseded job fails because dropping it from the table
+    /// dropped its receiver, which is the mechanism by which its result never reaches the model, so
+    /// the answer is offered rather than required.
     fn answer(&self, which: usize, finished: Finished) {
-        self.senders.lock().expect("the senders")[which]
-            .send(finished)
-            .expect("the job is still in the table");
+        let _ = self.senders.lock().expect("the senders")[which].send(finished);
     }
 
     fn lines(&self) -> Vec<String> {
@@ -5066,12 +5073,16 @@ What changes is the record. The old pane posted a Todoist comment; `dam` has no 
 submit as an ordinary write job, and is `None` when `handoff_label` is empty. That is a working-layer
 change, which is the right place for it, because a hand-off is a change to the task.
 
+The fake records through a `Mutex`, not a `RefCell`: `Herdr: Send + Sync` is the port's own bound in
+Task 15, and a fake holding a `RefCell` fails to compile with
+`error[E0277]: RefCell<...> cannot be shared between threads safely`.
+
 - [ ] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-application/src/handoff/tests.rs`:
 
 ```rust
-use std::cell::RefCell;
+use std::sync::Mutex;
 
 use herdr_damnit_domain::{Kind, Object, Oid, Priority, TaskFields};
 
@@ -5083,8 +5094,9 @@ const LISTING: &str = r#"{"result":{"agents":[
   {"pane_id":"w2:p9","workspace_id":"w2","agent":"codex"}
 ]}}"#;
 
+/// `Herdr` is `Send + Sync`, so the fake records through a `Mutex`.
 struct FakeHerdr {
-    calls: RefCell<Vec<Vec<String>>>,
+    calls: Mutex<Vec<Vec<String>>>,
     listing: String,
     refuse_send: bool,
     refuse_focus: bool,
@@ -5093,7 +5105,7 @@ struct FakeHerdr {
 impl FakeHerdr {
     fn new() -> Self {
         Self {
-            calls: RefCell::new(Vec::new()),
+            calls: Mutex::new(Vec::new()),
             listing: LISTING.to_string(),
             refuse_send: false,
             refuse_focus: false,
@@ -5102,7 +5114,8 @@ impl FakeHerdr {
 
     fn verbs(&self) -> Vec<String> {
         self.calls
-            .borrow()
+            .lock()
+            .expect("the calls")
             .iter()
             .map(|call| call[..2.min(call.len())].join(" "))
             .collect()
@@ -5110,7 +5123,8 @@ impl FakeHerdr {
 
     fn sent_text(&self) -> String {
         self.calls
-            .borrow()
+            .lock()
+            .expect("the calls")
             .iter()
             .find(|call| call.first().map(String::as_str) == Some("pane"))
             .and_then(|call| call.last().cloned())
@@ -5121,7 +5135,8 @@ impl FakeHerdr {
 impl Herdr for FakeHerdr {
     fn call(&self, args: &[&str]) -> Result<String, String> {
         self.calls
-            .borrow_mut()
+            .lock()
+            .expect("the calls")
             .push(args.iter().map(|word| word.to_string()).collect());
         match args {
             ["agent", "list"] => Ok(self.listing.clone()),
@@ -7606,6 +7621,17 @@ impl App {
 }
 ```
 
+**The clock arrives here.** Task 17's `Jobs::submit` records `started: Instant::now()` itself, so
+`elapsed_of_current` cannot be driven by a fake. This task routes it through the `Clock` port Task 15
+declares: `Jobs::new` takes the clock, `submit` sets `started: self.clock.now()`, and the header
+timer's test drives a fake clock rather than a real one. Task 17 is otherwise unchanged, and no
+behaviour before this task reads an elapsed time.
+
+**The same superseded-job trap as Task 17.** A superseded read is dropped from the table before its
+replacement spawns, which drops its receiver, so an `expect` on the send panics the moment a test
+answers one. This task's `Harness::answer` therefore ignores the `SendError`, as Task 17's does.
+Keep it that way.
+
 `loop_.rs` is the terminal-facing half, which no test drives:
 
 ```rust
@@ -7683,15 +7709,16 @@ impl Harness {
         self.app.key(KeyEvent::from(code))
     }
 
+    /// Answer one spawned job. A send to a superseded job fails because dropping it from the table
+    /// dropped its receiver, which is the mechanism by which its result never reaches the model, so
+    /// the answer is offered rather than required.
     pub(crate) fn answer(&mut self, which: usize, code: i32, stdout: &str, stderr: &str) {
-        self.senders.lock().expect("the senders")[which]
-            .send(Finished {
-                code: Some(code),
-                stdout: stdout.to_string(),
-                stderr: stderr.to_string(),
-                elapsed: Duration::from_millis(9),
-            })
-            .expect("the job is still in the table");
+        let _ = self.senders.lock().expect("the senders")[which].send(Finished {
+            code: Some(code),
+            stdout: stdout.to_string(),
+            stderr: stderr.to_string(),
+            elapsed: Duration::from_millis(9),
+        });
         self.app.tick(Instant::now());
     }
 
