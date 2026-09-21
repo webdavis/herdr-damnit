@@ -7627,10 +7627,10 @@ declares: `Jobs::new` takes the clock, `submit` sets `started: self.clock.now()`
 timer's test drives a fake clock rather than a real one. Task 17 is otherwise unchanged, and no
 behaviour before this task reads an elapsed time.
 
-**The same superseded-job trap as Task 17.** This task's `Harness::answer` ends
-`.expect("the job is still in the table")`. A superseded read is dropped from the table before its
-replacement spawns, which drops its receiver, so that `expect` panics the moment a test answers one.
-Task 17's harness ignores the `SendError` for exactly this reason; do the same here.
+**The same superseded-job trap as Task 17.** A superseded read is dropped from the table before its
+replacement spawns, which drops its receiver, so an `expect` on the send panics the moment a test
+answers one. This task's `Harness::answer` therefore ignores the `SendError`, as Task 17's does.
+Keep it that way.
 
 `loop_.rs` is the terminal-facing half, which no test drives:
 
@@ -7709,15 +7709,16 @@ impl Harness {
         self.app.key(KeyEvent::from(code))
     }
 
+    /// Answer one spawned job. A send to a superseded job fails because dropping it from the table
+    /// dropped its receiver, which is the mechanism by which its result never reaches the model, so
+    /// the answer is offered rather than required.
     pub(crate) fn answer(&mut self, which: usize, code: i32, stdout: &str, stderr: &str) {
-        self.senders.lock().expect("the senders")[which]
-            .send(Finished {
-                code: Some(code),
-                stdout: stdout.to_string(),
-                stderr: stderr.to_string(),
-                elapsed: Duration::from_millis(9),
-            })
-            .expect("the job is still in the table");
+        let _ = self.senders.lock().expect("the senders")[which].send(Finished {
+            code: Some(code),
+            stdout: stdout.to_string(),
+            stderr: stderr.to_string(),
+            elapsed: Duration::from_millis(9),
+        });
         self.app.tick(Instant::now());
     }
 
