@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 todoist = { path = "../todoist" }
+herdr-damnit-application.workspace = true
 herdr-damnit-domain.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 crossterm = "0.29"

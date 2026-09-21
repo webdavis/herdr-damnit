@@ -617,6 +617,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "crossterm",
+ "herdr-damnit-application",
  "herdr-damnit-domain",
  "ratatui",
  "serde",
@@ -626,6 +627,14 @@ dependencies = [
  "tokio",
  "toml",
  "unicode-width",
+]
+
+[[package]]
+name = "herdr-damnit-application"
+version = "0.1.0"
+dependencies = [
+ "herdr-damnit-domain",
+ "serde_json",
 ]
 
 [[package]]

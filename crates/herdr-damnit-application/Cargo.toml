@@ -1,0 +1,11 @@
+[package]
+name = "herdr-damnit-application"
+description = "The pane's use cases over its ports: every dam argv, the job table and the handshake."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+herdr-damnit-domain.workspace = true
+serde_json.workspace = true
