@@ -1,0 +1,20 @@
+{
+  "objects": [
+    {
+      "oid": "4c00f4be170cd08a78e6035a0a1d0ae190a58153",
+      "kind": "task",
+      "subject": "ship the pin bump",
+      "body": "",
+      "path": "proj/dotfiles/",
+      "labels": [],
+      "depends": [],
+      "reminders": [],
+      "task": {
+        "done": true,
+        "completed_at": "2026-09-21T06:49:48.338275Z",
+        "priority": 1,
+        "due": "2026-09-18"
+      }
+    }
+  ]
+}

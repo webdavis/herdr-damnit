@@ -1,0 +1,50 @@
+{
+  "objects": [
+    {
+      "oid": "4c00f4be170cd08a78e6035a0a1d0ae190a58153",
+      "kind": "task",
+      "subject": "ship the pin bump",
+      "body": "",
+      "path": "proj/dotfiles/",
+      "labels": [],
+      "depends": [],
+      "reminders": [],
+      "task": {
+        "done": false,
+        "priority": 1,
+        "due": "2026-09-18"
+      }
+    },
+    {
+      "oid": "6d32443e24509da4e02707a236b553833d7185a7",
+      "kind": "task",
+      "subject": "refresh the roster row",
+      "body": "",
+      "path": "proj/dotfiles/",
+      "labels": [
+        "slow"
+      ],
+      "depends": [],
+      "reminders": [],
+      "task": {
+        "done": false,
+        "priority": 4
+      }
+    },
+    {
+      "oid": "fce397b100b693de172efe3aca5c10d38255bca4",
+      "kind": "task",
+      "subject": "water the plants",
+      "body": "",
+      "path": "proj/home/",
+      "labels": [],
+      "depends": [],
+      "reminders": [],
+      "recurrence": "every week",
+      "task": {
+        "done": false,
+        "priority": 4
+      }
+    }
+  ]
+}

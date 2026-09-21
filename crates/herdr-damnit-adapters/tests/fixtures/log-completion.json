@@ -1,0 +1,87 @@
+{
+  "commits": [
+    {
+      "id": "e94a92e69a8ceb57c540d0282ca48733e148992a",
+      "at": "2026-09-21T06:49:48.363579Z",
+      "message": "the completion",
+      "changes": [
+        {
+          "oid": "4c00f4be170cd08a78e6035a0a1d0ae190a58153",
+          "op": "update",
+          "fields": [
+            "done"
+          ],
+          "kind": "task",
+          "subject": "ship the pin bump",
+          "path": "proj/dotfiles/",
+          "labels": [],
+          "done": true,
+          "completed_at": "2026-09-21T06:49:48.338275Z",
+          "priority": 1,
+          "due": "2026-09-18"
+        }
+      ]
+    },
+    {
+      "id": "f7d78941dcec5af201ad5db669ed395c2e76a170",
+      "at": "2026-09-21T06:49:48.261078Z",
+      "message": "the first commit",
+      "changes": [
+        {
+          "oid": "4c00f4be170cd08a78e6035a0a1d0ae190a58153",
+          "op": "create",
+          "fields": [
+            "subject",
+            "path",
+            "priority",
+            "due"
+          ],
+          "kind": "task",
+          "subject": "ship the pin bump",
+          "path": "proj/dotfiles/",
+          "labels": [],
+          "done": false,
+          "completed_at": null,
+          "priority": 1,
+          "due": "2026-09-18"
+        },
+        {
+          "oid": "6d32443e24509da4e02707a236b553833d7185a7",
+          "op": "create",
+          "fields": [
+            "subject",
+            "path",
+            "labels"
+          ],
+          "kind": "task",
+          "subject": "refresh the roster row",
+          "path": "proj/dotfiles/",
+          "labels": [
+            "slow"
+          ],
+          "done": false,
+          "completed_at": null,
+          "priority": 4,
+          "due": null
+        },
+        {
+          "oid": "fce397b100b693de172efe3aca5c10d38255bca4",
+          "op": "create",
+          "fields": [
+            "subject",
+            "path",
+            "recurrence"
+          ],
+          "kind": "task",
+          "subject": "water the plants",
+          "path": "proj/home/",
+          "labels": [],
+          "done": false,
+          "completed_at": null,
+          "priority": 4,
+          "due": null
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "remotes": [
+    {
+      "remote": "example",
+      "sent": 3,
+      "succeeded": 2,
+      "skipped": 0,
+      "failed": [{ "oid": "9a0b1c2", "why": "the service refused the write" }]
+    }
+  ]
+}
