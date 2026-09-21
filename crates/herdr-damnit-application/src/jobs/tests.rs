@@ -264,6 +264,21 @@ fn cancelling_reaches_the_exclusive_job_before_any_read_that_started_earlier() {
     assert_eq!(*cancelled.lock().expect("the record"), vec![1]);
 }
 
+/// A `dam` thread that dies without sending closes the channel. The job leaves the table on the
+/// next drain, so a wedged exclusive job cannot block every later one.
+#[test]
+fn a_job_whose_thread_died_without_answering_leaves_the_table() {
+    let mut jobs = Jobs::new(Box::new(Marking {
+        cancelled: Arc::new(Mutex::new(Vec::new())),
+        next: Mutex::new(0),
+    }));
+    jobs.submit(JobKind::Exclusive(SyncKind::Push), crate::argv::push());
+
+    assert!(jobs.drain().is_empty());
+    assert_eq!(jobs.in_flight(), 0);
+    assert_eq!(jobs.exclusive(), None);
+}
+
 #[test]
 fn cancelling_with_nothing_in_flight_says_so() {
     let mut harness = harness();
