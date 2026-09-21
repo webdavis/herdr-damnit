@@ -1,8 +1,11 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+mod support;
+
 use herdr_damnit_adapters::ProcessDamRunner;
 use herdr_damnit_application::{DamRunner, SpawnError};
+use support::Scratch;
 
 fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
@@ -127,8 +130,8 @@ fn an_empty_argv_is_a_not_found_rather_than_a_panic() {
 #[test]
 fn the_configured_argv_leads_and_the_commands_arguments_follow_it() {
     let _env = fake_env();
-    let log = std::env::temp_dir().join(format!("herdr-damnit-runner-{}", std::process::id()));
-    let _ = std::fs::remove_file(&log);
+    let scratch = Scratch::new("runner");
+    let log = scratch.file("argv.jsonl");
     unsafe {
         std::env::set_var("FAKE_DAM_LOG", &log);
         std::env::set_var("FAKE_DAM_FIXTURE_DIR", fixtures());
