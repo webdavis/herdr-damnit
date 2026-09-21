@@ -48,8 +48,9 @@ struct WireConflict {
 struct WireUnpushed {
     remote: String,
     commits: u64,
-    /// Added in `dam` 0.2.x. A `dam` that does not send it leaves the set empty, which costs the
-    /// rows their unpushed mark and nothing else.
+    /// The distinct objects this remote's unpushed commits touch, newest commit first. A `dam`
+    /// that sends none leaves the set empty, which costs the rows their unpushed mark and nothing
+    /// else.
     #[serde(default)]
     oids: Vec<String>,
 }

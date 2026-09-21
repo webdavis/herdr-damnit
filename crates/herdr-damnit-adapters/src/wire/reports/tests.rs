@@ -107,6 +107,29 @@ fn an_unpushed_remote_that_names_its_objects_carries_them() {
     assert!(stage.is_unpushed(&herdr_damnit_domain::Oid::new("5d6e7f8")));
 }
 
+/// The unpushed row `dam` settled on carries `oids`, the distinct objects its unpushed commits
+/// touch, and `commit_ids`, the commits themselves. This pane reads the objects and ignores the
+/// commit ids, and reading the wrong one of the two would give every row the wrong mark.
+#[test]
+fn an_unpushed_row_reads_the_objects_and_ignores_the_commit_ids_beside_them() {
+    let document = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],
+      "unpushed":[{"remote":"example","commits":2,
+                   "oids":["1a2b3c4","5d6e7f8"],
+                   "commit_ids":["c9c9c9c","d8d8d8d"]}]}"#;
+    let stage = stage(document).expect("it parsed");
+
+    assert_eq!(stage.unpushed[0].commits, 2);
+    assert_eq!(
+        stage.unpushed[0].oids,
+        vec![Oid::new("1a2b3c4"), Oid::new("5d6e7f8")]
+    );
+    assert!(stage.is_unpushed(&Oid::new("1a2b3c4")));
+    assert!(
+        !stage.is_unpushed(&Oid::new("c9c9c9c")),
+        "a commit id was read as an object"
+    );
+}
+
 #[test]
 fn a_removed_upstream_notice_reads_as_a_sentence_rather_than_a_kind() {
     let document = r#"{"staged":[],"unstaged":[],"conflicts":[],"unpushed":[],
