@@ -8587,6 +8587,38 @@ Run: `wc -l crates/herdr-damnit/src/app.rs`
 Expected: under 300. If it is over, move `header`, `frame` and `elapsed_text` into
 `crates/herdr-damnit/src/app/header.rs`.
 
+**Ruling 21.** `loop_.rs` is written in Task 28 rather than here. Its body calls
+`crate::screens::draw`, which Task 27 writes, and nothing calls `loop_::run` until `main.rs` does at
+the cutover, so landing it here would either break the build or need two throwaway stub modules Task
+27 immediately replaces. Task 26 lands the model and its tests; the terminal half lands with the
+composition root that calls it.
+
+**Ruling 22.** `Jobs::new(runner, clock)` takes the `Clock` port and `submit` sets
+`started: self.clock.now()`, as this task's preamble requires, and the harness exposes
+`started()` so the two header tests read the instant the fake clock answers instead of calling
+`Instant::now()` themselves. Against a `started` recorded a moment later,
+`header(started + Duration::from_secs(42))` measures 42 seconds minus that moment, whose `as_secs()`
+is 41, so the test as first written failed on every run. The four existing `Jobs::new` call sites in
+`jobs/tests.rs` and `jobs/tests/unanswered.rs` take a `TestClock` declared beside them.
+
+**Ruling 23.** `Screen` and `After` declare only the variants a task constructs. Here that is
+`Screen::List` and `After::Stay`; Task 29 adds `Screen::Status` and `Screen::Done` with the Tab
+cycle, Task 30 adds `Screen::Detail` and the `detail: Option<Object>` field with the `<CR>` key, Task
+31 adds `overlay: Option<Overlay>` with the pickers, Task 37 adds `After::Editor(Vec<String>)` and
+Task 39 adds `After::Quit`. `clippy -D warnings` rejects a variant nothing constructs and a field
+nothing reads, and a suppression would be a lint that is right rather than wrong.
+
+**Ruling 24.** `classify` takes three arguments, not the two the `App::apply` sketch above passes:
+`classify(completion.finished.code, wire::error_document(&completion.finished.stderr),
+&completion.finished.stderr)`. Task 22 gave it the parsed error document and the raw stream as the
+fallback for a `dam` too old to print one.
+
+**Ruling 25.** `cargo clippy --workspace --all-targets -- -D warnings` is not green at Tasks 26 and
+27 and is not expected to be. Both tasks add a model and a renderer that nothing in `main.rs` reaches
+until Task 28 wires them, so the binary target carries the whole of `app.rs` and `screens.rs` as dead
+code until the cutover. The plan's gate order already says this: Task 28 Step 6 is the first step
+that runs clippy.
+
 - [ ] **Step 7: Commit**
 
 ```bash
@@ -9564,6 +9596,13 @@ SKIP_AI_COMMIT=1 git commit -m "feat(pane): draw one object's detail from dam sh
 ---
 
 ### Task 31: Navigation, the view picker, the number keys and the interval
+
+**Ruling 26 (carried in from Task 26).** `config.default_view` has no owner anywhere in this plan.
+`Config::check_default_view` proves the name is a view that exists and nothing ever selects it, so
+`default_view = "today"` in the operator's own config file opens the pane on the open list in
+silence. This task owns view selection, so it discharges it: `App::new` follows `Views::new` with
+`views.select_named(name)` for a configured `default_view`, under a test that asserts the showing
+view.
 
 **Files:**
 - Create: `crates/herdr-damnit/src/overlay.rs`

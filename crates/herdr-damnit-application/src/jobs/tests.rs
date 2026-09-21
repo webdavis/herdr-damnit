@@ -5,7 +5,19 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use super::*;
-use crate::{Finished, SpawnError};
+use crate::{Clock, Finished, SpawnError};
+/// A clock the job table reads a start from. The instant is real and the day is unused here.
+struct TestClock;
+
+impl Clock for TestClock {
+    fn today(&self) -> herdr_damnit_domain::Date {
+        herdr_damnit_domain::parse_date("2026-09-20").expect("a date")
+    }
+
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+}
 
 /// A runner that records every argv and hands the test the sender for each job, so a test decides
 /// when a job answers and with what.
@@ -55,7 +67,7 @@ fn harness() -> Harness {
     let log = Arc::clone(&recorder.log);
     let senders = Arc::clone(&recorder.senders);
     Harness {
-        jobs: Jobs::new(Box::new(recorder)),
+        jobs: Jobs::new(Box::new(recorder), Box::new(TestClock)),
         log,
         senders,
     }
@@ -230,10 +242,13 @@ fn each_sync_job_names_itself_in_the_refusal() {
 /// A `dam` that is on `PATH` and would not start is a different sentence from one that is absent.
 #[test]
 fn a_spawn_that_failed_for_some_other_reason_carries_dams_own_error() {
-    let mut jobs = Jobs::new(Box::new(Recorder {
-        io_error: Some("permission denied".to_string()),
-        ..Recorder::default()
-    }));
+    let mut jobs = Jobs::new(
+        Box::new(Recorder {
+            io_error: Some("permission denied".to_string()),
+            ..Recorder::default()
+        }),
+        Box::new(TestClock),
+    );
 
     let Submitted::Failed(message) = jobs.submit(JobKind::ReadStatus, crate::argv::status()) else {
         panic!("expected a failure");
@@ -259,7 +274,7 @@ fn a_dam_that_is_not_there_is_reported_rather_than_started() {
         refuse_spawn: true,
         ..Recorder::default()
     };
-    let mut jobs = Jobs::new(Box::new(recorder));
+    let mut jobs = Jobs::new(Box::new(recorder), Box::new(TestClock));
 
     assert!(matches!(
         jobs.submit(JobKind::ReadStatus, crate::argv::status()),

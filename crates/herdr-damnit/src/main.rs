@@ -1,5 +1,6 @@
 //! The plugin binary. With no arguments it is the pane; the subcommands are the plugin actions.
 
+mod app;
 mod apply;
 mod cache;
 mod completed;
