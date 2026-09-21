@@ -1045,44 +1045,46 @@ No message carries a token, a path under the home directory, or a stack trace.
   today. A picker arrives with the second one.
 - **Multi-select.** Staging is one row at a time plus `A` and `U`. A visual-mode range is the obvious
   next thing and it is not in version one.
-- **Categories as first-class UI.** See the open decision below.
+- **Categories as first-class UI.** See the label picker decision below.
 - **Anything Todoist-specific.** No filter-language translation, no Quick Add syntax, no project or
   section vocabulary. The remote is `dam`'s business.
 
-### Open decisions
+### Decisions closed 2026-09-20
 
-**Should `<Tab>` cycle three screens, or should Status get a chord of its own?** Recommendation:
-cycle. `<Tab>` already toggles two screens, three is learnable, and it costs no key in a pane that is
-short of them. If it is wrong, the cost is one extra press to reach Done, and the fix is a second
-key with no change to anything else.
+**`<Tab>` cycles three screens.** Decided 2026-09-20: `<Tab>` cycles List, Status and Done rather
+than giving Status a chord of its own, the recommended option. `<Tab>` already toggles two screens,
+three is learnable, and it costs no key in a pane that is short of them. If it is wrong, the cost is
+one extra press to reach Done, and the fix is a second key with no change to anything else.
 
-**Should the pane read `dam status` on every tick, or only after a write?** Recommendation: only
-after a write, on `R`, and on the interval. A per-tick read is twenty reads a second against a store
-another client may be writing, for a number that changes when this pane changes it. If it is wrong,
-a change made in `damnit.nvim` shows up in this pane one interval late, and the fix is to lower the
-interval, which is already a config key.
+**The pane reads `dam status` only after a write.** Decided 2026-09-20: read it only after a write,
+on `R`, and on the interval, rather than on every tick, the recommended option. A per-tick read is
+twenty reads a second against a store another client may be writing, for a number that changes when
+this pane changes it. If it is wrong, a change made in `damnit.nvim` shows up in this pane one
+interval late, and the fix is to lower the interval, which is already a config key.
 
-**Should the label picker group by category?** Recommendation: not in version one. It needs a `dam`
-command that does not exist (below), and a flat list plus `dam`'s own refusal is correct, just less
-pleasant. If it is wrong, an operator with exclusive categories gets a refusal where a good picker
-would have shown them the conflict, which is annoying and never wrong.
+**The label picker does not group by category in version one.** Decided 2026-09-20: ship a flat
+list and let `dam`'s own refusal handle a conflict, the recommended option. It needs a `dam` command
+that does not exist yet (see Needed from dam, below), and a flat list plus `dam`'s own refusal is
+correct, just less pleasant. If it is wrong, an operator with exclusive categories gets a refusal
+where a good picker would have shown them the conflict, which is annoying and never wrong.
 
-**Should `handoff_label` default to `"handed-off"` or to empty?** Recommendation: `"handed-off"`.
-A hand-off that leaves no trace is the failure mode the Todoist comment existed to prevent, and a
-label is queryable, which a comment was not. If it is wrong, the operator gets working-layer changes
-they did not ask for, and one config line turns it off.
+**`handoff_label` defaults to `"handed-off"`.** Decided 2026-09-20: default to `"handed-off"` rather
+than empty, the recommended option. A hand-off that leaves no trace is the failure mode the Todoist
+comment existed to prevent, and a label is queryable, which a comment was not. If it is wrong, the
+operator gets working-layer changes they did not ask for, and one config line turns it off.
 
-**Should the pane keep a written copy of the last model for a fast first frame?** Recommendation:
-no. `dam ls --json` measured 9.5 ms, which is faster than reading and parsing a cache file would be,
-and a cache is the thing this design just spent a section deleting. If it is wrong, the first frame
-after a cold start is briefly empty, and the fix is a spinner on the first read rather than a file.
+**The pane keeps no written copy of the last model.** Decided 2026-09-20: no cache for a fast first
+frame, the recommended option. `dam ls --json` measured 9.5 ms, which is faster than reading and
+parsing a cache file would be, and a cache is the thing this design just spent a section deleting.
+If it is wrong, the first frame after a cold start is briefly empty, and the fix is a spinner on the
+first read rather than a file.
 
-**Should `X` be force-complete, or should it stay bound to reopen and refuse?** Recommendation:
-force-complete. A key that only ever prints "not supported" teaches nothing and wastes a key in a
-pane with `q`, `Q`, `d`, `D` and little else left. If it is wrong, an operator with muscle memory
-from `herdr-todoist` force-completes a task they meant to reopen; the confirm-free path makes that
-worth watching, and the mitigation is that `X` is the only key whose meaning changed silently, so it
-gets a line in the release notes.
+**`X` is force-complete.** Decided 2026-09-20: bind `X` to force-complete rather than leaving it
+bound to reopen and refuse, the recommended option. A key that only ever prints "not supported"
+teaches nothing and wastes a key in a pane with `q`, `Q`, `d`, `D` and little else left. An operator
+with muscle memory from `herdr-todoist` may force-complete a task they meant to reopen; the
+confirm-free path makes that worth watching, and the mitigation is that `X` is the only key whose
+meaning changed silently, so it gets a line in the release notes.
 
 ### Decisions recorded
 
