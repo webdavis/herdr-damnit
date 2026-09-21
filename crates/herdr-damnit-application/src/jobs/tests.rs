@@ -1,3 +1,5 @@
+mod unanswered;
+
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -275,75 +277,4 @@ fn a_push_names_itself_while_it_runs_and_nothing_once_it_is_drained() {
     harness.answer(0, ok("{}"));
     harness.jobs.drain();
     assert_eq!(harness.jobs.exclusive(), None);
-}
-
-#[test]
-fn cancelling_reaches_the_exclusive_job_before_any_read_that_started_earlier() {
-    let cancelled = Arc::new(Mutex::new(Vec::new()));
-    let mut jobs = Jobs::new(Box::new(Marking {
-        cancelled: Arc::clone(&cancelled),
-        next: Mutex::new(0),
-    }));
-    jobs.submit(JobKind::ReadList, crate::argv::list("!done"));
-    jobs.submit(JobKind::Exclusive(SyncKind::Push), crate::argv::push());
-
-    assert!(jobs.cancel_current());
-    assert_eq!(*cancelled.lock().expect("the record"), vec![1]);
-}
-
-/// A `dam` thread that dies without sending closes the channel. The job leaves the table on the
-/// next drain, so a wedged exclusive job cannot block every later one.
-#[test]
-fn a_job_whose_thread_died_without_answering_leaves_the_table() {
-    let mut jobs = Jobs::new(Box::new(Marking {
-        cancelled: Arc::new(Mutex::new(Vec::new())),
-        next: Mutex::new(0),
-    }));
-    jobs.submit(JobKind::Exclusive(SyncKind::Push), crate::argv::push());
-
-    assert!(jobs.drain().is_empty());
-    assert_eq!(jobs.in_flight(), 0);
-    assert_eq!(jobs.exclusive(), None);
-}
-
-/// The other half of the ladder: with nothing exclusive running, the signal goes to the job that
-/// has been waiting longest, which is the one the header names.
-#[test]
-fn with_no_exclusive_job_the_cancel_reaches_the_oldest_read() {
-    let cancelled = Arc::new(Mutex::new(Vec::new()));
-    let mut jobs = Jobs::new(Box::new(Marking {
-        cancelled: Arc::clone(&cancelled),
-        next: Mutex::new(0),
-    }));
-    jobs.submit(JobKind::ReadList, crate::argv::list("!done"));
-    jobs.submit(JobKind::ReadStatus, crate::argv::status());
-
-    assert!(jobs.cancel_current());
-    assert_eq!(*cancelled.lock().expect("the record"), vec![0]);
-}
-
-#[test]
-fn cancelling_with_nothing_in_flight_says_so() {
-    let mut harness = harness();
-    assert!(!harness.jobs.cancel_current());
-}
-
-/// A runner whose jobs record their own index when cancelled.
-struct Marking {
-    cancelled: Arc<Mutex<Vec<usize>>>,
-    next: Mutex<usize>,
-}
-
-impl DamRunner for Marking {
-    fn spawn(&self, _argv: &[String]) -> Result<RunningJob, SpawnError> {
-        let mut next = self.next.lock().expect("the counter");
-        let which = *next;
-        *next += 1;
-        let cancelled = Arc::clone(&self.cancelled);
-        let (_sender, results) = channel();
-        Ok(RunningJob {
-            cancel: Box::new(move || cancelled.lock().expect("the record").push(which)),
-            results,
-        })
-    }
 }

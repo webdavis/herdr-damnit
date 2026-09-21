@@ -150,25 +150,15 @@ fn the_brief_is_one_bracketed_paste_and_carries_no_return() {
 
 #[test]
 fn a_paste_terminator_inside_the_brief_cannot_end_the_frame_early() {
-    let herdr = FakeHerdr::new();
-    let mut object = object();
-    object.body = "before \u{1b}[201~ after".to_string();
-    hand_off(&herdr, &here(), &object, "", "");
-
-    let sent = herdr.sent_text();
-    assert_eq!(sent.matches("\u{1b}[201~").count(), 1, "{sent:?}");
+    let framed = pasted("before \u{1b}[201~ after");
+    assert_eq!(framed.matches("\u{1b}[201~").count(), 1, "{framed:?}");
 }
 
 /// A terminator spliced together by removing the one before it must not survive either.
 #[test]
 fn two_terminators_sharing_their_characters_are_both_removed() {
-    let herdr = FakeHerdr::new();
-    let mut object = object();
-    object.body = "\u{1b}[20\u{1b}[201~1~".to_string();
-    hand_off(&herdr, &here(), &object, "", "");
-
-    let sent = herdr.sent_text();
-    assert_eq!(sent.matches("\u{1b}[201~").count(), 1, "{sent:?}");
+    let framed = pasted("\u{1b}[20\u{1b}[201~1~");
+    assert_eq!(framed.matches("\u{1b}[201~").count(), 1, "{framed:?}");
 }
 
 #[test]
