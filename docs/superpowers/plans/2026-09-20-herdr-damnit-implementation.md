@@ -2149,9 +2149,10 @@ and working beats unpushed. `Stage::rows` draws the four sections the spec names
 order, leaving an empty section out; an entirely empty stage is one line reading
 `nothing staged, nothing changed`, which is `dam`'s own wording.
 
-`Change::fields` is the list of changed field names. `dam status --json` carries no such list today
-and Task 24 leaves it empty, which draws a `changed` row with no parenthesis. It is filled the day
-`dam` adds `fields` to a change document, which is item 3 of the spec's Needed from dam.
+`Change::fields` is the list of changed field names, which `dam` 0.2.0 carries on every change
+document as `fields` and Task 23 maps straight across. An update names the fields that moved, a
+create names the fields the new object carries beyond its defaults, and a delete names none, so a
+deleted row draws with no parenthesis.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2850,15 +2851,26 @@ SKIP_AI_COMMIT=1 git commit -m "feat(domain): compare the dam this pane found ag
 
 **Files:**
 - Create: `crates/herdr-damnit-domain/src/failure.rs`
+- Create: `crates/herdr-damnit-domain/src/failure/rule.rs`
 - Modify: `crates/herdr-damnit-domain/src/lib.rs`
 
 **Interfaces:**
-- Consumes: the domain crate.
+- Consumes: `Oid` from Task 4.
 - Produces:
 
 ```rust
+pub enum Rule { /* dam's eighteen rule words, plus Unknown(String) */ }
+pub enum ErrorKind { Refused, Store, Helper, Credential, Parse, Usage, Cancelled }
+
+pub struct ErrorDocument {
+    pub kind: ErrorKind,
+    pub message: String,
+    pub rule: Option<Rule>,
+    pub oids: Vec<Oid>,
+}
+
 pub enum Failure {
-    Refused(String),
+    Refused { rule: Rule, said: String, oids: Vec<Oid> },
     Store(String),
     Other(String),
     Cancelled { killed: bool },
@@ -2867,20 +2879,27 @@ pub enum Failure {
     Deadline(String),
 }
 
-pub fn classify(code: Option<i32>, stderr: &str) -> Failure;
+pub fn classify(code: Option<i32>, error: Option<ErrorDocument>, fallback: &str) -> Failure;
 pub fn message(failure: &Failure) -> String;
 pub fn leaves_model_untouched(failure: &Failure) -> bool;
 ```
 
-The exit codes are `dam`'s own (`crates/dam-cli/src/error.rs`): 0 did what it said, 1 everything
-else, 2 a refusal, 3 cancelled. A failing command prints `dam: <message>` on standard error and
-produces no document, with `--json` or without, so the mapping takes standard error, strips the
-`dam: ` prefix and keeps the first line. `dam`'s refusals already name the rule and the objects, so
-rewording them would lose information.
+The exit codes are `dam` 0.2.0's own: 0 did what it said, 1 every other failure including a dead
+editor, 2 the command line alone, 3 cancelled, 4 a rule `dam` refused. **Every rule reports 4 and
+nothing else does**, so the mapping reads the code once rather than per verb.
 
-A `Store` failure is an exit 1 whose message names the SQLite busy timeout; it takes four extra
-words, because the usual cause is a long `dam pull` in another pane and a retry loop would queue
-behind it.
+Under `--json` a failure is one document on standard error and nothing else, so the pane reads
+`message` rather than stripping a prefix off a line. The adapters crate owns the parse, because the
+domain crate takes no serde; `classify` is handed the parsed document. `fallback` is standard error's
+first line and is used only when no document parsed: clap's usage text at exit 2, or a `dam` too old
+to print one.
+
+`rule` is what a key branches on when it does more than print. `Rule::Unknown` carries the word, so
+a rule `dam` adds later reaches the status line as its message rather than being dropped.
+
+A `Store` failure is an exit 1 whose document says `store` and whose message names the SQLite busy
+timeout; it takes four extra words, because the usual cause is a long `dam pull` in another pane and
+a retry loop would queue behind it.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2891,32 +2910,128 @@ behind it.
 mod tests {
     use super::*;
 
+    fn refusal(rule: &str, message: &str, oids: &[&str]) -> ErrorDocument {
+        ErrorDocument {
+            kind: ErrorKind::Refused,
+            message: message.to_string(),
+            rule: Some(Rule::named(rule)),
+            oids: oids.iter().map(|oid| Oid::new(*oid)).collect(),
+        }
+    }
+
     #[test]
-    fn a_refusal_is_dams_own_sentence_with_its_prefix_stripped() {
-        let failure = classify(Some(2), "dam: no object matches \"zzzzzzz\"\n");
-        assert_eq!(failure, Failure::Refused("no object matches \"zzzzzzz\"".to_string()));
-        assert_eq!(message(&failure), "no object matches \"zzzzzzz\"");
+    fn a_refusal_carries_dams_own_sentence_its_rule_and_its_oids() {
+        let failure = classify(
+            Some(4),
+            Some(refusal(
+                "blocked",
+                "98d8780 cannot be completed: child a9db854 is open",
+                &["98d8780", "a9db854"],
+            )),
+            "",
+        );
+        assert_eq!(
+            failure,
+            Failure::Refused {
+                rule: Rule::Blocked,
+                said: "98d8780 cannot be completed: child a9db854 is open".to_string(),
+                oids: vec![Oid::new("98d8780"), Oid::new("a9db854")],
+            }
+        );
+        assert_eq!(message(&failure), "98d8780 cannot be completed: child a9db854 is open");
         assert!(leaves_model_untouched(&failure));
     }
 
     #[test]
-    fn only_the_first_line_of_standard_error_reaches_the_status_line() {
-        let failure = classify(Some(1), "dam: nothing to commit\nhint: stage something first\n");
+    fn every_rule_word_dam_publishes_has_a_variant_of_its_own() {
+        for word in [
+            "blocked",
+            "cycle",
+            "exclusive_label",
+            "unknown_category",
+            "no_such_object",
+            "no_working_object",
+            "no_such_remote",
+            "not_a_task",
+            "not_an_event",
+            "not_completed",
+            "not_committed",
+            "dirty_on_pull",
+            "move_inside_itself",
+            "nothing_to_commit",
+            "needs_an_answer",
+            "needs_an_editor",
+            "unresolved_conflicts",
+            "missing_credential",
+        ] {
+            assert!(
+                !matches!(Rule::named(word), Rule::Unknown(_)),
+                "{word} has no variant"
+            );
+        }
+    }
+
+    #[test]
+    fn a_rule_this_pane_has_not_heard_of_keeps_its_word() {
+        assert_eq!(
+            Rule::named("invented_tomorrow"),
+            Rule::Unknown("invented_tomorrow".to_string())
+        );
+    }
+
+    #[test]
+    fn an_empty_stage_is_a_refusal_now_rather_than_an_ordinary_failure() {
+        let failure = classify(
+            Some(4),
+            Some(refusal("nothing_to_commit", "nothing to commit", &[])),
+            "",
+        );
+        assert!(leaves_model_untouched(&failure));
         assert_eq!(message(&failure), "nothing to commit");
     }
 
     #[test]
     fn a_held_store_says_who_is_holding_it_and_what_to_press() {
-        let failure = classify(Some(1), "dam: database is locked");
+        let failure = classify(
+            Some(1),
+            Some(ErrorDocument {
+                kind: ErrorKind::Store,
+                message: "database is locked".to_string(),
+                rule: None,
+                oids: Vec::new(),
+            }),
+            "",
+        );
         assert_eq!(
             message(&failure),
             "database is locked; another dam is writing, press R to retry."
         );
     }
 
+    /// clap answers a bad command line before `dam` runs, so there is no document to read.
+    #[test]
+    fn a_command_line_dam_would_not_read_falls_back_to_its_first_line() {
+        let failure = classify(
+            Some(2),
+            None,
+            "error: unexpected argument '--nope'\n\nUsage: dam ls [QUERY]\n",
+        );
+        assert_eq!(message(&failure), "error: unexpected argument '--nope'");
+        assert!(
+            !leaves_model_untouched(&failure),
+            "a bad command line is this pane's own bug, not a rule dam kept"
+        );
+    }
+
+    #[test]
+    fn a_dam_too_old_to_print_a_document_still_reaches_the_status_line() {
+        let failure = classify(Some(1), None, "dam: no object matches \"zzzzzzz\"\n");
+        assert_eq!(message(&failure), "no object matches \"zzzzzzz\"");
+    }
+
     #[test]
     fn a_cancelled_run_is_never_an_error_banner() {
-        assert_eq!(message(&classify(Some(3), "")), "cancelled");
+        assert_eq!(message(&classify(Some(3), None, "")), "cancelled");
         assert_eq!(
             message(&Failure::Cancelled { killed: true }),
             "cancelled (killed)"
@@ -2950,7 +3065,10 @@ mod tests {
 
     #[test]
     fn a_signal_death_with_no_code_is_reported_rather_than_swallowed() {
-        assert_eq!(message(&classify(None, "")), "dam was killed before it answered.");
+        assert_eq!(
+            message(&classify(None, None, "")),
+            "dam was killed before it answered."
+        );
     }
 }
 ```
@@ -2958,48 +3076,152 @@ mod tests {
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-domain --locked failure`
-Expected: FAIL with `unresolved module or unlinked crate 'failure'`
+Expected: FAIL, the test module naming types that do not exist yet.
 
-- [ ] **Step 3: Write the module**
+- [ ] **Step 3: Write the rule words**
+
+`crates/herdr-damnit-domain/src/failure/rule.rs`:
+
+```rust
+//! The rule `dam` names when it refuses. One stable snake_case word per rule, which is what lets a
+//! key branch on the reason rather than on the sentence.
+
+/// Every rule word `dam` 0.2.0 publishes, and the word itself for one it adds later.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Rule {
+    Blocked,
+    Cycle,
+    ExclusiveLabel,
+    UnknownCategory,
+    NoSuchObject,
+    NoWorkingObject,
+    NoSuchRemote,
+    NotATask,
+    NotAnEvent,
+    NotCompleted,
+    NotCommitted,
+    DirtyOnPull,
+    MoveInsideItself,
+    NothingToCommit,
+    NeedsAnAnswer,
+    NeedsAnEditor,
+    UnresolvedConflicts,
+    MissingCredential,
+    Unknown(String),
+}
+
+impl Rule {
+    pub fn named(word: &str) -> Self {
+        match word {
+            "blocked" => Self::Blocked,
+            "cycle" => Self::Cycle,
+            "exclusive_label" => Self::ExclusiveLabel,
+            "unknown_category" => Self::UnknownCategory,
+            "no_such_object" => Self::NoSuchObject,
+            "no_working_object" => Self::NoWorkingObject,
+            "no_such_remote" => Self::NoSuchRemote,
+            "not_a_task" => Self::NotATask,
+            "not_an_event" => Self::NotAnEvent,
+            "not_completed" => Self::NotCompleted,
+            "not_committed" => Self::NotCommitted,
+            "dirty_on_pull" => Self::DirtyOnPull,
+            "move_inside_itself" => Self::MoveInsideItself,
+            "nothing_to_commit" => Self::NothingToCommit,
+            "needs_an_answer" => Self::NeedsAnAnswer,
+            "needs_an_editor" => Self::NeedsAnEditor,
+            "unresolved_conflicts" => Self::UnresolvedConflicts,
+            "missing_credential" => Self::MissingCredential,
+            other => Self::Unknown(other.to_string()),
+        }
+    }
+}
+```
+
+- [ ] **Step 4: Write the module**
 
 `crates/herdr-damnit-domain/src/failure.rs`, above its test module:
 
 ```rust
-//! What a non-zero `dam` exit means, and the one sentence the status line carries for it. `dam`
-//! prints `dam: <message>` on standard error whatever the format flag, so the text is its own.
+//! What a non-zero `dam` exit means, and the one sentence the status line carries for it. Under
+//! `--json` a failure is one document on standard error, so the text and the rule are `dam`'s own.
+
+use crate::Oid;
+
+mod rule;
+
+pub use rule::Rule;
 
 /// The read deadline the pane cancels a local read at. A SQLite read that takes this long is a
 /// wedged store rather than a slow one.
 pub const READ_DEADLINE_SECONDS: u64 = 30;
 
+/// The `kind` of `dam`'s error document.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ErrorKind {
+    Refused,
+    Store,
+    Helper,
+    Credential,
+    Parse,
+    Usage,
+    Cancelled,
+}
+
+/// `dam`'s error document, parsed by the adapters crate and handed here.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ErrorDocument {
+    pub kind: ErrorKind,
+    pub message: String,
+    /// The rule a refusal broke, and `None` for every other kind.
+    pub rule: Option<Rule>,
+    /// The objects the message names, in the order it names them.
+    pub oids: Vec<Oid>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Failure {
-    Refused(String),
+    Refused {
+        rule: Rule,
+        said: String,
+        oids: Vec<Oid>,
+    },
     Store(String),
     Other(String),
-    Cancelled { killed: bool },
+    Cancelled {
+        killed: bool,
+    },
     Unreadable,
     NotInstalled,
     Deadline(String),
 }
 
-pub fn classify(code: Option<i32>, stderr: &str) -> Failure {
-    let said = first_line(stderr);
-    match code {
-        Some(2) => Failure::Refused(said),
-        Some(3) => Failure::Cancelled { killed: false },
-        Some(_) if is_locked(&said) => Failure::Store(said),
-        Some(_) => Failure::Other(said),
-        None => Failure::Other(String::new()),
+/// The exit code `dam` reports for a rule of its own, and for nothing else.
+const REFUSED: i32 = 4;
+/// The exit code `dam` reports when it was interrupted or a prompt went unanswered.
+const CANCELLED: i32 = 3;
+
+pub fn classify(code: Option<i32>, error: Option<ErrorDocument>, fallback: &str) -> Failure {
+    let said = |error: &Option<ErrorDocument>| match error {
+        Some(document) => document.message.clone(),
+        None => first_line(fallback),
+    };
+    match (code, error) {
+        (Some(REFUSED), Some(document)) => Failure::Refused {
+            rule: document.rule.unwrap_or_else(|| Rule::Unknown(String::new())),
+            said: document.message,
+            oids: document.oids,
+        },
+        (Some(CANCELLED), _) => Failure::Cancelled { killed: false },
+        (Some(_), error) if is_store(&error, fallback) => Failure::Store(said(&error)),
+        (Some(_), error) => Failure::Other(said(&error)),
+        (None, _) => Failure::Other(String::new()),
     }
 }
 
 pub fn message(failure: &Failure) -> String {
     match failure {
-        Failure::Refused(said) | Failure::Other(said) if said.is_empty() => {
-            "dam was killed before it answered.".to_string()
-        }
-        Failure::Refused(said) | Failure::Other(said) => said.clone(),
+        Failure::Other(said) if said.is_empty() => "dam was killed before it answered.".to_string(),
+        Failure::Refused { said, .. } | Failure::Other(said) => said.clone(),
         Failure::Store(said) => format!("{said}; another dam is writing, press R to retry."),
         Failure::Cancelled { killed: false } => "cancelled".to_string(),
         Failure::Cancelled { killed: true } => "cancelled (killed)".to_string(),
@@ -3007,9 +3229,9 @@ pub fn message(failure: &Failure) -> String {
         Failure::NotInstalled => {
             "dam is not on PATH; install it with cargo install damnit, then press R.".to_string()
         }
-        Failure::Deadline(command) => format!(
-            "{command} took longer than {READ_DEADLINE_SECONDS}s and was cancelled."
-        ),
+        Failure::Deadline(command) => {
+            format!("{command} took longer than {READ_DEADLINE_SECONDS}s and was cancelled.")
+        }
     }
 }
 
@@ -3018,24 +3240,22 @@ pub fn message(failure: &Failure) -> String {
 pub fn leaves_model_untouched(failure: &Failure) -> bool {
     matches!(
         failure,
-        Failure::Refused(_) | Failure::Cancelled { .. } | Failure::Deadline(_)
+        Failure::Refused { .. } | Failure::Cancelled { .. } | Failure::Deadline(_)
     )
 }
 
 fn first_line(stderr: &str) -> String {
-    stderr
-        .lines()
-        .next()
-        .unwrap_or_default()
-        .trim()
-        .strip_prefix("dam: ")
-        .unwrap_or_else(|| stderr.lines().next().unwrap_or_default().trim())
-        .to_string()
+    let line = stderr.lines().next().unwrap_or_default().trim();
+    line.strip_prefix("dam: ").unwrap_or(line).to_string()
 }
 
 /// SQLite's own words for a store another writer is holding past the five-second busy timeout.
-fn is_locked(said: &str) -> bool {
-    let said = said.to_ascii_lowercase();
+fn is_store(error: &Option<ErrorDocument>, fallback: &str) -> bool {
+    let said = match error {
+        Some(document) => document.message.as_str(),
+        None => fallback,
+    }
+    .to_ascii_lowercase();
     said.contains("database is locked") || said.contains("database table is locked")
 }
 ```
@@ -3046,20 +3266,21 @@ Add to `crates/herdr-damnit-domain/src/lib.rs`:
 mod failure;
 
 pub use failure::{
-    Failure, READ_DEADLINE_SECONDS, classify, leaves_model_untouched, message,
+    ErrorDocument, ErrorKind, Failure, READ_DEADLINE_SECONDS, Rule, classify,
+    leaves_model_untouched, message,
 };
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `cargo test --workspace --locked && cargo clippy --workspace --all-targets --locked -- -D warnings`
 Expected: PASS and clean.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(domain): map a dam exit code onto the sentence the status line carries"
+SKIP_AI_COMMIT=1 git commit -m "feat(domain): map a dam exit and its error document to one sentence"
 ```
 
 ---
@@ -3277,8 +3498,19 @@ path as `--path`, `add` takes oids or `-A`, `reset` takes oids or none, `commit`
 takes `-p`, `--due`, `--no-due`, `--deadline`, `--no-deadline`, `--label`, `--unlabel` and `-e`, `mv`
 takes two positionals, and `resolve` takes `--ours` or `--theirs`.
 
-`edit_in_editor` is the one command that carries no `--json`, because it owns the terminal and prints
-no report the pane reads.
+`--json` buys two things and both matter: the report on standard output, and the error document on
+standard error, which is the only place the pane reads a refusal's rule and oids. So every command
+that can fail in a way the pane reports carries it.
+
+`edit_in_editor` is the one command that carries no `--json`, and cannot: `dam edit -e --json` is
+refused as `needs_an_editor` rather than run, because a machine format never opens an editor. It owns
+the terminal, prints no report, and a run that fails prints the plain `dam: <message>` line, which
+Task 14's `fallback` reads.
+
+`status` needs no `--full`. Since `dam` 0.2.0 the default change document carries the oid, the
+operation, a `fields` list and the state the change left behind, with no embedded object, which is
+what a pane polling `status` per render wants. `--full` adds `before` and `after` for a client that
+needs them and this pane does not.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3382,9 +3614,44 @@ fn a_new_object_under_no_path_leaves_the_flag_off_rather_than_sending_an_empty_o
     assert_eq!(line(create("file taxes", "")), "new file taxes --json");
 }
 
+/// `dam edit -e --json` is refused as `needs_an_editor`, so the editor round trip is the one
+/// command that must not carry the flag.
 #[test]
 fn the_editor_round_trip_asks_for_no_report_because_it_owns_the_terminal() {
     assert_eq!(line(edit_in_editor(&oid())), "edit 1a2b3c4 -e");
+    assert!(!edit_in_editor(&oid()).contains(&JSON.to_string()));
+}
+
+/// Every other command carries `--json`, which is what makes a failure answer with the error
+/// document Task 14 maps instead of a line to match substrings against.
+#[test]
+fn every_command_that_reports_a_failure_asks_for_the_document() {
+    for argv in [
+        list("!done"),
+        status(),
+        show(&oid()),
+        log(),
+        stage(&oid()),
+        stage_all(),
+        unstage(&oid()),
+        unstage_all(),
+        commit("m"),
+        push(),
+        pull(),
+        done(&oid(), false),
+        remove(&oid()),
+        set_priority(&oid(), Priority::default()),
+        set_due(&oid(), None),
+        set_deadline(&oid(), None),
+        label(&oid(), "home"),
+        unlabel(&oid(), "home"),
+        move_to(&oid(), "home/"),
+        create("s", ""),
+        resolve(&oid(), Side::Ours),
+        restore(&oid()),
+    ] {
+        assert!(argv.contains(&JSON.to_string()), "{argv:?}");
+    }
 }
 
 #[test]
@@ -3417,9 +3684,9 @@ use herdr_damnit_domain::{Oid, Priority};
 #[cfg(test)]
 mod tests;
 
-/// `--json` is a global flag on `dam`, so every command that prints a report the pane reads ends
-/// with it.
-const JSON: &str = "--json";
+/// `--json` is a global flag on `dam`. It selects the report on standard output and the error
+/// document on standard error, so every command whose failure the pane reports ends with it.
+pub const JSON: &str = "--json";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Side {
@@ -3559,7 +3826,7 @@ pub use argv::Side;
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-application --locked`
-Expected: PASS, fourteen tests.
+Expected: PASS, fifteen tests.
 
 - [ ] **Step 5: Commit**
 
@@ -4700,9 +4967,10 @@ documents into the domain types.
     alone, so a release build of the plugin never builds it.
   - Its four environment knobs: `FAKE_DAM_LOG` (a file it appends one JSON line of full argv to per
     call), `FAKE_DAM_FIXTURE_DIR` (the directory it replays `<subcommand>.json` from),
-    `FAKE_DAM_EXIT` (an exit code) with `FAKE_DAM_STDERR` (a line to print on standard error),
-    and `FAKE_DAM_SLEEP_MS` (a sleep before answering). It installs a `SIGINT` handler that appends
-    a `{"signal":"SIGINT"}` line to the log and exits 3.
+    `FAKE_DAM_EXIT` (an exit code) with `FAKE_DAM_STDERR` (what to print on standard error, which
+    for a refusal is the whole error document `dam` prints under `--json`), and `FAKE_DAM_SLEEP_MS`
+    (a sleep before answering). It installs a `SIGINT` handler that appends a `{"signal":"SIGINT"}`
+    line to the log and exits 3.
   - Fifteen fixtures: `ls.json`, `ls-empty.json`, `ls-done.json`, `status-clean.json`,
     `status-full.json`, `show-task.json`, `show-event.json`, `log.json`, `push-ok.json`,
     `push-partial-failure.json`, `pull-ok.json`, `pull-conflict.json`, `commit.json`, `new.json`,
@@ -4922,21 +5190,39 @@ fn the_fake_appends_one_json_line_of_argv_per_call() {
     assert_eq!(lines[1], vec!["ls", "!done", "--json"]);
 }
 
+/// A refusal is exit 4 and one error document on standard error, which is `dam` 0.2.0's contract
+/// under `--json`.
 #[test]
-fn the_fake_exits_with_the_code_and_the_line_it_was_given() {
+fn the_fake_refuses_with_the_code_and_the_document_it_was_given() {
+    let document = r#"{"error":{"kind":"refused","rule":"no_such_object","message":"no object matches \"zzzzzzz\"","oids":[]}}"#;
     let output = Command::new(fake())
         .args(["show", "zzzzzzz", "--json"])
+        .env("FAKE_DAM_EXIT", "4")
+        .env("FAKE_DAM_STDERR", document)
+        .output()
+        .expect("the fake ran");
+
+    assert_eq!(output.status.code(), Some(4));
+    assert_eq!(String::from_utf8_lossy(&output.stderr).trim(), document);
+    assert!(output.stdout.is_empty(), "a failing dam prints no report");
+}
+
+/// clap answers a bad command line before `dam` runs, so exit 2 carries usage text and no
+/// document. The pane has to read that shape too.
+#[test]
+fn the_fake_can_also_answer_the_way_clap_does() {
+    let output = Command::new(fake())
+        .args(["ls", "--nope"])
         .env("FAKE_DAM_EXIT", "2")
-        .env("FAKE_DAM_STDERR", "dam: no object matches \"zzzzzzz\"")
+        .env("FAKE_DAM_STDERR", "error: unexpected argument '--nope'")
         .output()
         .expect("the fake ran");
 
     assert_eq!(output.status.code(), Some(2));
     assert_eq!(
         String::from_utf8_lossy(&output.stderr).trim(),
-        "dam: no object matches \"zzzzzzz\""
+        "error: unexpected argument '--nope'"
     );
-    assert!(output.stdout.is_empty(), "a failing dam prints no report");
 }
 
 #[test]
@@ -5189,9 +5475,10 @@ fn spawning_does_not_wait_for_the_child() {
 
 #[test]
 fn a_failing_run_carries_its_code_and_its_standard_error() {
+    let document = r#"{"error":{"kind":"refused","rule":"no_such_object","message":"no object matches \"zzzzzzz\"","oids":[]}}"#;
     unsafe {
-        std::env::set_var("FAKE_DAM_EXIT", "2");
-        std::env::set_var("FAKE_DAM_STDERR", "dam: no object matches \"zzzzzzz\"");
+        std::env::set_var("FAKE_DAM_EXIT", "4");
+        std::env::set_var("FAKE_DAM_STDERR", document);
     }
     let job = runner()
         .spawn(&words(&["show", "zzzzzzz", "--json"]))
@@ -5201,8 +5488,8 @@ fn a_failing_run_carries_its_code_and_its_standard_error() {
         .recv_timeout(Duration::from_secs(5))
         .expect("one result");
 
-    assert_eq!(finished.code, Some(2));
-    assert!(finished.stderr.contains("no object matches"), "{}", finished.stderr);
+    assert_eq!(finished.code, Some(4));
+    assert_eq!(finished.stderr.trim(), document);
     unsafe {
         std::env::remove_var("FAKE_DAM_EXIT");
         std::env::remove_var("FAKE_DAM_STDERR");
@@ -5649,6 +5936,7 @@ pub fn stage(json: &str) -> Result<Stage, String>;            // dam status --js
 pub fn completions(json: &str) -> Result<HashMap<Oid, Date>, String>;  // dam log --json
 pub fn push_summary(json: &str) -> Result<String, String>;    // dam push --json
 pub fn pull_summary(json: &str) -> Result<String, String>;    // dam pull --json
+pub fn error_document(stderr: &str) -> Option<ErrorDocument>; // standard error under --json
 ```
 
 The serde structs here mirror `dam`'s own `WireObject`, `WireTask` and `WireEvent`
@@ -5661,14 +5949,22 @@ fixture in the tests, so a `dam` change that moves a byte fails here.
 human output: `todoist: 3 sent, 3 ok, 0 failed, 0 skipped` and `todoist: 2 new, 1 updated, 40
 unchanged, 0 conflict(s), 0 removed upstream`.
 
-`completions` is how the Done screen gets its dates: a commit's `changes` array holds a `before` and
-an `after` per object, so the commit whose change flipped `after.task.done` to true is the one that
-completed it and the commit's `at` is the date. A task completed in the working layer and not yet
-committed has no commit and therefore no date.
+`error_document` is the one function that reads standard error rather than standard output. Under
+`--json` a failure prints exactly one document there and nothing else, so the parse is of the whole
+stream. It answers `None` for anything that is not that document, which is clap's usage text at exit
+2 and a `dam` too old to print one; Task 14's `classify` falls back to the first line in that case.
+`kind` and `rule` are mapped onto the domain's own enums, and a `rule` word this pane has not heard
+of becomes `Rule::Unknown` rather than an error, so a rule `dam` adds still reaches the status line.
 
-`Change::fields` is left empty, because `dam status --json` carries no changed-field list today.
-Filling it is item 3 of the spec's Needed from dam and is picked up by the same mapping the day the
-key appears.
+`Change::fields` is `dam`'s own `fields` array, mapped straight across. Since 0.2.0 every change
+document carries it: an update names the fields that moved, a create names the fields the new object
+carries beyond its defaults, and a delete names none.
+
+`completions` is how the Done screen gets its dates, and it reads `dam log --json`, whose change
+documents carry no `before` and `after` either. The commit that completed a task is the one whose
+change names `done` among its `fields` and whose row carries `done` of true, and that commit's `at`
+is the date. A task completed in the working layer and not yet committed has no commit and therefore
+no date.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -6005,7 +6301,10 @@ struct WireChange {
     oid: String,
     op: String,
     #[serde(default)]
-    before: Option<WireObject>,
+    subject: String,
+    #[serde(default)]
+    fields: Vec<String>,
+    /// Present only under `--full`, which this pane never asks for.
     #[serde(default)]
     after: Option<WireObject>,
 }
@@ -6052,12 +6351,14 @@ pub fn stage(json: &str) -> Result<Stage, String> {
 }
 
 fn into_change(wire: WireChange) -> Change {
-    let subject = wire
-        .after
-        .as_ref()
-        .or(wire.before.as_ref())
-        .map(|object| object.subject.clone())
-        .unwrap_or_default();
+    let subject = match wire.subject.is_empty() {
+        false => wire.subject,
+        true => wire
+            .after
+            .as_ref()
+            .map(|object| object.subject.clone())
+            .unwrap_or_default(),
+    };
     Change {
         oid: Oid::new(wire.oid),
         op: match wire.op.as_str() {
@@ -6066,8 +6367,7 @@ fn into_change(wire: WireChange) -> Change {
             _ => Op::Update,
         },
         subject,
-        // `dam status --json` carries no changed-field list today.
-        fields: Vec::new(),
+        fields: wire.fields,
     }
 }
 
@@ -9939,9 +10239,8 @@ what makes the key appear the day the operator updates `dam`, with no pane relea
 That gate is the only place a key depends on a `dam` version, and it exists because a confirm followed
 by a refusal is the worst shape a destructive key can have.
 
-`Change::fields` is empty until `dam` carries a changed-field list, so the confirm names the object
-and says `its working change` where it would name the fields. Filling that in is one line here the day
-item 3 of Needed from dam lands.
+`Change::fields` carries `dam`'s own `fields` array from 0.2.0 on, so the confirm names the fields
+that would be lost. A change that names none, which is a delete, keeps `its working change`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -10069,7 +10368,7 @@ SKIP_AI_COMMIT=1 git commit -m "feat(pane): bind the discard key only on a dam t
     running pane shows the Status screen on its next tick.
   - `App::tick` reading a `status` request as the Status screen rather than as a view name.
 
-The remotes and their last-pull times are item 6 and item 4 of the spec's Needed from dam in part:
+The remotes and their last-pull times are item 6 of the spec's Needed from dam in part:
 `dam remote list` exists and prints the configured remotes, and until it reports a last-pull time the
 doctor prints the remote names alone and says the age is not available. Do not read `dam`'s config
 file directly: the pane would own a second parser for a file `dam` owns.
@@ -10288,7 +10587,7 @@ onto a task:
 | 5, non-blocking operations, jobs, the header, cancellation, completion, closing mid-push | 17, 21, 22, 26, 33, 39 |
 | 6, the four crates and the dependency direction | 4, 15, 20, 28 |
 | 7, the fake dam, the fixtures, the golden renders, CI | 20, 23, 27, 29, 30, 42 |
-| 8, targets, messages, out of scope, decisions, Needed from dam | 14, 40 for the gated key; the seven remaining Needed items are named where they bite |
+| 8, targets, messages, out of scope, decisions, Needed from dam | 14, 40 for the gated key; items 3, 4 and 7 arrived in `dam` 0.2.0 and are built on rather than waited for; the four remaining are named where they bite |
 
 **The gaps this plan leaves on purpose**, each because the spec puts it out of scope for version one:
 events beyond reading them, a history browser, editing a recurrence rule, choosing a remote,
@@ -10300,11 +10599,11 @@ multi-select, categories as first-class UI, and anything Todoist-specific.
 |---|---|
 | 1, clear `done` on a task | Not bound. `X` is force-complete, Task 34 |
 | 2, `dam restore` | Task 40, behind the version gate |
-| 3, a JSON error envelope | Task 14 parses standard error instead; the mapping is the one place that changes |
-| 4, exit 2 for every refusal | Task 14, where `nothing to commit` arrives as exit 1 and reads correctly anyway |
+| 3, a JSON error envelope | DELIVERED in `dam` 0.2.0, with a `rule` besides. Task 23 parses it, Task 14 maps it |
+| 4, one exit code for every refusal | DELIVERED in `dam` 0.2.0 as exit 4, `nothing_to_commit` among them. Task 14 |
 | 5, a completion timestamp | Task 23's `completions`, which walks the log instead |
 | 6, the category catalogue and saved filters | Task 36's flat label picker; Task 41's doctor prints remote names alone |
-| 7, a `status` without embedded objects | Not needed; Task 23 ignores the embedded objects apart from the subject |
+| 7, a `status` without embedded objects | DELIVERED in `dam` 0.2.0 as the default. Task 23 reads the row shape and Task 16 asks for no `--full` |
 | 8, richer date words | Task 35's hint names exactly the words `dam` accepts today |
 
 **Type consistency.** The names used across tasks: `Oid::short`, `Priority::next`, `Priority::get`,
