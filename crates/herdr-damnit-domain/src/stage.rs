@@ -3,9 +3,6 @@
 
 use crate::{Mark, Oid, StagingMarks};
 
-#[cfg(test)]
-mod tests;
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Op {
     Create,
@@ -196,3 +193,6 @@ impl StagingMarks for Stage {
         None
     }
 }
+
+#[cfg(test)]
+mod tests;

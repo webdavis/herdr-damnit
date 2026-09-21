@@ -2351,9 +2351,6 @@ deriving `Clone`, `Debug`, `PartialEq` and `Eq`, plus:
 
 use crate::{Mark, Oid, StagingMarks};
 
-#[cfg(test)]
-mod tests;
-
 impl Stage {
     pub fn is_clean(&self) -> bool {
         self.staged.is_empty()
@@ -2485,6 +2482,9 @@ impl StagingMarks for Stage {
         None
     }
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 Add to `crates/herdr-damnit-domain/src/lib.rs`:
