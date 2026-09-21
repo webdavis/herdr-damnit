@@ -70,7 +70,7 @@ fn the_four_sections_are_drawn_in_dams_own_order() {
             "  todoist  1 commit".to_string(),
             "Notices".to_string(),
             "  3d4e5f6  todoist  ours: \"mine\"  theirs: \"theirs\"".to_string(),
-            "  removed on todoist: \"old task\" is kept here".to_string(),
+            "  7a8b9c0  removed on todoist: \"old task\" is kept here".to_string(),
         ]
     );
 }
@@ -149,7 +149,50 @@ fn every_row_naming_an_oid_is_a_cursor_target() {
         .into_iter()
         .filter(|row| matches!(row, StatusRow::Change { .. }))
         .count();
-    assert_eq!(targets, 4, "staged two, working one, conflict one");
+    assert_eq!(
+        targets, 5,
+        "staged two, working one, conflict one, notice one"
+    );
+}
+
+#[test]
+fn a_notice_about_no_object_in_particular_draws_its_message_alone() {
+    let stage = Stage {
+        notices: vec![Notice {
+            kind: "pull_failed".to_string(),
+            oid: None,
+            remote: Some("todoist".to_string()),
+            message: "pull failed on todoist: the service did not answer".to_string(),
+        }],
+        ..full()
+    };
+
+    assert!(
+        drawn(&stage).contains(&"  pull failed on todoist: the service did not answer".to_string()),
+        "{:?}",
+        drawn(&stage)
+    );
+    assert_eq!(
+        stage
+            .rows()
+            .into_iter()
+            .filter(|row| matches!(row, StatusRow::Change { .. }))
+            .count(),
+        4,
+        "a notice naming no object is not a cursor target"
+    );
+}
+
+#[test]
+fn a_notice_that_names_an_object_carries_its_mark() {
+    let marked = full()
+        .rows()
+        .into_iter()
+        .find(|row| matches!(row, StatusRow::Change { oid, .. } if oid.as_str() == "7a8b9c0"));
+    let Some(StatusRow::Change { mark, .. }) = marked else {
+        panic!("the notice row is not a cursor target");
+    };
+    assert_eq!(mark, Mark::Notice);
 }
 
 #[test]

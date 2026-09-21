@@ -880,7 +880,7 @@ SKIP_AI_COMMIT=1 git commit -m "feat(domain): read a dam date and say where it s
   - `IconSet`, an enum of `NerdFont` and `Ascii`, with `IconSet::default()` of `NerdFont`. It carries
     no serde derive; the config reader in Task 25 maps its own string onto it.
   - `Mark`, an enum of `Priority(Priority)`, `Overdue`, `Today`, `Upcoming`, `Recurring`,
-    `Labels(usize)`, `Working`, `Staged`, `Unpushed` and `Conflict`.
+    `Labels(usize)`, `Working`, `Staged`, `Unpushed`, `Conflict` and `Notice`.
   - `Mark::glyph(self, set: IconSet) -> String` and `Mark::slot(self) -> Slot`.
   - `Mark::of_due(state: DueState) -> Option<Mark>` and
     `Mark::of_priority(priority: Priority) -> Option<Mark>`, both `None` where the spec draws
@@ -944,6 +944,16 @@ mod tests {
         }
     }
 
+    /// A notice is a decision waiting rather than the refusal a conflict is, so it draws below
+    /// red, and it draws the `!` the spec's Status screen shows in both sets: the Font Awesome
+    /// block has no glyph that reads as a notice more plainly than the character itself.
+    #[test]
+    fn a_notice_draws_the_same_bang_whichever_set_is_chosen() {
+        assert_eq!(Mark::Notice.glyph(IconSet::Ascii), "!");
+        assert_eq!(Mark::Notice.glyph(IconSet::NerdFont), "!");
+        assert_eq!(Mark::Notice.slot(), Slot::Orange);
+    }
+
     #[test]
     fn a_label_count_is_the_sigil_and_the_number() {
         assert_eq!(Mark::Labels(2).glyph(IconSet::Ascii), "@2");
@@ -973,6 +983,7 @@ mod tests {
             Mark::Staged,
             Mark::Unpushed,
             Mark::Conflict,
+            Mark::Notice,
         ] {
             let glyph = mark.glyph(IconSet::NerdFont);
             assert_eq!(glyph.chars().count(), 1, "{mark:?} drew {glyph:?}");
@@ -1007,8 +1018,8 @@ already names a cyan, use that colour.
 ```rust
 //! The marks a row carries: the object's own state, and the staging state `dam status` reports for
 //! it. Two sets draw them. The Nerd Font set uses glyphs from the Font Awesome block every Nerd
-//! Font patches in, each one cell wide; the plain set uses one character per mark, for a terminal
-//! whose font has none of those glyphs.
+//! Font patches in, each one cell wide, except the notice, which draws a plain `!` in both sets;
+//! the plain set uses one character per mark, for a terminal whose font has none of those glyphs.
 
 use crate::{DueState, Priority, Slot};
 
@@ -1032,6 +1043,7 @@ pub enum Mark {
     Staged,
     Unpushed,
     Conflict,
+    Notice,
 }
 
 impl Mark {
@@ -1063,6 +1075,7 @@ impl Mark {
             Self::Recurring | Self::Staged => Slot::Green,
             Self::Labels(_) => Slot::Purple,
             Self::Unpushed => Slot::Cyan,
+            Self::Notice => Slot::Orange,
         }
     }
 
@@ -1104,6 +1117,7 @@ impl Mark {
             (Self::Unpushed, IconSet::Ascii) => "^",
             (Self::Conflict, IconSet::NerdFont) => "\u{f00d}",
             (Self::Conflict, IconSet::Ascii) => "x",
+            (Self::Notice, _) => "!",
             (Self::Labels(_), _) => Self::labels_sigil(set),
         }
     }
@@ -2145,9 +2159,17 @@ impl StagingMarks for Stage { fn mark_of(&self, oid: &Oid) -> Option<Mark> }
 ```
 
 `mark_of` resolves in one order, most urgent first: a conflict beats staged, staged beats working,
-and working beats unpushed. `Stage::rows` draws the four sections the spec names, in `dam`'s own
-order, leaving an empty section out; an entirely empty stage is one line reading
-`nothing staged, nothing changed`, which is `dam`'s own wording.
+and working beats unpushed. `Stage::rows` draws the four sections the spec names, in `dam`'s own order, leaving an
+empty section out; an entirely empty stage is one line reading `nothing staged, nothing changed`,
+which is `dam`'s own wording.
+
+**A notice that names an object draws that object and is a cursor target.** The spec's Status mock
+draws a notice as `! 7a8b9c0  removed on todoist: ...`, with a mark and the short oid, and the
+sentence under the mock makes every row that names an oid a cursor target. The four kinds that name
+one (`removed_upstream`, `push_failed`, `event_cancelled`, `kind_changed`) therefore draw as a
+`StatusRow::Change` under `Mark::Notice` from Task 6; `pull_failed` is about a remote rather than an
+object, carries no oid, draws its message alone and is not a target. The pinned target count over
+the fixture is the number of rows that name an object, which is five.
 
 `Stage::summary` counts the arrays it is handed, so over the `full()` fixture below, which holds
 two staged changes and one unstaged one, it reads `2 staged  1 changed  1 unpushed  1 notice`. The
@@ -2226,7 +2248,7 @@ fn the_four_sections_are_drawn_in_dams_own_order() {
             "  todoist  1 commit".to_string(),
             "Notices".to_string(),
             "  3d4e5f6  todoist  ours: \"mine\"  theirs: \"theirs\"".to_string(),
-            "  removed on todoist: \"old task\" is kept here".to_string(),
+            "  7a8b9c0  removed on todoist: \"old task\" is kept here".to_string(),
         ]
     );
 }
@@ -2282,7 +2304,7 @@ fn every_row_naming_an_oid_is_a_cursor_target() {
         .into_iter()
         .filter(|row| matches!(row, StatusRow::Change { .. }))
         .count();
-    assert_eq!(targets, 4, "staged two, working one, conflict one");
+    assert_eq!(targets, 5, "staged two, working one, conflict one, notice one");
 }
 
 #[test]
@@ -2386,9 +2408,7 @@ impl Stage {
                     ),
                 });
             }
-            for notice in &self.notices {
-                rows.push(StatusRow::Line(format!("  {}", notice.message)));
-            }
+            rows.extend(self.notices.iter().map(Notice::row));
         }
         if rows.is_empty() {
             rows.push(StatusRow::Line("nothing staged, nothing changed".to_string()));
@@ -2423,6 +2443,21 @@ impl Change {
             format!("  ({})", self.fields.join(", "))
         };
         format!("  {word} {}  {}{fields}", self.oid.short(), self.subject)
+    }
+}
+
+impl Notice {
+    /// A notice that names an object is a cursor target, the way a conflict is. One about a remote
+    /// rather than an object, such as a failed pull, names none and draws its message alone.
+    fn row(&self) -> StatusRow {
+        match &self.oid {
+            Some(oid) => StatusRow::Change {
+                oid: oid.clone(),
+                mark: Mark::Notice,
+                text: format!("  {}  {}", oid.short(), self.message),
+            },
+            None => StatusRow::Line(format!("  {}", self.message)),
+        }
     }
 }
 

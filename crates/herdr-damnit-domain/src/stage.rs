@@ -125,9 +125,7 @@ impl Stage {
                     ),
                 });
             }
-            for notice in &self.notices {
-                rows.push(StatusRow::Line(format!("  {}", notice.message)));
-            }
+            rows.extend(self.notices.iter().map(Notice::row));
         }
         if rows.is_empty() {
             rows.push(StatusRow::Line(
@@ -164,6 +162,21 @@ impl Change {
             format!("  ({})", self.fields.join(", "))
         };
         format!("  {word} {}  {}{fields}", self.oid.short(), self.subject)
+    }
+}
+
+impl Notice {
+    /// A notice that names an object is a cursor target, the way a conflict is. One about a remote
+    /// rather than an object, such as a failed pull, names none and draws its message alone.
+    fn row(&self) -> StatusRow {
+        match &self.oid {
+            Some(oid) => StatusRow::Change {
+                oid: oid.clone(),
+                mark: Mark::Notice,
+                text: format!("  {}  {}", oid.short(), self.message),
+            },
+            None => StatusRow::Line(format!("  {}", self.message)),
+        }
     }
 }
 
