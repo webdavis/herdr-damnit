@@ -7846,6 +7846,15 @@ Every `herdr` read checks the envelope under `result` rather than the exit code,
 `herdr plugin list` returns exit 0 even when that envelope is an error. That behaviour is already in
 `herdr.rs` and moves with it.
 
+**Carried obligation from Task 24, for whoever reaches the composition root.**
+`Config::check_theme_against(&self, names: &[&str])` exists and has no production caller. The theme
+vocabulary is `herdr_damnit::theme::NAMES`, which lives in the binary crate, and the adapters crate
+cannot depend on the binary crate, so the parse cannot make this check and no adapters test can
+cover the wiring. Every `Config::load()` must be followed by
+`config.check_theme_against(theme::NAMES)?`, which Task 28 discharges in one place with its
+`load_config` helper. If it never lands, an unknown theme name is accepted in silence and the pane
+paints half of itself in the default colors.
+
 - [ ] **Step 1: Write the failing test**
 
 `crates/herdr-damnit-adapters/src/clock.rs`, inside `mod tests`:
@@ -8942,6 +8951,11 @@ hint line; `screens::draw` checks `app.refusal` first and draws that instead of 
 
 - [ ] **Step 4: Rewrite main.rs**
 
+**The theme check lands here**, discharging the obligation Task 24 leaves and Task 25 carries.
+`Config::parse` runs four checks and not the theme one, because the theme names live in this crate
+rather than in the adapters crate (Task 24, Ruling 15). `load_config` below is the single funnel
+both entry points take, so the check cannot be wired at one of them and forgotten at the other.
+
 ```rust
 //! The plugin binary. With no arguments it is the pane; the subcommands are the plugin actions.
 
@@ -8995,8 +9009,17 @@ fn main() -> std::process::ExitCode {
     }
 }
 
+/// The configuration plus the one check the adapters crate cannot make for itself: the theme
+/// vocabulary is this crate's, so `Config::parse` never sees it and every load goes through here.
+/// Skip this and an unknown theme name is accepted in silence and the pane paints with defaults.
+fn load_config() -> Result<Config, String> {
+    let config = Config::load()?;
+    config.check_theme_against(theme::NAMES)?;
+    Ok(config)
+}
+
 fn run_pane() -> std::process::ExitCode {
-    let config = match Config::load() {
+    let config = match load_config() {
         Ok(config) => config,
         Err(error) => return fail(&error),
     };
@@ -9011,7 +9034,7 @@ fn run_pane() -> std::process::ExitCode {
 }
 
 fn with_config(run: impl FnOnce(&Config) -> Result<String, String>) -> std::process::ExitCode {
-    report(Config::load().and_then(|config| run(&config)))
+    report(load_config().and_then(|config| run(&config)))
 }
 
 fn report(outcome: Result<String, String>) -> std::process::ExitCode {
