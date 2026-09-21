@@ -10,7 +10,7 @@ const LISTING: &str = r#"{"result":{"agents":[
   {"pane_id":"w2:p9","workspace_id":"w2","agent":"codex"}
 ]}}"#;
 
-/// `Herdr` is `Send + Sync`, so the fake records through a `Mutex` rather than a `RefCell`.
+/// `Herdr` is `Send + Sync`, so the fake records through a `Mutex`.
 struct FakeHerdr {
     calls: Mutex<Vec<Vec<String>>>,
     listing: String,
