@@ -2960,7 +2960,11 @@ a rule `dam` adds later reaches the status line as its message rather than being
 
 A `Store` failure is an exit 1 whose document says `store` and whose message names the SQLite busy
 timeout; it takes four extra words, because the usual cause is a long `dam pull` in another pane and
-a retry loop would queue behind it.
+a retry loop would queue behind it. **Both halves are required.** `kind` of `store` covers every
+store, config and io failure, so a disk error would otherwise be told to wait for a writer that is
+not there, and the message alone would attach the advice to a helper quoting SQLite's sentence back.
+A failure with no document at all is judged on its line, which is what a `dam` too old to print one
+leaves behind.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3070,6 +3074,39 @@ mod tests {
     }
 
     /// clap answers a bad command line before `dam` runs, so there is no document to read.
+    #[test]
+    fn a_failure_whose_own_kind_is_not_the_store_takes_no_retry_advice() {
+        let failure = classify(
+            Some(1),
+            Some(ErrorDocument {
+                kind: ErrorKind::Helper,
+                message: "the todoist helper says the database is locked".to_string(),
+                rule: None,
+                oids: Vec::new(),
+            }),
+            "",
+        );
+        assert_eq!(
+            message(&failure),
+            "the todoist helper says the database is locked"
+        );
+    }
+
+    #[test]
+    fn a_store_failure_that_is_not_the_busy_timeout_takes_no_retry_advice() {
+        let failure = classify(
+            Some(1),
+            Some(ErrorDocument {
+                kind: ErrorKind::Store,
+                message: "disk I/O error".to_string(),
+                rule: None,
+                oids: Vec::new(),
+            }),
+            "",
+        );
+        assert_eq!(message(&failure), "disk I/O error");
+    }
+
     #[test]
     fn a_command_line_dam_would_not_read_falls_back_to_its_first_line() {
         let failure = classify(
@@ -3380,10 +3417,18 @@ fn first_line(stderr: &str) -> String {
     line.strip_prefix("dam: ").unwrap_or(line).to_string()
 }
 
-/// SQLite's own words for a store another writer is holding past the five-second busy timeout.
+/// A held store is both halves `dam` reports: its own `store` kind, and SQLite's words for a
+/// writer holding the store past the five-second busy timeout. A disk error under the same kind
+/// takes no advice about waiting for another writer. A failure with no document is judged on its
+/// line alone, which is what a `dam` too old to print one leaves behind.
 fn is_store(error: &Option<ErrorDocument>, fallback: &str) -> bool {
     let said = match error {
-        Some(document) => document.message.as_str(),
+        Some(document) => {
+            if document.kind != ErrorKind::Store {
+                return false;
+            }
+            document.message.as_str()
+        }
         None => fallback,
     }
     .to_ascii_lowercase();
