@@ -1157,8 +1157,9 @@ Made while writing this design, on 2026-09-20:
 ### Needed from dam
 
 Each item names what the pane needs, why, and the `dam` change that would provide it. None of them
-blocks the pane shipping; the two marked **blocking a key** are the reason a key is absent or
-re-aimed in version one.
+blocks the pane shipping. The one marked **blocking a key** is why a key is re-aimed in version one,
+and the one marked **blocking a mark** is why a mark in the List screen's table stays unlit until
+`dam` publishes the field behind it.
 
 **1. Clear `done` on a task. Blocking a key.** `dam` version one has `done` and no inverse:
 `dam edit --help` lists no done flag, and there is no `undone` or `reopen` subcommand
@@ -1167,17 +1168,18 @@ client. Proposed: `dam edit <oid> --undone`, next to the other paired flags `--n
 `--no-deadline`, `--no-recurrence` and `--detach`, which already establish the shape. The pane would
 bind it to `u`, matching the completed list's existing key.
 
-**2. Discard a working change. Blocking a key.** `dam reset` unstages; nothing restores an object to
-its last committed state. The pane's `!` key has no verb to call. Proposed: `dam restore <oid>...`,
-git's own word for it since 2.23, refusing on an object with no commit behind it and naming that in
-the refusal. `dam reset --hard` would also work and reads worse, because `dam reset` already means
-unstage.
+**2. Discard a working change. DELIVERED in `dam` 0.2.0.** `dam reset` unstages, and
+`dam restore <oid>...` puts an object back to its last committed state: git's own word for it since
+2.23 (`crates/dam-cli/src/commands/restore.rs` at `webdavis/damnit` `84937a3`, declared at
+`args.rs` as `Restore(RestoreArgs)` and dispatched in `commands/mod.rs`). The pane's `!` key has its
+verb.
 
-The pane binds `!` only when the version the handshake read is at or above the one that adds
-`restore`, so the key appears the day the operator updates `dam` and no pane release is needed for
-it. `DAM_RESTORE` is 0.3.0 by assumption, the minor the pane expects the verb in; it moves if the
-verb ships in another one. That gate is the only place a key depends on a `dam` version, and it exists because a confirm
-followed by a refusal is the worst shape a destructive key can have.
+The pane binds `!` only when the version the handshake read is at or above `DAM_RESTORE`, which is
+0.2.0, the same release that sets the floor, so every `dam` the pane agrees to draw against clears
+it. The gate stays written and tested rather than deleted: it is the only place a key depends on a
+`dam` version, it costs one comparison, and it exists because a confirm followed by a refusal is the
+worst shape a destructive key can have. A floor that moves later shows up at the key rather than at
+the first refusal.
 
 **3. A JSON error envelope under `--json`. DELIVERED in `dam` 0.2.0.** Under `--json` and `--toon`
 a failure is one document on standard error and nothing else,
