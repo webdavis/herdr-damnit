@@ -636,6 +636,7 @@ version = "0.1.0"
 dependencies = [
  "herdr-damnit-application",
  "herdr-damnit-domain",
+ "jiff",
  "libc",
  "serde",
  "serde_json",

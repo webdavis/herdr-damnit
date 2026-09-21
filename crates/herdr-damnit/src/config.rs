@@ -68,17 +68,6 @@ pub enum Placement {
     Zoomed,
 }
 
-impl Placement {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Overlay => "overlay",
-            Self::Split => "split",
-            Self::Tab => "tab",
-            Self::Zoomed => "zoomed",
-        }
-    }
-}
-
 impl Config {
     /// Read the configuration file, or the defaults when there is none.
     pub fn load() -> Result<Self, String> {

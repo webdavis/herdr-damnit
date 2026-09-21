@@ -1,11 +1,11 @@
 //! The `open`, `toggle`, `focus` and `auto-open` actions. Each one resolves the plugin's pane in
 //! the current workspace, then drives the `herdr` CLI.
 
-use crate::config::{Config, Placement};
-use crate::herdr;
+use herdr_damnit_adapters::config::Placement;
+use herdr_damnit_adapters::{Config, herdr_cli as herdr, state};
+use herdr_damnit_domain::Views;
+
 use crate::placement;
-use crate::state;
-use crate::views::Views;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -126,7 +126,7 @@ pub fn view(argument: &str, config: &Config) -> Result<String, String> {
     let number: usize = argument
         .parse()
         .map_err(|_| format!("'{argument}' is not a view number"))?;
-    let views = Views::new(&config.views);
+    let views = Views::new(&config.views());
     let name = views.name_of_number(number).ok_or_else(|| {
         format!(
             "no view {number}: this config has {} views, 1 being the unfiltered list",
@@ -189,6 +189,10 @@ fn arrange_pane(neighbor: &str, config: &Config) -> Option<String> {
 mod tests {
     use super::*;
 
+    fn default_config() -> Config {
+        Config::parse("").expect("the default config")
+    }
+
     fn panes(ids: &[&str]) -> Vec<String> {
         ids.iter().map(|id| id.to_string()).collect()
     }
@@ -250,7 +254,7 @@ mod tests {
 
     #[test]
     fn auto_open_does_nothing_at_all_when_the_config_has_not_asked_for_it() {
-        let outcome = auto_open(&Config::default()).expect("no herdr call at all");
+        let outcome = auto_open(&default_config()).expect("no herdr call at all");
 
         assert_eq!(outcome, "auto_open is off");
     }
@@ -285,7 +289,7 @@ mod tests {
 
     #[test]
     fn a_view_number_past_the_end_names_how_many_views_there_are() {
-        let error = view("4", &Config::default()).expect_err("refuses");
+        let error = view("4", &default_config()).expect_err("refuses");
 
         assert!(error.contains("no view 4"), "{error}");
         assert!(error.contains("1 views"), "{error}");
@@ -293,7 +297,7 @@ mod tests {
 
     #[test]
     fn a_view_argument_that_is_not_a_number_is_refused() {
-        let error = view("today", &Config::default()).expect_err("refuses");
+        let error = view("today", &default_config()).expect_err("refuses");
 
         assert!(error.contains("not a view number"), "{error}");
     }

@@ -11,7 +11,6 @@ mod doctor;
 mod draft;
 mod edit;
 mod editor;
-mod herdr;
 mod history;
 mod icons;
 mod list;
@@ -24,10 +23,11 @@ mod refresh;
 mod reload;
 mod render;
 mod send;
-mod state;
 mod theme;
 mod tui;
 mod views;
+
+pub(crate) use herdr_damnit_adapters::state;
 
 use config::Config;
 use pane::Mode;
@@ -79,8 +79,10 @@ async fn main() -> std::process::ExitCode {
 
 /// Load the config and run a synchronous action against it, so a bad config only breaks the
 /// commands that actually need one.
-fn with_config(run: impl FnOnce(&Config) -> Result<String, String>) -> std::process::ExitCode {
-    report(Config::load().and_then(|config| run(&config)))
+fn with_config(
+    run: impl FnOnce(&herdr_damnit_adapters::Config) -> Result<String, String>,
+) -> std::process::ExitCode {
+    report(herdr_damnit_adapters::Config::load().and_then(|config| run(&config)))
 }
 
 fn report(outcome: Result<String, String>) -> std::process::ExitCode {

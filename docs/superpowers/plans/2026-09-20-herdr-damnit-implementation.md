@@ -8004,6 +8004,21 @@ Expected: PASS. The binary crate still compiles: it now reaches `state` and the 
 `herdr_damnit_adapters`, so replace its `mod state;` and `mod herdr;` declarations with
 `use herdr_damnit_adapters::{state, herdr_cli as herdr};` and fix the call sites the compiler names.
 
+**Ruling 19.** `herdr_cli` is declared `pub mod herdr_cli;` rather than `mod herdr_cli;`. `pane.rs`
+calls `open_plugin_pane`, `focus_plugin_pane`, `close_plugin_pane`, `resize_leading_pane` and
+`live_panes` by path, so the module itself has to be reachable and not only the `CliHerdr` re-export.
+
+**Ruling 20.** Step 4's "fix the call sites the compiler names" is larger than one import.
+`herdr_cli::open_plugin_pane` takes the adapters crate's own `Config`, so `pane.rs` moves onto
+`herdr_damnit_adapters::Config` and `herdr_damnit_domain::Views` in this task, and `main.rs` loads
+that config for the five pane actions while `tui::run` and `doctor::run` keep loading the Todoist-era
+`config::Config` until Task 28 deletes it. That re-aim orphaned three items, each deleted here with
+the one test that only exercised it, because `clippy -D warnings` fails on dead code and all three
+files leave the tree in Task 28: `Placement::as_str` in `crates/herdr-damnit/src/config.rs`,
+`Side::split_direction` in `placement.rs`, and `Views::name_of_number` in `views.rs`. `send.rs` calls
+the herdr client through the port (`herdr_damnit_application::Herdr::call(&CliHerdr, args)`) because
+the free `herdr::call` became that trait method.
+
 - [ ] **Step 5: Commit**
 
 ```bash

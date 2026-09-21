@@ -14,17 +14,6 @@ pub enum Side {
     Down,
 }
 
-impl Side {
-    /// The direction both `herdr plugin pane open --direction` and `herdr pane resize
-    /// --direction` take for this side.
-    pub fn split_direction(self) -> &'static str {
-        match self {
-            Self::Right => "right",
-            Self::Down => "down",
-        }
-    }
-}
-
 /// The calling pane's share of the tab once the Todoist pane has taken `width`: whatever is
 /// left. `herdr pane resize` moves the calling pane to this ratio to get there.
 pub fn leading_share(width: f32) -> f32 {
@@ -34,12 +23,6 @@ pub fn leading_share(width: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_side_maps_onto_the_direction_herdr_splits_in() {
-        assert_eq!(Side::Right.split_direction(), "right");
-        assert_eq!(Side::Down.split_direction(), "down");
-    }
 
     #[test]
     fn the_calling_panes_share_is_the_rest_of_the_tab() {

@@ -118,7 +118,7 @@ pub async fn send(
 
 /// The production herdr call, the CLI herdr names for its plugins.
 pub fn cli(args: &[&str]) -> Result<String, String> {
-    crate::herdr::call(args)
+    herdr_damnit_application::Herdr::call(&herdr_damnit_adapters::CliHerdr, args)
 }
 
 /// Write the brief into the workspace's agent pane and focus it.

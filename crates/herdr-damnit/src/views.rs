@@ -75,14 +75,6 @@ impl Views {
         }
     }
 
-    /// The name of the nth view, counting from 1 the way the number keys and the `view` actions
-    /// do.
-    pub fn name_of_number(&self, number: usize) -> Option<&str> {
-        self.views
-            .get(number.checked_sub(1)?)
-            .map(|view| view.name.as_str())
-    }
-
     /// The view a number key asks for. `1` is the first view, which is the unfiltered list; a
     /// digit outside the numbered range, and any other character, ask for nothing.
     pub fn by_number(key: char) -> Option<usize> {
@@ -183,16 +175,6 @@ mod tests {
         assert_eq!(views.current().name, "work");
         assert!(!views.select_named("nothing"));
         assert_eq!(views.current().name, "work");
-    }
-
-    #[test]
-    fn views_are_named_by_their_number_counting_from_one() {
-        let views = Views::new(&configured(&["today"]));
-
-        assert_eq!(views.name_of_number(1), Some(ALL));
-        assert_eq!(views.name_of_number(2), Some("today"));
-        assert_eq!(views.name_of_number(3), None);
-        assert_eq!(views.name_of_number(0), None);
     }
 
     #[test]

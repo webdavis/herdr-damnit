@@ -6,9 +6,13 @@ use std::process::Command;
 
 use crate::config::{Config, Placement};
 
-/// One `herdr` call by its arguments, for a caller that spells its own.
-pub fn call(args: &[&str]) -> Result<String, String> {
-    run(args)
+/// The production herdr client: the CLI herdr names for its plugins.
+pub struct CliHerdr;
+
+impl herdr_damnit_application::Herdr for CliHerdr {
+    fn call(&self, args: &[&str]) -> Result<String, String> {
+        run(args)
+    }
 }
 
 pub fn focus_plugin_pane(pane: &str) -> Result<String, String> {
