@@ -55,12 +55,14 @@ fn every_path_gets_one_heading_and_its_objects_sit_under_it() {
         task("2", "proj/home", "water the plants"),
         task("1", "proj/dotfiles", "ship the pin bump"),
         task("3", "proj/dotfiles", "refresh the roster row"),
+        task("4", "proj/dotfiles/", "bump the roster pin"),
     ];
 
     assert_eq!(
         drawn(&rows(&objects, &NoMarks, style())),
         vec![
             "proj/dotfiles".to_string(),
+            "  bump the roster pin".to_string(),
             "  refresh the roster row".to_string(),
             "  ship the pin bump".to_string(),
             "proj/home".to_string(),
@@ -76,6 +78,12 @@ fn an_object_with_no_path_is_grouped_rather_than_dropped() {
         drawn(&rows),
         vec!["(no path)".to_string(), "  file taxes".to_string()]
     );
+}
+
+#[test]
+fn a_path_that_is_nothing_but_separators_is_no_path_either() {
+    let rows = rows(&[task("1", "/", "file taxes")], &NoMarks, style());
+    assert_eq!(rows[0].text(), "(no path)");
 }
 
 #[test]
