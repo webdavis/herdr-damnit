@@ -2148,7 +2148,11 @@ pub struct Stage {
     pub notices: Vec<Notice>,
 }
 
-pub enum StatusRow { Heading(String), Change { oid: Oid, mark: Mark, text: String }, Line(String) }
+pub enum StatusRow {
+    Heading(String),
+    Change { oid: Oid, mark: Mark, text: String },
+    Line { mark: Option<Mark>, text: String },
+}
 
 impl Stage {
     pub fn is_clean(&self) -> bool;
@@ -2171,6 +2175,11 @@ does not publish them leaves the set empty, which costs those rows their mark an
 `Stage::rows` draws the four sections the spec names, in `dam`'s own order, leaving an
 empty section out; an entirely empty stage is one line reading `nothing staged, nothing changed`,
 which is `dam`'s own wording.
+
+**The Unpushed row carries the up arrow the spec's mock draws.** Every other row of that screen now
+takes its mark from a field, so the one plain row that shows one takes it the same way rather than
+leaving the renderer to know which heading it sits under: `StatusRow::Line` carries an
+`Option<Mark>`, `Some(Mark::Unpushed)` on a remote's row and `None` everywhere else.
 
 **A notice that names an object draws that object and is a cursor target.** The spec's Status mock
 draws a notice as `! 7a8b9c0  removed on todoist: ...`, with a mark and the short oid, and the
@@ -2259,8 +2268,8 @@ fn drawn(stage: &Stage) -> Vec<String> {
         .rows()
         .iter()
         .map(|row| match row {
-            StatusRow::Heading(text) | StatusRow::Line(text) => text.clone(),
-            StatusRow::Change { text, .. } => text.clone(),
+            StatusRow::Heading(text) => text.clone(),
+            StatusRow::Line { text, .. } | StatusRow::Change { text, .. } => text.clone(),
         })
         .collect()
 }
@@ -2393,6 +2402,34 @@ fn every_row_naming_an_oid_is_a_cursor_target() {
     assert_eq!(
         targets, 5,
         "staged two, working one, conflict one, notice one"
+    );
+}
+
+/// The spec's Status mock leads the unpushed row with the up arrow, and every other plain row with
+/// nothing, so the mark is a field rather than a character the renderer has to know to add.
+#[test]
+fn the_unpushed_row_carries_its_own_mark_and_no_other_plain_row_does() {
+    let mut stage = full();
+    stage.notices.push(Notice {
+        kind: "pull_failed".to_string(),
+        oid: None,
+        remote: Some("todoist".to_string()),
+        message: "pull failed on todoist: the service did not answer".to_string(),
+    });
+
+    let marks: Vec<Option<Mark>> = stage
+        .rows()
+        .into_iter()
+        .filter_map(|row| match row {
+            StatusRow::Line { mark, .. } => Some(mark),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        marks,
+        vec![Some(Mark::Unpushed), Some(Mark::Unpushed), None],
+        "two unpushed remotes and one notice about no object"
     );
 }
 
@@ -2536,6 +2573,67 @@ deriving `Clone`, `Debug`, `PartialEq` and `Eq`, plus:
 
 use crate::{Mark, Oid, StagingMarks};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Op {
+    Create,
+    Update,
+    Delete,
+}
+
+/// One object `dam` reports as changed, and the field names the change touches.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Change {
+    pub oid: Oid,
+    pub op: Op,
+    pub subject: String,
+    pub fields: Vec<String>,
+}
+
+/// How far one remote is behind the local commits, and which objects those commits touch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Unpushed {
+    pub remote: String,
+    pub commits: u64,
+    /// The objects whose changes sit in this remote's unpushed commits. Empty when the `dam` that
+    /// answered does not publish them, which costs the rows their unpushed mark and nothing else.
+    pub oids: Vec<Oid>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Conflict {
+    pub oid: Oid,
+    pub remote: String,
+    pub ours: String,
+    pub theirs: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Notice {
+    pub kind: String,
+    pub oid: Option<Oid>,
+    pub remote: Option<String>,
+    pub message: String,
+}
+
+/// The five arrays `dam status --json` answers with.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Stage {
+    pub staged: Vec<Change>,
+    pub unstaged: Vec<Change>,
+    pub unpushed: Vec<Unpushed>,
+    pub conflicts: Vec<Conflict>,
+    pub notices: Vec<Notice>,
+}
+
+/// One line of the Status screen. A `Change` row names an oid and is therefore a cursor target; a
+/// `Line` names none, and carries a mark only where the screen draws one beside it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StatusRow {
+    Heading(String),
+    Change { oid: Oid, mark: Mark, text: String },
+    Line { mark: Option<Mark>, text: String },
+}
+
 impl Stage {
     pub fn is_clean(&self) -> bool {
         self.staged.is_empty()
@@ -2582,12 +2680,15 @@ impl Stage {
         if self.unpushed.iter().any(|remote| remote.commits > 0) {
             rows.push(StatusRow::Heading("Unpushed".to_string()));
             for remote in self.unpushed.iter().filter(|remote| remote.commits > 0) {
-                rows.push(StatusRow::Line(format!(
-                    "  {}  {} commit{}",
-                    remote.remote,
-                    remote.commits,
-                    if remote.commits == 1 { "" } else { "s" }
-                )));
+                rows.push(StatusRow::Line {
+                    mark: Some(Mark::Unpushed),
+                    text: format!(
+                        "  {}  {} commit{}",
+                        remote.remote,
+                        remote.commits,
+                        if remote.commits == 1 { "" } else { "s" }
+                    ),
+                });
             }
         }
         if !self.conflicts.is_empty() || !self.notices.is_empty() {
@@ -2608,7 +2709,10 @@ impl Stage {
             rows.extend(self.notices.iter().map(Notice::row));
         }
         if rows.is_empty() {
-            rows.push(StatusRow::Line("nothing staged, nothing changed".to_string()));
+            rows.push(StatusRow::Line {
+                mark: None,
+                text: "nothing staged, nothing changed".to_string(),
+            });
         }
         rows
     }
@@ -2659,7 +2763,10 @@ impl Notice {
                 mark: Mark::Notice,
                 text: format!("  {}  {}", oid.short(), self.message),
             },
-            None => StatusRow::Line(format!("  {}", self.message)),
+            None => StatusRow::Line {
+                mark: None,
+                text: format!("  {}", self.message),
+            },
         }
     }
 }
@@ -8736,8 +8843,9 @@ Expected: FAIL with `no variant named 'ReadDone'`
 with `Screen::next` and `Screen::previous` cycling `List`, `Status`, `Done` and leaving `Detail`
 alone, and `App::show` submitting `ReadDone` and `ReadLog` on the first entry to `Done`.
 
-`screens/status.rs` renders `app.stage.rows()`, each `StatusRow::Change` coloured by its mark and the
-rest plain. `screens/done.rs` groups by completion date, newest first, with the uncommitted ones
+`screens/status.rs` renders `app.stage.rows()`, each `StatusRow::Change` coloured by its mark, each
+`StatusRow::Line` drawing its `Option<Mark>` in the same mark column when it carries one, and a
+`Heading` plain. No row's mark is inferred from the section it sits under. `screens/done.rs` groups by completion date, newest first, with the uncommitted ones
 under a `not committed` heading at the top, and draws `YYYY-MM-DD  <subject>` with the date first.
 
 - [ ] **Step 4: Run the tests to verify they pass**

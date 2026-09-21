@@ -55,12 +55,13 @@ pub struct Stage {
     pub notices: Vec<Notice>,
 }
 
-/// One line of the Status screen. A `Change` row names an oid and is therefore a cursor target.
+/// One line of the Status screen. A `Change` row names an oid and is therefore a cursor target; a
+/// `Line` names none, and carries a mark only where the screen draws one beside it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StatusRow {
     Heading(String),
     Change { oid: Oid, mark: Mark, text: String },
-    Line(String),
+    Line { mark: Option<Mark>, text: String },
 }
 
 impl Stage {
@@ -109,12 +110,15 @@ impl Stage {
         if self.unpushed.iter().any(|remote| remote.commits > 0) {
             rows.push(StatusRow::Heading("Unpushed".to_string()));
             for remote in self.unpushed.iter().filter(|remote| remote.commits > 0) {
-                rows.push(StatusRow::Line(format!(
-                    "  {}  {} commit{}",
-                    remote.remote,
-                    remote.commits,
-                    if remote.commits == 1 { "" } else { "s" }
-                )));
+                rows.push(StatusRow::Line {
+                    mark: Some(Mark::Unpushed),
+                    text: format!(
+                        "  {}  {} commit{}",
+                        remote.remote,
+                        remote.commits,
+                        if remote.commits == 1 { "" } else { "s" }
+                    ),
+                });
             }
         }
         if !self.conflicts.is_empty() || !self.notices.is_empty() {
@@ -135,9 +139,10 @@ impl Stage {
             rows.extend(self.notices.iter().map(Notice::row));
         }
         if rows.is_empty() {
-            rows.push(StatusRow::Line(
-                "nothing staged, nothing changed".to_string(),
-            ));
+            rows.push(StatusRow::Line {
+                mark: None,
+                text: "nothing staged, nothing changed".to_string(),
+            });
         }
         rows
     }
@@ -188,7 +193,10 @@ impl Notice {
                 mark: Mark::Notice,
                 text: format!("  {}  {}", oid.short(), self.message),
             },
-            None => StatusRow::Line(format!("  {}", self.message)),
+            None => StatusRow::Line {
+                mark: None,
+                text: format!("  {}", self.message),
+            },
         }
     }
 }

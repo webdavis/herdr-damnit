@@ -58,8 +58,8 @@ fn drawn(stage: &Stage) -> Vec<String> {
         .rows()
         .iter()
         .map(|row| match row {
-            StatusRow::Heading(text) | StatusRow::Line(text) => text.clone(),
-            StatusRow::Change { text, .. } => text.clone(),
+            StatusRow::Heading(text) => text.clone(),
+            StatusRow::Line { text, .. } | StatusRow::Change { text, .. } => text.clone(),
         })
         .collect()
 }
@@ -192,6 +192,34 @@ fn every_row_naming_an_oid_is_a_cursor_target() {
     assert_eq!(
         targets, 5,
         "staged two, working one, conflict one, notice one"
+    );
+}
+
+/// The spec's Status mock leads the unpushed row with the up arrow, and every other plain row with
+/// nothing, so the mark is a field rather than a character the renderer has to know to add.
+#[test]
+fn the_unpushed_row_carries_its_own_mark_and_no_other_plain_row_does() {
+    let mut stage = full();
+    stage.notices.push(Notice {
+        kind: "pull_failed".to_string(),
+        oid: None,
+        remote: Some("todoist".to_string()),
+        message: "pull failed on todoist: the service did not answer".to_string(),
+    });
+
+    let marks: Vec<Option<Mark>> = stage
+        .rows()
+        .into_iter()
+        .filter_map(|row| match row {
+            StatusRow::Line { mark, .. } => Some(mark),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        marks,
+        vec![Some(Mark::Unpushed), Some(Mark::Unpushed), None],
+        "two unpushed remotes and one notice about no object"
     );
 }
 
