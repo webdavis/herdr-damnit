@@ -634,6 +634,7 @@ name = "herdr-damnit-application"
 version = "0.1.0"
 dependencies = [
  "herdr-damnit-domain",
+ "serde",
  "serde_json",
 ]
 
