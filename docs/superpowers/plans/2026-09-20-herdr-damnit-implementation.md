@@ -2324,7 +2324,13 @@ fn an_empty_stage_says_so_in_dams_own_words() {
     };
     assert!(stage.is_clean());
     assert!(!full().is_clean());
-    assert_eq!(drawn(&stage), vec!["nothing staged, nothing changed"]);
+    assert_eq!(
+        stage.rows(),
+        vec![StatusRow::Line {
+            mark: None,
+            text: "nothing staged, nothing changed".to_string(),
+        }]
+    );
 }
 
 #[test]
