@@ -2204,10 +2204,16 @@ fn full() -> Stage {
             change("5d6e7f8", Op::Update, "refresh the roster row", &["due", "priority"]),
         ],
         unstaged: vec![change("9a0b1c2", Op::Update, "water the plants", &["subject"])],
-        unpushed: vec![Unpushed {
-            remote: "todoist".to_string(),
-            commits: 1,
-        }],
+        unpushed: vec![
+            Unpushed {
+                remote: "todoist".to_string(),
+                commits: 1,
+            },
+            Unpushed {
+                remote: "work".to_string(),
+                commits: 2,
+            },
+        ],
         conflicts: vec![Conflict {
             oid: Oid::new("3d4e5f6"),
             remote: "todoist".to_string(),
@@ -2246,6 +2252,7 @@ fn the_four_sections_are_drawn_in_dams_own_order() {
             "  changed  9a0b1c2  water the plants  (subject)".to_string(),
             "Unpushed".to_string(),
             "  todoist  1 commit".to_string(),
+            "  work  2 commits".to_string(),
             "Notices".to_string(),
             "  3d4e5f6  todoist  ours: \"mine\"  theirs: \"theirs\"".to_string(),
             "  7a8b9c0  removed on todoist: \"old task\" is kept here".to_string(),
@@ -2309,7 +2316,8 @@ fn every_row_naming_an_oid_is_a_cursor_target() {
 
 #[test]
 fn the_summary_counts_what_the_status_line_carries() {
-    assert_eq!(full().summary(), "2 staged  1 changed  1 unpushed  1 notice");
+    assert_eq!(full().summary(), "2 staged  1 changed  3 unpushed  1 notice");
+    assert_eq!(full().unpushed_commits(), 3, "two remotes, one and two commits");
 }
 
 #[test]
