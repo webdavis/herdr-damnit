@@ -203,6 +203,51 @@ fn a_notice_that_names_an_object_carries_its_mark() {
 }
 
 #[test]
+fn a_conflict_value_is_quoted_without_leaking_rust_escaping() {
+    let stage = Stage {
+        conflicts: vec![Conflict {
+            oid: Oid::new("3d4e5f6"),
+            remote: "todoist".to_string(),
+            ours: "say \"hi\"".to_string(),
+            theirs: "a\\b".to_string(),
+        }],
+        ..full()
+    };
+
+    assert!(
+        drawn(&stage)
+            .contains(&"  3d4e5f6  todoist  ours: \"say \"hi\"\"  theirs: \"a\\b\"".to_string()),
+        "{:?}",
+        drawn(&stage)
+    );
+}
+
+#[test]
+fn a_conflict_value_that_spans_lines_still_draws_as_one_row() {
+    let stage = Stage {
+        conflicts: vec![Conflict {
+            oid: Oid::new("3d4e5f6"),
+            remote: "todoist".to_string(),
+            ours: "line\nbreak".to_string(),
+            theirs: "plain".to_string(),
+        }],
+        ..full()
+    };
+
+    assert!(
+        drawn(&stage).iter().all(|line| !line.contains('\n')),
+        "{:?}",
+        drawn(&stage)
+    );
+    assert!(
+        drawn(&stage)
+            .contains(&"  3d4e5f6  todoist  ours: \"line break\"  theirs: \"plain\"".to_string()),
+        "{:?}",
+        drawn(&stage)
+    );
+}
+
+#[test]
 fn the_summary_counts_what_the_status_line_carries() {
     assert_eq!(
         full().summary(),

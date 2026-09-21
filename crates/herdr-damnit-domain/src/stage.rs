@@ -114,11 +114,11 @@ impl Stage {
                     oid: conflict.oid.clone(),
                     mark: Mark::Conflict,
                     text: format!(
-                        "  {}  {}  ours: {:?}  theirs: {:?}",
+                        "  {}  {}  ours: \"{}\"  theirs: \"{}\"",
                         conflict.oid.short(),
                         conflict.remote,
-                        conflict.ours,
-                        conflict.theirs
+                        one_line(&conflict.ours),
+                        one_line(&conflict.theirs)
                     ),
                 });
             }
@@ -131,6 +131,12 @@ impl Stage {
         }
         rows
     }
+}
+
+/// A conflicting value as one row can carry it. The quotes are the spec's; a newline becomes a
+/// space so a multi-line value cannot break the row it is drawn in.
+fn one_line(value: &str) -> String {
+    value.replace(['\n', '\r'], " ")
 }
 
 fn section(rows: &mut Vec<StatusRow>, heading: &str, changes: &[Change], mark: Mark) {
