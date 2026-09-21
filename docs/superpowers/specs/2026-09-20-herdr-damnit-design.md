@@ -231,12 +231,14 @@ link.
 
 ### The version handshake
 
-On start, before the first read, the pane runs `dam --version`. The binary prints `dam 0.1.0`
-(measured; `clap`'s standard `-V`). The pane parses `dam <major>.<minor>.<patch>` and compares
-against two compiled-in constants:
+On start, before the first read, the pane runs `dam --version`. The binary prints `dam 0.2.0`
+(`crates/dam-cli/Cargo.toml` at `webdavis/damnit` `84937a3`; `clap`'s standard `-V`). The pane
+parses `dam <major>.<minor>.<patch>` and compares against two compiled-in constants:
 
-- `DAM_MINIMUM`, the lowest version whose command surface the pane was written against.
-- `DAM_KNOWN`, the highest version the pane was tested against.
+- `DAM_MINIMUM`, the lowest version whose command surface the pane was written against: 0.2.0,
+  which is where the error document, exit 4 for every refusal, and a change document with no
+  embedded object arrived, all three of which the pane reads.
+- `DAM_KNOWN`, the highest version the pane was tested against: 0.2.0.
 
 Below 1.0, the minor is the breaking axis, so the rule is:
 
@@ -1171,7 +1173,8 @@ unstage.
 
 The pane binds `!` only when the version the handshake read is at or above the one that adds
 `restore`, so the key appears the day the operator updates `dam` and no pane release is needed for
-it. That gate is the only place a key depends on a `dam` version, and it exists because a confirm
+it. `DAM_RESTORE` is 0.3.0 by assumption, the minor the pane expects the verb in; it moves if the
+verb ships in another one. That gate is the only place a key depends on a `dam` version, and it exists because a confirm
 followed by a refusal is the worst shape a destructive key can have.
 
 **3. A JSON error envelope under `--json`. DELIVERED in `dam` 0.2.0.** Under `--json` and `--toon`
