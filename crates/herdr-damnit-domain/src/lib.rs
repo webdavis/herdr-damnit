@@ -1,5 +1,6 @@
 //! The pane's rules, over `std` and `jiff` alone: no serde, no ratatui, no process call.
 
+mod brief;
 mod cursor;
 mod dates;
 mod marks;
@@ -11,6 +12,7 @@ mod slot;
 mod stage;
 mod views;
 
+pub use brief::brief;
 pub use cursor::Cursor;
 pub use dates::{Date, DueState, due_state, long, parse_date, short};
 pub use marks::{IconSet, Mark};
