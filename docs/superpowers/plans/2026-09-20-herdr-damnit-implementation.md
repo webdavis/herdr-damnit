@@ -1968,13 +1968,17 @@ mod tests {
     fn view_one_is_the_open_list_because_dam_ls_with_no_query_includes_done_objects() {
         let views = Views::new(&[]);
         assert_eq!(views.len(), 1);
+        assert!(!views.is_empty());
         assert_eq!(views.current().name, OPEN);
         assert_eq!(views.current().query, OPEN_QUERY);
     }
 
     #[test]
     fn the_configured_views_follow_it_in_the_order_they_were_written() {
-        let views = Views::new(&[view("today", "!done & due:today"), view("deep", "effort:deep")]);
+        let views = Views::new(&[
+            view("today", "!done & due:today"),
+            view("deep", "effort:deep"),
+        ]);
         assert_eq!(
             views.names().collect::<Vec<_>>(),
             vec!["open", "today", "deep"]
@@ -2201,9 +2205,19 @@ fn full() -> Stage {
     Stage {
         staged: vec![
             change("1a2b3c4", Op::Create, "ship the pin bump", &[]),
-            change("5d6e7f8", Op::Update, "refresh the roster row", &["due", "priority"]),
+            change(
+                "5d6e7f8",
+                Op::Update,
+                "refresh the roster row",
+                &["due", "priority"],
+            ),
         ],
-        unstaged: vec![change("9a0b1c2", Op::Update, "water the plants", &["subject"])],
+        unstaged: vec![change(
+            "9a0b1c2",
+            Op::Update,
+            "water the plants",
+            &["subject"],
+        )],
         unpushed: vec![
             Unpushed {
                 remote: "todoist".to_string(),
@@ -2269,6 +2283,10 @@ fn an_empty_section_is_left_out_entirely() {
         notices: Vec::new(),
         ..full()
     };
+    assert!(
+        !stage.is_clean(),
+        "a stage with staged changes is not clean"
+    );
     let drawn = drawn(&stage);
     assert_eq!(drawn.first().map(String::as_str), Some("Staged"));
     assert!(!drawn.iter().any(|line| line == "Working"), "{drawn:?}");
@@ -2285,12 +2303,14 @@ fn an_empty_stage_says_so_in_dams_own_words() {
         notices: Vec::new(),
     };
     assert!(stage.is_clean());
+    assert!(!full().is_clean());
     assert_eq!(drawn(&stage), vec!["nothing staged, nothing changed"]);
 }
 
 #[test]
 fn a_conflict_outranks_staged_and_staged_outranks_working() {
     let stage = full();
+    assert_eq!(stage.staged_count(), 2);
     assert_eq!(stage.mark_of(&Oid::new("3d4e5f6")), Some(Mark::Conflict));
     assert_eq!(stage.mark_of(&Oid::new("1a2b3c4")), Some(Mark::Staged));
     assert_eq!(stage.mark_of(&Oid::new("9a0b1c2")), Some(Mark::Working));
@@ -2298,9 +2318,26 @@ fn a_conflict_outranks_staged_and_staged_outranks_working() {
 }
 
 #[test]
+fn an_object_both_staged_and_in_conflict_shows_the_conflict_mark() {
+    let mut stage = full();
+    stage.staged.push(change(
+        "3d4e5f6",
+        Op::Update,
+        "the conflicted one",
+        &["due"],
+    ));
+    assert_eq!(stage.mark_of(&Oid::new("3d4e5f6")), Some(Mark::Conflict));
+}
+
+#[test]
 fn an_object_both_staged_and_changed_again_shows_the_staged_mark() {
     let mut stage = full();
-    stage.unstaged.push(change("1a2b3c4", Op::Update, "ship the pin bump", &["body"]));
+    stage.unstaged.push(change(
+        "1a2b3c4",
+        Op::Update,
+        "ship the pin bump",
+        &["body"],
+    ));
     assert_eq!(stage.mark_of(&Oid::new("1a2b3c4")), Some(Mark::Staged));
 }
 
@@ -2311,23 +2348,124 @@ fn every_row_naming_an_oid_is_a_cursor_target() {
         .into_iter()
         .filter(|row| matches!(row, StatusRow::Change { .. }))
         .count();
-    assert_eq!(targets, 5, "staged two, working one, conflict one, notice one");
+    assert_eq!(
+        targets, 5,
+        "staged two, working one, conflict one, notice one"
+    );
+}
+
+#[test]
+fn a_notice_about_no_object_in_particular_draws_its_message_alone() {
+    let stage = Stage {
+        notices: vec![Notice {
+            kind: "pull_failed".to_string(),
+            oid: None,
+            remote: Some("todoist".to_string()),
+            message: "pull failed on todoist: the service did not answer".to_string(),
+        }],
+        ..full()
+    };
+
+    assert!(
+        drawn(&stage).contains(&"  pull failed on todoist: the service did not answer".to_string()),
+        "{:?}",
+        drawn(&stage)
+    );
+    assert_eq!(
+        stage
+            .rows()
+            .into_iter()
+            .filter(|row| matches!(row, StatusRow::Change { .. }))
+            .count(),
+        4,
+        "a notice naming no object is not a cursor target"
+    );
+}
+
+#[test]
+fn a_notice_that_names_an_object_carries_its_mark() {
+    let marked = full()
+        .rows()
+        .into_iter()
+        .find(|row| matches!(row, StatusRow::Change { oid, .. } if oid.as_str() == "7a8b9c0"));
+    let Some(StatusRow::Change { mark, .. }) = marked else {
+        panic!("the notice row is not a cursor target");
+    };
+    assert_eq!(mark, Mark::Notice);
+}
+
+#[test]
+fn a_conflict_value_is_quoted_without_leaking_rust_escaping() {
+    let stage = Stage {
+        conflicts: vec![Conflict {
+            oid: Oid::new("3d4e5f6"),
+            remote: "todoist".to_string(),
+            ours: "say \"hi\"".to_string(),
+            theirs: "a\\b".to_string(),
+        }],
+        ..full()
+    };
+
+    assert!(
+        drawn(&stage)
+            .contains(&"  3d4e5f6  todoist  ours: \"say \"hi\"\"  theirs: \"a\\b\"".to_string()),
+        "{:?}",
+        drawn(&stage)
+    );
+}
+
+#[test]
+fn a_conflict_value_that_spans_lines_still_draws_as_one_row() {
+    let stage = Stage {
+        conflicts: vec![Conflict {
+            oid: Oid::new("3d4e5f6"),
+            remote: "todoist".to_string(),
+            ours: "line\nbreak".to_string(),
+            theirs: "plain".to_string(),
+        }],
+        ..full()
+    };
+
+    assert!(
+        drawn(&stage).iter().all(|line| !line.contains('\n')),
+        "{:?}",
+        drawn(&stage)
+    );
+    assert!(
+        drawn(&stage)
+            .contains(&"  3d4e5f6  todoist  ours: \"line break\"  theirs: \"plain\"".to_string()),
+        "{:?}",
+        drawn(&stage)
+    );
 }
 
 #[test]
 fn the_summary_counts_what_the_status_line_carries() {
-    assert_eq!(full().summary(), "2 staged  1 changed  3 unpushed  1 notice");
-    assert_eq!(full().unpushed_commits(), 3, "two remotes, one and two commits");
+    assert_eq!(
+        full().summary(),
+        "2 staged  1 changed  3 unpushed  1 notice"
+    );
+    assert_eq!(
+        full().unpushed_commits(),
+        3,
+        "two remotes, one and two commits"
+    );
 }
 
 #[test]
 fn one_commit_and_two_commits_are_both_spelled_correctly() {
     let one = Stage {
-        unpushed: vec![Unpushed { remote: "todoist".to_string(), commits: 1 }],
+        unpushed: vec![Unpushed {
+            remote: "todoist".to_string(),
+            commits: 1,
+        }],
         ..full()
     };
     let two = Stage {
-        unpushed: vec![Unpushed { remote: "todoist".to_string(), commits: 2 }],
+        unpushed: vec![Unpushed {
+            remote: "todoist".to_string(),
+            commits: 2,
+        }],
         ..full()
     };
     assert!(drawn(&one).contains(&"  todoist  1 commit".to_string()));
@@ -2544,7 +2682,7 @@ object has nothing for is left out rather than written empty.
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Kind, Priority, TaskFields, parse_date};
+    use crate::{Kind, Oid, Priority, TaskFields, parse_date};
 
     fn task() -> Object {
         Object {
@@ -2615,6 +2753,23 @@ mod tests {
         };
 
         assert!(brief(&event, "").starts_with("dam event: file taxes\n"));
+    }
+
+    #[test]
+    fn a_deadline_sits_under_the_due_date_when_the_task_carries_one() {
+        let dated = Object {
+            task: Some(TaskFields {
+                deadline: parse_date("2026-10-01"),
+                ..task().task.expect("a task")
+            }),
+            ..task()
+        };
+
+        assert!(
+            brief(&dated, "").contains("due: 2026-09-20\ndeadline: 2026-10-01\n"),
+            "{}",
+            brief(&dated, "")
+        );
     }
 
     #[test]
@@ -2746,7 +2901,11 @@ mod tests {
     use super::*;
 
     fn at(major: u32, minor: u32, patch: u32) -> DamVersion {
-        DamVersion { major, minor, patch }
+        DamVersion {
+            major,
+            minor,
+            patch,
+        }
     }
 
     #[test]
@@ -2762,6 +2921,7 @@ mod tests {
         assert_eq!(parse_version("dam"), None);
         assert_eq!(parse_version("dam 0.1"), None);
         assert_eq!(parse_version("dam version one"), None);
+        assert_eq!(parse_version("dam 0.1.0.4"), None);
     }
 
     #[test]
@@ -2919,6 +3079,7 @@ SKIP_AI_COMMIT=1 git commit -m "feat(domain): compare the dam this pane found ag
 - Create: `crates/herdr-damnit-domain/src/failure.rs`
 - Create: `crates/herdr-damnit-domain/src/failure/kind.rs`
 - Create: `crates/herdr-damnit-domain/src/failure/rule.rs`
+- Create: `crates/herdr-damnit-domain/src/failure/tests.rs`
 - Modify: `crates/herdr-damnit-domain/src/lib.rs`
 
 **Interfaces:**
@@ -2974,211 +3135,219 @@ leaves behind.
 
 - [ ] **Step 1: Write the failing tests**
 
-`crates/herdr-damnit-domain/src/failure.rs`, inside `mod tests`:
+`crates/herdr-damnit-domain/src/failure/tests.rs`, which is a file of its own because the module
+and its tests together run past the 300 line ideal:
 
 ```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
+use super::*;
 
-    fn refusal(rule: &str, message: &str, oids: &[&str]) -> ErrorDocument {
-        ErrorDocument {
-            kind: ErrorKind::Refused,
-            message: message.to_string(),
-            rule: Some(Rule::named(rule)),
-            oids: oids.iter().map(|oid| Oid::new(*oid)).collect(),
-        }
+fn refusal(rule: &str, message: &str, oids: &[&str]) -> ErrorDocument {
+    ErrorDocument {
+        kind: ErrorKind::Refused,
+        message: message.to_string(),
+        rule: Some(Rule::named(rule)),
+        oids: oids.iter().map(|oid| Oid::new(*oid)).collect(),
     }
+}
 
-    #[test]
-    fn a_refusal_carries_dams_own_sentence_its_rule_and_its_oids() {
-        let failure = classify(
-            Some(4),
-            Some(refusal(
-                "blocked",
-                "98d8780 cannot be completed: child a9db854 is open",
-                &["98d8780", "a9db854"],
-            )),
-            "",
-        );
-        assert_eq!(
-            failure,
-            Failure::Refused {
-                rule: Rule::Blocked,
-                said: "98d8780 cannot be completed: child a9db854 is open".to_string(),
-                oids: vec![Oid::new("98d8780"), Oid::new("a9db854")],
-            }
-        );
-        assert_eq!(message(&failure), "98d8780 cannot be completed: child a9db854 is open");
-        assert!(leaves_model_untouched(&failure));
-    }
-
-    #[test]
-    fn every_rule_word_dam_publishes_has_a_variant_of_its_own() {
-        for word in [
+#[test]
+fn a_refusal_carries_dams_own_sentence_its_rule_and_its_oids() {
+    let failure = classify(
+        Some(4),
+        Some(refusal(
             "blocked",
-            "cycle",
-            "exclusive_label",
-            "unknown_category",
-            "no_such_object",
-            "no_working_object",
-            "no_such_remote",
-            "not_a_task",
-            "not_an_event",
-            "not_completed",
-            "not_committed",
-            "dirty_on_pull",
-            "move_inside_itself",
-            "nothing_to_commit",
-            "needs_an_answer",
-            "needs_an_editor",
-            "unresolved_conflicts",
-            "missing_credential",
-        ] {
-            assert!(
-                !matches!(Rule::named(word), Rule::Unknown(_)),
-                "{word} has no variant"
-            );
+            "98d8780 cannot be completed: child a9db854 is open",
+            &["98d8780", "a9db854"],
+        )),
+        "",
+    );
+    assert_eq!(
+        failure,
+        Failure::Refused {
+            rule: Rule::Blocked,
+            said: "98d8780 cannot be completed: child a9db854 is open".to_string(),
+            oids: vec![Oid::new("98d8780"), Oid::new("a9db854")],
         }
-    }
+    );
+    assert_eq!(
+        message(&failure),
+        "98d8780 cannot be completed: child a9db854 is open"
+    );
+    assert!(leaves_model_untouched(&failure));
+}
 
-    #[test]
-    fn a_rule_this_pane_has_not_heard_of_keeps_its_word() {
-        assert_eq!(
-            Rule::named("invented_tomorrow"),
-            Rule::Unknown("invented_tomorrow".to_string())
-        );
-    }
-
-    #[test]
-    fn an_empty_stage_is_a_refusal_now_rather_than_an_ordinary_failure() {
-        let failure = classify(
-            Some(4),
-            Some(refusal("nothing_to_commit", "nothing to commit", &[])),
-            "",
-        );
-        assert!(leaves_model_untouched(&failure));
-        assert_eq!(message(&failure), "nothing to commit");
-    }
-
-    #[test]
-    fn a_held_store_says_who_is_holding_it_and_what_to_press() {
-        let failure = classify(
-            Some(1),
-            Some(ErrorDocument {
-                kind: ErrorKind::Store,
-                message: "database is locked".to_string(),
-                rule: None,
-                oids: Vec::new(),
-            }),
-            "",
-        );
-        assert_eq!(
-            message(&failure),
-            "database is locked; another dam is writing, press R to retry."
-        );
-    }
-
-    /// clap answers a bad command line before `dam` runs, so there is no document to read.
-    #[test]
-    fn a_failure_whose_own_kind_is_not_the_store_takes_no_retry_advice() {
-        let failure = classify(
-            Some(1),
-            Some(ErrorDocument {
-                kind: ErrorKind::Helper,
-                message: "the todoist helper says the database is locked".to_string(),
-                rule: None,
-                oids: Vec::new(),
-            }),
-            "",
-        );
-        assert_eq!(
-            message(&failure),
-            "the todoist helper says the database is locked"
-        );
-    }
-
-    #[test]
-    fn a_store_failure_that_is_not_the_busy_timeout_takes_no_retry_advice() {
-        let failure = classify(
-            Some(1),
-            Some(ErrorDocument {
-                kind: ErrorKind::Store,
-                message: "disk I/O error".to_string(),
-                rule: None,
-                oids: Vec::new(),
-            }),
-            "",
-        );
-        assert_eq!(message(&failure), "disk I/O error");
-    }
-
-    #[test]
-    fn a_command_line_dam_would_not_read_falls_back_to_its_first_line() {
-        let failure = classify(
-            Some(2),
-            None,
-            "error: unexpected argument '--nope'\n\nUsage: dam ls [QUERY]\n",
-        );
-        assert_eq!(message(&failure), "error: unexpected argument '--nope'");
+#[test]
+fn every_rule_word_dam_publishes_has_a_variant_of_its_own() {
+    for word in [
+        "blocked",
+        "cycle",
+        "exclusive_label",
+        "unknown_category",
+        "no_such_object",
+        "no_working_object",
+        "no_such_remote",
+        "not_a_task",
+        "not_an_event",
+        "not_completed",
+        "not_committed",
+        "dirty_on_pull",
+        "move_inside_itself",
+        "nothing_to_commit",
+        "needs_an_answer",
+        "needs_an_editor",
+        "unresolved_conflicts",
+        "missing_credential",
+    ] {
         assert!(
-            !leaves_model_untouched(&failure),
-            "a bad command line is this pane's own bug, not a rule dam kept"
+            !matches!(Rule::named(word), Rule::Unknown(_)),
+            "{word} has no variant"
         );
     }
+}
 
-    #[test]
-    fn a_dam_too_old_to_print_a_document_still_reaches_the_status_line() {
-        let failure = classify(Some(1), None, "dam: no object matches \"zzzzzzz\"\n");
-        assert_eq!(message(&failure), "no object matches \"zzzzzzz\"");
-    }
+#[test]
+fn a_rule_this_pane_has_not_heard_of_keeps_its_word() {
+    assert_eq!(
+        Rule::named("invented_tomorrow"),
+        Rule::Unknown("invented_tomorrow".to_string())
+    );
+}
 
-    #[test]
-    fn a_cancelled_run_is_never_an_error_banner() {
-        assert_eq!(
-            classify(Some(3), None, ""),
-            Failure::Cancelled { killed: false }
-        );
-        assert!(leaves_model_untouched(&classify(Some(3), None, "")));
-        assert_eq!(message(&classify(Some(3), None, "")), "cancelled");
-        assert_eq!(
-            message(&Failure::Cancelled { killed: true }),
-            "cancelled (killed)"
-        );
-        assert!(leaves_model_untouched(&Failure::Cancelled { killed: false }));
-    }
+#[test]
+fn an_empty_stage_is_a_refusal_now_rather_than_an_ordinary_failure() {
+    let failure = classify(
+        Some(4),
+        Some(refusal("nothing_to_commit", "nothing to commit", &[])),
+        "",
+    );
+    assert!(leaves_model_untouched(&failure));
+    assert_eq!(message(&failure), "nothing to commit");
+}
 
-    #[test]
-    fn a_dam_that_is_not_there_says_how_to_get_one() {
-        assert_eq!(
-            message(&Failure::NotInstalled),
-            "dam is not on PATH; install it with cargo install damnit, then press R."
-        );
-    }
+#[test]
+fn a_held_store_says_who_is_holding_it_and_what_to_press() {
+    let failure = classify(
+        Some(1),
+        Some(ErrorDocument {
+            kind: ErrorKind::Store,
+            message: "database is locked".to_string(),
+            rule: None,
+            oids: Vec::new(),
+        }),
+        "",
+    );
+    assert_eq!(
+        message(&failure),
+        "database is locked; another dam is writing, press R to retry."
+    );
+    let without_document = classify(Some(1), None, "dam: database is locked\n");
+    assert_eq!(
+        message(&without_document),
+        "database is locked; another dam is writing, press R to retry."
+    );
+}
 
-    #[test]
-    fn output_that_will_not_parse_says_so_without_quoting_it() {
-        assert_eq!(
-            message(&Failure::Unreadable),
-            "dam answered with something this pane could not read."
-        );
-    }
+/// clap answers a bad command line before `dam` runs, so there is no document to read.
+#[test]
+fn a_failure_whose_own_kind_is_not_the_store_takes_no_retry_advice() {
+    let failure = classify(
+        Some(1),
+        Some(ErrorDocument {
+            kind: ErrorKind::Helper,
+            message: "the todoist helper says the database is locked".to_string(),
+            rule: None,
+            oids: Vec::new(),
+        }),
+        "",
+    );
+    assert_eq!(
+        message(&failure),
+        "the todoist helper says the database is locked"
+    );
+}
 
-    #[test]
-    fn a_read_past_its_deadline_names_the_command_and_the_wait() {
-        assert_eq!(
-            message(&Failure::Deadline("dam ls".to_string())),
-            "dam ls took longer than 30s and was cancelled."
-        );
-    }
+#[test]
+fn a_store_failure_that_is_not_the_busy_timeout_takes_no_retry_advice() {
+    let failure = classify(
+        Some(1),
+        Some(ErrorDocument {
+            kind: ErrorKind::Store,
+            message: "disk I/O error".to_string(),
+            rule: None,
+            oids: Vec::new(),
+        }),
+        "",
+    );
+    assert_eq!(message(&failure), "disk I/O error");
+}
 
-    #[test]
-    fn a_signal_death_with_no_code_is_reported_rather_than_swallowed() {
-        assert_eq!(
-            message(&classify(None, None, "")),
-            "dam was killed before it answered."
-        );
-    }
+#[test]
+fn a_command_line_dam_would_not_read_falls_back_to_its_first_line() {
+    let failure = classify(
+        Some(2),
+        None,
+        "error: unexpected argument '--nope'\n\nUsage: dam ls [QUERY]\n",
+    );
+    assert_eq!(message(&failure), "error: unexpected argument '--nope'");
+    assert!(
+        !leaves_model_untouched(&failure),
+        "a bad command line is this pane's own bug, not a rule dam kept"
+    );
+}
+
+#[test]
+fn a_dam_too_old_to_print_a_document_still_reaches_the_status_line() {
+    let failure = classify(Some(1), None, "dam: no object matches \"zzzzzzz\"\n");
+    assert_eq!(message(&failure), "no object matches \"zzzzzzz\"");
+}
+
+#[test]
+fn a_cancelled_run_is_never_an_error_banner() {
+    assert_eq!(
+        classify(Some(3), None, ""),
+        Failure::Cancelled { killed: false }
+    );
+    assert!(leaves_model_untouched(&classify(Some(3), None, "")));
+    assert_eq!(message(&classify(Some(3), None, "")), "cancelled");
+    assert_eq!(
+        message(&Failure::Cancelled { killed: true }),
+        "cancelled (killed)"
+    );
+    assert!(leaves_model_untouched(&Failure::Cancelled {
+        killed: false
+    }));
+}
+
+#[test]
+fn a_dam_that_is_not_there_says_how_to_get_one() {
+    assert_eq!(
+        message(&Failure::NotInstalled),
+        "dam is not on PATH; install it with cargo install damnit, then press R."
+    );
+}
+
+#[test]
+fn output_that_will_not_parse_says_so_without_quoting_it() {
+    assert_eq!(
+        message(&Failure::Unreadable),
+        "dam answered with something this pane could not read."
+    );
+}
+
+#[test]
+fn a_read_past_its_deadline_names_the_command_and_the_wait() {
+    assert_eq!(
+        message(&Failure::Deadline("dam ls".to_string())),
+        "dam ls took longer than 30s and was cancelled."
+    );
+}
+
+#[test]
+fn a_signal_death_with_no_code_is_reported_rather_than_swallowed() {
+    assert_eq!(
+        message(&classify(None, None, "")),
+        "dam was killed before it answered."
+    );
 }
 ```
 
@@ -3336,6 +3505,9 @@ mod rule;
 
 pub use kind::ErrorKind;
 pub use rule::Rule;
+
+#[cfg(test)]
+mod tests;
 
 /// The read deadline the pane cancels a local read at. A SQLite read that takes this long is a
 /// wedged store rather than a slow one.
