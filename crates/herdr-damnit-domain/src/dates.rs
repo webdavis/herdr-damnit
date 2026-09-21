@@ -82,6 +82,15 @@ mod tests {
         );
     }
 
+    /// `dam` writes a date as `YYYY-MM-DD` and a timestamp as that plus a time, so the leading ten
+    /// characters are the whole grammar. A date spelled any other width is no date here, whatever
+    /// else could read it.
+    #[test]
+    fn a_date_that_is_not_ten_characters_wide_is_no_date() {
+        assert_eq!(parse_date("20260920"), None);
+        assert_eq!(parse_date("+002026-09-20"), None);
+    }
+
     #[test]
     fn something_that_is_not_a_date_is_no_date() {
         assert_eq!(parse_date(""), None);
