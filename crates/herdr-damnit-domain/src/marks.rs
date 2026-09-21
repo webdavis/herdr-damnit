@@ -187,9 +187,9 @@ mod tests {
         assert_eq!(Mark::of_due(DueState::None), None);
     }
 
-    /// Every Nerd Font glyph is one cell wide, which is what keeps the columns of the pane lined
-    /// up; a glyph a font has none of is drawn as a two-cell replacement box and puts every column
-    /// after it out by one.
+    /// Every Nerd Font mark is one character, which is what lets the drawing crate measure a row
+    /// by counting marks. How many cells that character occupies is the terminal's answer, over
+    /// codepoints whose East Asian Width is Ambiguous, so the drawing crate measures it.
     #[test]
     fn every_nerd_font_glyph_is_a_single_character() {
         for mark in [
