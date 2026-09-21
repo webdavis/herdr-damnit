@@ -30,10 +30,12 @@ fn full() -> Stage {
             Unpushed {
                 remote: "todoist".to_string(),
                 commits: 1,
+                oids: Vec::new(),
             },
             Unpushed {
                 remote: "work".to_string(),
                 commits: 2,
+                oids: vec![Oid::new("c3d4e5f")],
             },
         ],
         conflicts: vec![Conflict {
@@ -123,6 +125,31 @@ fn a_conflict_outranks_staged_and_staged_outranks_working() {
     assert_eq!(stage.mark_of(&Oid::new("1a2b3c4")), Some(Mark::Staged));
     assert_eq!(stage.mark_of(&Oid::new("9a0b1c2")), Some(Mark::Working));
     assert_eq!(stage.mark_of(&Oid::new("nothing")), None);
+}
+
+#[test]
+fn an_object_only_in_an_unpushed_commit_carries_the_unpushed_mark() {
+    assert_eq!(full().mark_of(&Oid::new("c3d4e5f")), Some(Mark::Unpushed));
+}
+
+#[test]
+fn a_working_change_outranks_an_unpushed_commit() {
+    let mut stage = full();
+    stage.unpushed[1].oids.push(Oid::new("9a0b1c2"));
+    assert_eq!(stage.mark_of(&Oid::new("9a0b1c2")), Some(Mark::Working));
+}
+
+#[test]
+fn a_dam_that_sends_no_oids_leaves_the_unpushed_set_empty() {
+    let stage = Stage {
+        unpushed: vec![Unpushed {
+            remote: "work".to_string(),
+            commits: 2,
+            oids: Vec::new(),
+        }],
+        ..full()
+    };
+    assert_eq!(stage.mark_of(&Oid::new("c3d4e5f")), None);
 }
 
 #[test]
@@ -266,6 +293,7 @@ fn one_commit_and_two_commits_are_both_spelled_correctly() {
         unpushed: vec![Unpushed {
             remote: "todoist".to_string(),
             commits: 1,
+            oids: Vec::new(),
         }],
         ..full()
     };
@@ -273,6 +301,7 @@ fn one_commit_and_two_commits_are_both_spelled_correctly() {
         unpushed: vec![Unpushed {
             remote: "todoist".to_string(),
             commits: 2,
+            oids: Vec::new(),
         }],
         ..full()
     };

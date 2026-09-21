@@ -19,11 +19,14 @@ pub struct Change {
     pub fields: Vec<String>,
 }
 
-/// How far one remote is behind the local commits.
+/// How far one remote is behind the local commits, and which objects those commits touch.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Unpushed {
     pub remote: String,
     pub commits: u64,
+    /// The objects whose changes sit in this remote's unpushed commits. Empty when the `dam` that
+    /// answered does not publish them, which costs the rows their unpushed mark and nothing else.
+    pub oids: Vec<Oid>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -75,6 +78,13 @@ impl Stage {
 
     pub fn staged_count(&self) -> usize {
         self.staged.len()
+    }
+
+    /// Whether an object's changes sit in some remote's unpushed commits.
+    pub fn is_unpushed(&self, oid: &Oid) -> bool {
+        self.unpushed
+            .iter()
+            .any(|remote| remote.oids.iter().any(|unpushed| unpushed == oid))
     }
 
     pub fn unpushed_commits(&self) -> u64 {
@@ -195,6 +205,9 @@ impl StagingMarks for Stage {
         }
         if self.unstaged.iter().any(|change| &change.oid == oid) {
             return Some(Mark::Working);
+        }
+        if self.is_unpushed(oid) {
+            return Some(Mark::Unpushed);
         }
         None
     }
