@@ -1,4 +1,4 @@
-# herdr-todoist
+# herdr-damnit
 
 A Todoist pane for the [herdr](https://herdr.dev) terminal multiplexer: a
 [ratatui](https://ratatui.rs) terminal user interface in a plugin-owned pane, talking to the
@@ -12,14 +12,14 @@ switch with a picker or a number key. The editing keys follow.
 ## Install
 
 ```bash
-herdr plugin install webdavis/herdr-todoist
+herdr plugin install webdavis/herdr-damnit
 ```
 
-The install step builds the binary into `bin/herdr-todoist` with cargo, so a Rust toolchain is
+The install step builds the binary into `bin/herdr-damnit` with cargo, so a Rust toolchain is
 needed. A local checkout is linked instead, and builds itself:
 
 ```bash
-cargo build --release --locked && mkdir -p bin && cp target/release/herdr-todoist bin/
+cargo build --release --locked && mkdir -p bin && cp target/release/herdr-damnit bin/
 herdr plugin link .
 ```
 
@@ -27,7 +27,7 @@ herdr plugin link .
 
 The plugin never stores a token and never reads one from a file. Configure one of two
 indirections in `config.toml` in the plugin's config directory (`herdr plugin config-dir
-herdr-todoist` prints it):
+herdr-damnit` prints it):
 
 ```toml
 # A command whose standard output is the token, for example a password manager CLI.
@@ -60,11 +60,11 @@ already has one, and `focus` reports that there is no pane rather than jumping a
 A pane the operator closed by hand counts as no pane.
 
 Bind them in `~/.config/herdr/config.toml` as `plugin_action` keys (the fully qualified name is
-`herdr-todoist.<action>`), or invoke one directly:
+`herdr-damnit.<action>`), or invoke one directly:
 
 ```bash
-herdr plugin action invoke toggle --plugin herdr-todoist
-herdr plugin action invoke doctor --plugin herdr-todoist
+herdr plugin action invoke toggle --plugin herdr-damnit
+herdr plugin action invoke doctor --plugin herdr-damnit
 ```
 
 `doctor` reports that the token resolved, and which indirection it came from, then that
@@ -122,7 +122,7 @@ focus off the pane you switched to. It is `false` by default, which keeps the pa
 The pane opens on the view it last read, so its local copy fills the rows before anything is
 asked of the API. That local copy is one file per view in a `cache` directory under the plugin's
 state directory, which herdr names in `HERDR_PLUGIN_STATE_DIR` and which is
-`~/.local/state/herdr/plugins/state/herdr-todoist` for a run outside herdr. Each file holds the
+`~/.local/state/herdr/plugins/state/herdr-damnit` for a run outside herdr. Each file holds the
 API's own task, project and section documents. Every successful read replaces the file for
 that view. A file that cannot be read, because it was half written or came from an older version
 of the plugin, is treated as no cache at all: the pane opens empty rather than refusing to open.
@@ -189,7 +189,7 @@ keys and the pane's hint line all share; raising it means adding entries in all 
 [[keys.command]]
 key = "prefix+ctrl+t"
 type = "plugin_action"
-command = "herdr-todoist.view:2"
+command = "herdr-damnit.view:2"
 description = "todoist: show view 2"
 ```
 
