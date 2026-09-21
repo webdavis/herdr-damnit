@@ -156,6 +156,27 @@ mod tests {
     fn a_label_count_is_the_sigil_and_the_number() {
         assert_eq!(Mark::Labels(2).glyph(IconSet::Ascii), "@2");
         assert_eq!(Mark::Labels(0).glyph(IconSet::Ascii), "@0");
+        assert_eq!(Mark::Labels(2).glyph(IconSet::NerdFont), "\u{f02c}2");
+    }
+
+    /// The codepoint each mark draws is a contract with the spec, which names every one of these
+    /// by the Font Awesome glyph it is: flag, warning, clock, calendar, refresh, pencil, plus, up
+    /// arrow, cross and tags.
+    #[test]
+    fn every_nerd_font_mark_draws_the_codepoint_it_is_named_for() {
+        for (mark, glyph) in [
+            (Mark::Priority(priority(1)), "\u{f024}"),
+            (Mark::Overdue, "\u{f071}"),
+            (Mark::Today, "\u{f017}"),
+            (Mark::Upcoming, "\u{f073}"),
+            (Mark::Recurring, "\u{f021}"),
+            (Mark::Working, "\u{f040}"),
+            (Mark::Staged, "\u{f067}"),
+            (Mark::Unpushed, "\u{f062}"),
+            (Mark::Conflict, "\u{f00d}"),
+        ] {
+            assert_eq!(mark.glyph(IconSet::NerdFont), glyph, "{mark:?}");
+        }
     }
 
     #[test]
