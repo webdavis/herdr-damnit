@@ -3,9 +3,6 @@
 
 use crate::{Date, DueState, IconSet, Mark, Object, Oid, Slot, due_state, short};
 
-#[cfg(test)]
-mod tests;
-
 /// The heading an object with no path of its own is grouped under.
 const NO_PATH: &str = "(no path)";
 
@@ -138,3 +135,6 @@ fn push(segments: &mut Vec<Segment>, mark: Mark, icons: IconSet) {
         slot: mark.slot(),
     });
 }
+
+#[cfg(test)]
+mod tests;
