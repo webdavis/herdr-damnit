@@ -283,7 +283,9 @@ the stream rather than hunting a line in it:
           "a9db854060d1943ef9eb9f6d7a8ac0b1ace45d77"]}}
 ```
 
-`kind` is one of `refused`, `store`, `helper`, `credential`, `parse`, `usage` and `cancelled`.
+`kind` is one of `refused`, `store`, `helper`, `credential`, `parse`, `usage`, `cancelled` and
+`editor` (`crates/dam-cli/src/error.rs`, `kind`). A client reads a word it does not know as an
+unknown kind and keeps `dam`'s own sentence, rather than failing the parse and losing it.
 `rule` is one stable snake_case word on a refusal and null on every other kind: `blocked`, `cycle`,
 `exclusive_label`, `unknown_category`, `no_such_object`, `no_working_object`, `no_such_remote`,
 `not_a_task`, `not_an_event`, `not_completed`, `not_committed`, `dirty_on_pull`,

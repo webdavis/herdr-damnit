@@ -2911,6 +2911,7 @@ SKIP_AI_COMMIT=1 git commit -m "feat(domain): compare the dam this pane found ag
 
 **Files:**
 - Create: `crates/herdr-damnit-domain/src/failure.rs`
+- Create: `crates/herdr-damnit-domain/src/failure/kind.rs`
 - Create: `crates/herdr-damnit-domain/src/failure/rule.rs`
 - Modify: `crates/herdr-damnit-domain/src/lib.rs`
 
@@ -2920,7 +2921,7 @@ SKIP_AI_COMMIT=1 git commit -m "feat(domain): compare the dam this pane found ag
 
 ```rust
 pub enum Rule { /* dam's eighteen rule words, plus Unknown(String) */ }
-pub enum ErrorKind { Refused, Store, Helper, Credential, Parse, Usage, Cancelled }
+pub enum ErrorKind { /* dam's eight kind words, plus Unknown(String) */ }
 
 pub struct ErrorDocument {
     pub kind: ErrorKind,
@@ -3143,7 +3144,82 @@ mod tests {
 Run: `cargo test -p herdr-damnit-domain --locked failure`
 Expected: FAIL, the test module naming types that do not exist yet.
 
-- [ ] **Step 3: Write the rule words**
+- [ ] **Step 3: Write the kind words**
+
+`crates/herdr-damnit-domain/src/failure/kind.rs`:
+
+```rust
+//! The `kind` `dam` names on an error document. One word per kind, and the word itself for one
+//! `dam` adds later, so a parser has somewhere to put a word this pane has not heard of.
+
+/// Every kind word `dam` 0.2.0 publishes, and the word itself for one it adds later.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ErrorKind {
+    Refused,
+    Store,
+    Helper,
+    Credential,
+    Parse,
+    Usage,
+    Cancelled,
+    Editor,
+    Unknown(String),
+}
+
+impl ErrorKind {
+    pub fn named(word: &str) -> Self {
+        match word {
+            "refused" => Self::Refused,
+            "store" => Self::Store,
+            "helper" => Self::Helper,
+            "credential" => Self::Credential,
+            "parse" => Self::Parse,
+            "usage" => Self::Usage,
+            "cancelled" => Self::Cancelled,
+            "editor" => Self::Editor,
+            other => Self::Unknown(other.to_string()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_kind_word_dam_publishes_has_a_variant_of_its_own() {
+        for word in [
+            "refused",
+            "store",
+            "helper",
+            "credential",
+            "parse",
+            "usage",
+            "cancelled",
+            "editor",
+        ] {
+            assert!(
+                !matches!(ErrorKind::named(word), ErrorKind::Unknown(_)),
+                "{word} has no variant"
+            );
+        }
+    }
+
+    #[test]
+    fn a_kind_this_pane_has_not_heard_of_keeps_its_word_rather_than_failing_the_parse() {
+        assert_eq!(
+            ErrorKind::named("invented_tomorrow"),
+            ErrorKind::Unknown("invented_tomorrow".to_string())
+        );
+    }
+}
+```
+
+`dam`'s `kind()` emits eight words (`crates/dam-cli/src/error.rs`), `editor` among them, and
+`Unknown` is what keeps a ninth reaching the status line with `dam`'s own sentence instead of being
+dropped, the way `Rule::Unknown` does for a rule word.
+
+- [ ] **Step 4: Write the rule words**
 
 `crates/herdr-damnit-domain/src/failure/rule.rs`:
 
@@ -3202,7 +3278,7 @@ impl Rule {
 }
 ```
 
-- [ ] **Step 4: Write the module**
+- [ ] **Step 5: Write the module**
 
 `crates/herdr-damnit-domain/src/failure.rs`, above its test module:
 
@@ -3212,25 +3288,15 @@ impl Rule {
 
 use crate::Oid;
 
+mod kind;
 mod rule;
 
+pub use kind::ErrorKind;
 pub use rule::Rule;
 
 /// The read deadline the pane cancels a local read at. A SQLite read that takes this long is a
 /// wedged store rather than a slow one.
 pub const READ_DEADLINE_SECONDS: u64 = 30;
-
-/// The `kind` of `dam`'s error document.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ErrorKind {
-    Refused,
-    Store,
-    Helper,
-    Credential,
-    Parse,
-    Usage,
-    Cancelled,
-}
 
 /// `dam`'s error document, parsed by the adapters crate and handed here.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -3336,12 +3402,12 @@ pub use failure::{
 };
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [ ] **Step 6: Run the tests to verify they pass**
 
 Run: `cargo test --workspace --locked && cargo clippy --workspace --all-targets --locked -- -D warnings`
 Expected: PASS and clean.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add -A

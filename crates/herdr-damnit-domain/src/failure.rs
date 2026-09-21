@@ -3,25 +3,15 @@
 
 use crate::Oid;
 
+mod kind;
 mod rule;
 
+pub use kind::ErrorKind;
 pub use rule::Rule;
 
 /// The read deadline the pane cancels a local read at. A SQLite read that takes this long is a
 /// wedged store rather than a slow one.
 pub const READ_DEADLINE_SECONDS: u64 = 30;
-
-/// The `kind` of `dam`'s error document.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ErrorKind {
-    Refused,
-    Store,
-    Helper,
-    Credential,
-    Parse,
-    Usage,
-    Cancelled,
-}
 
 /// `dam`'s error document, parsed by the adapters crate and handed here.
 #[derive(Clone, Debug, PartialEq, Eq)]
