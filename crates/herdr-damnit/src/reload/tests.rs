@@ -51,7 +51,7 @@ pub(crate) async fn serve_forever(status: &'static str, body: &'static str) -> S
 /// another wrote and none of them reaches the operator's own state directory.
 pub(crate) fn stores(name: &str) -> (Cache, Queue) {
     let dir = std::env::temp_dir().join(format!(
-        "herdr-todoist-store-{name}-{}-{:?}",
+        "herdr-damnit-store-{name}-{}-{:?}",
         std::process::id(),
         std::thread::current().id()
     ));
@@ -109,7 +109,7 @@ async fn a_failed_connection_reports_its_error_without_probing_the_network() {
 #[tokio::test]
 async fn a_refresh_reuses_the_client_instead_of_rerunning_token_command() {
     let counter = std::env::temp_dir().join(format!(
-        "herdr-todoist-token-command-runs-{}",
+        "herdr-damnit-token-command-runs-{}",
         std::process::id()
     ));
     let _ = std::fs::remove_file(&counter);

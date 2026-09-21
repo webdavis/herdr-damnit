@@ -268,7 +268,7 @@ mod tests {
     #[test]
     fn the_default_palette_is_reviewrs_own_mocha() {
         // The slots reviewr pins as literals, which is what makes a name mean one color in both
-        // panes: `crates/herdr-todoist/src/theme.rs` and reviewr's `src/theme.rs` agree here.
+        // panes: `crates/herdr-damnit/src/theme.rs` and reviewr's `src/theme.rs` agree here.
         let palette = resolve(None);
 
         assert_eq!(palette.text, Color::Rgb(0xcd, 0xd6, 0xf4));

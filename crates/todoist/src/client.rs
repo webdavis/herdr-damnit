@@ -26,7 +26,7 @@ impl Client {
     /// loopback double in tests.
     pub fn new(base_url: impl Into<String>, token: Token) -> Result<Self, Error> {
         let http = reqwest::Client::builder()
-            .user_agent(concat!("herdr-todoist/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("herdr-damnit/", env!("CARGO_PKG_VERSION")))
             .build()
             .map_err(|error| Error::Network(error.to_string()))?;
         Ok(Self {

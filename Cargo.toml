@@ -1,13 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["crates/todoist", "crates/herdr-todoist"]
-default-members = ["crates/herdr-todoist"]
+members = ["crates/todoist", "crates/herdr-damnit"]
+default-members = ["crates/herdr-damnit"]
 
 [workspace.package]
 edition = "2024"
 version = "0.1.0"
 license = "MIT"
-repository = "https://github.com/webdavis/herdr-todoist"
+repository = "https://github.com/webdavis/herdr-damnit"
 
 [workspace.dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

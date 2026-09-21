@@ -26,7 +26,7 @@ pub fn open_plugin_pane(
     focus: &str,
     config: &Config,
 ) -> Result<String, String> {
-    let plugin = std::env::var("HERDR_PLUGIN_ID").unwrap_or_else(|_| "herdr-todoist".to_string());
+    let plugin = std::env::var("HERDR_PLUGIN_ID").unwrap_or_else(|_| "herdr-damnit".to_string());
     let mut args = vec![
         "plugin",
         "pane",

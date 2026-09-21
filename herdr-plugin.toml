@@ -1,12 +1,12 @@
-id = "herdr-todoist"
-name = "Todoist"
+id = "herdr-damnit"
+name = "damnit"
 version = "0.1.0"
 # `herdr plugin pane open --entrypoint` and the plugin pane registry this plugin's actions drive
 # are present from 0.7.0. `S` also reads `herdr agent list`, whose `pane_id`, `workspace_id` and
 # `agent` fields are documented from 0.7.5, which is what sets the floor.
 min_herdr_version = "0.7.5"
 platforms = ["macos", "linux"]
-description = "A Todoist pane: the terminal UI, and a doctor check for the API token."
+description = "A task pane over the dam task store: the terminal UI, and a doctor check for dam."
 
 # Compiled at install time into bin/, which every entry point below runs by absolute path since the
 # binary is not on PATH. `herdr plugin link` skips this step, so a local checkout runs the same two
@@ -15,38 +15,45 @@ description = "A Todoist pane: the terminal UI, and a doctor check for the API t
 command = [
   "sh",
   "-c",
-  "cargo build --release --locked && mkdir -p bin && cp target/release/herdr-todoist bin/herdr-todoist",
+  "cargo build --release --locked && mkdir -p bin && cp target/release/herdr-damnit bin/herdr-damnit",
 ]
 
 [[panes]]
 id = "pane"
-title = "todoist"
+title = "damnit"
 placement = "split"
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\""]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\""]
 
 # A workspace gained focus. The command reads the config and exits when `auto_open` is off, which
 # is the default, so the pane stays closed until an action asks for it.
 [[events]]
 on = "workspace.focused"
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" auto-open"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" auto-open"]
 
 [[actions]]
 id = "open"
-title = "todoist: open pane"
+title = "damnit: open pane"
 contexts = ["pane", "workspace"]
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" open"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" open"]
 
 [[actions]]
 id = "toggle"
-title = "todoist: toggle pane"
+title = "damnit: toggle pane"
 contexts = ["pane", "workspace"]
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" toggle"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" toggle"]
 
 [[actions]]
 id = "focus"
-title = "todoist: focus pane"
+title = "damnit: focus pane"
 contexts = ["pane", "workspace"]
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" focus"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" focus"]
+
+# The staging model is the reason this plugin exists, so it gets a chord of its own.
+[[actions]]
+id = "status"
+title = "damnit: open pane on the status screen"
+contexts = ["pane", "workspace"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" status"]
 
 # One action per view number. herdr states that actions are manifest-only ("runtime action
 # registration ... not part of plugin v1") and a `plugin_action` keybinding passes its action name
@@ -56,60 +63,60 @@ command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" focus"]
 # the config has no view for exits non-zero saying how many views there are.
 [[actions]]
 id = "view:1"
-title = "todoist: show view 1"
+title = "damnit: show view 1"
 contexts = ["pane", "workspace"]
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 1"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" view 1"]
 
 [[actions]]
 id = "view:2"
-title = "todoist: show view 2"
+title = "damnit: show view 2"
 contexts = ["pane", "workspace"]
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 2"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" view 2"]
 
 [[actions]]
 id = "view:3"
-title = "todoist: show view 3"
+title = "damnit: show view 3"
 contexts = ["pane", "workspace"]
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 3"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" view 3"]
 
 [[actions]]
 id = "view:4"
-title = "todoist: show view 4"
+title = "damnit: show view 4"
 contexts = ["pane", "workspace"]
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 4"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" view 4"]
 
 [[actions]]
 id = "view:5"
-title = "todoist: show view 5"
+title = "damnit: show view 5"
 contexts = ["pane", "workspace"]
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 5"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" view 5"]
 
 [[actions]]
 id = "view:6"
-title = "todoist: show view 6"
+title = "damnit: show view 6"
 contexts = ["pane", "workspace"]
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 6"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" view 6"]
 
 [[actions]]
 id = "view:7"
-title = "todoist: show view 7"
+title = "damnit: show view 7"
 contexts = ["pane", "workspace"]
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 7"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" view 7"]
 
 [[actions]]
 id = "view:8"
-title = "todoist: show view 8"
+title = "damnit: show view 8"
 contexts = ["pane", "workspace"]
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 8"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" view 8"]
 
 [[actions]]
 id = "view:9"
-title = "todoist: show view 9"
+title = "damnit: show view 9"
 contexts = ["pane", "workspace"]
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" view 9"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" view 9"]
 
 [[actions]]
 id = "doctor"
-title = "todoist: check the token and the API"
+title = "damnit: check dam and the configured remotes"
 contexts = ["pane", "workspace"]
-command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-todoist\" doctor"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" doctor"]

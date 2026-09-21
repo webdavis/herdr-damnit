@@ -1,13 +1,13 @@
 [package]
-name = "herdr-todoist"
-description = "A Todoist pane plugin for the herdr terminal multiplexer."
+name = "herdr-damnit"
+description = "A task pane for the herdr terminal multiplexer, over the dam task store."
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "herdr-todoist"
+name = "herdr-damnit"
 path = "src/main.rs"
 
 [dependencies]

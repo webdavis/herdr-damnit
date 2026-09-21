@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use todoist::TokenSource;
@@ -187,11 +187,16 @@ impl Config {
 }
 
 /// herdr hands the plugin its own config directory; the documented path is the fallback for a run
-/// outside herdr, such as `herdr-todoist doctor` from a shell.
+/// outside herdr, such as `herdr-damnit doctor` from a shell.
 fn config_path() -> PathBuf {
-    let dir = match std::env::var_os("HERDR_PLUGIN_CONFIG_DIR") {
-        Some(dir) => PathBuf::from(dir),
-        None => base_config_dir().join("herdr/plugins/config/herdr-todoist"),
+    let given = std::env::var_os("HERDR_PLUGIN_CONFIG_DIR").map(PathBuf::from);
+    config_path_in(given.as_deref(), &base_config_dir())
+}
+
+fn config_path_in(given: Option<&Path>, base: &Path) -> PathBuf {
+    let dir = match given {
+        Some(dir) => dir.to_path_buf(),
+        None => base.join("herdr/plugins/config/herdr-damnit"),
     };
     dir.join("config.toml")
 }
@@ -470,5 +475,20 @@ mod tests {
 
         let error = Config::parse("icons = \"emoji\"\n").expect_err("refuses");
         assert!(error.contains("icons"), "{error}");
+    }
+
+    #[test]
+    fn the_config_directory_is_the_plugins_own_name_under_herdr() {
+        let path = config_path_in(None, Path::new("/x/.config"));
+        assert_eq!(
+            path,
+            Path::new("/x/.config/herdr/plugins/config/herdr-damnit/config.toml")
+        );
+    }
+
+    #[test]
+    fn herdrs_own_config_directory_wins_when_it_names_one() {
+        let path = config_path_in(Some(Path::new("/given")), Path::new("/x/.config"));
+        assert_eq!(path, Path::new("/given/config.toml"));
     }
 }

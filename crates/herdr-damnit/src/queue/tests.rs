@@ -4,7 +4,7 @@ use super::*;
 
 fn scratch(name: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!(
-        "herdr-todoist-queue-{name}-{}.json",
+        "herdr-damnit-queue-{name}-{}.json",
         std::process::id()
     ));
     clear(&path);

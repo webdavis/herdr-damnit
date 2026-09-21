@@ -299,8 +299,7 @@ mod tests {
     }
 
     fn scratch(name: &str) -> std::path::PathBuf {
-        let path =
-            std::env::temp_dir().join(format!("herdr-todoist-{name}-{}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("herdr-damnit-{name}-{}", std::process::id()));
         let _ = std::fs::remove_file(&path);
         path
     }

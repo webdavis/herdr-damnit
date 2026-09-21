@@ -192,9 +192,9 @@ SKIP_AI_COMMIT=1 git commit -m "refactor: rename the command crate and its binar
 
 **Interfaces:**
 - Consumes: the binary name `herdr-damnit` from Task 1.
-- Produces: manifest `id = "herdr-damnit"`, thirteen actions (`open`, `toggle`, `focus`, `status`,
+- Produces: manifest `id = "herdr-damnit"`, fourteen actions (`open`, `toggle`, `focus`, `status`,
   `view:1` to `view:9`, `doctor`), and the binary path `bin/herdr-damnit`. The binary must answer the
-  subcommand `status`, which Task 44 implements; until then it exits non-zero with the usage banner,
+  subcommand `status`, which Task 41 implements; until then it exits non-zero with the usage banner,
   which is what an unknown command already does.
 
 **The dotfiles values that move, for the separate pull request against `webdavis/dotfiles`:**
