@@ -84,6 +84,10 @@ fn an_empty_section_is_left_out_entirely() {
         notices: Vec::new(),
         ..full()
     };
+    assert!(
+        !stage.is_clean(),
+        "a stage with staged changes is not clean"
+    );
     let drawn = drawn(&stage);
     assert_eq!(drawn.first().map(String::as_str), Some("Staged"));
     assert!(!drawn.iter().any(|line| line == "Working"), "{drawn:?}");
@@ -112,6 +116,18 @@ fn a_conflict_outranks_staged_and_staged_outranks_working() {
     assert_eq!(stage.mark_of(&Oid::new("1a2b3c4")), Some(Mark::Staged));
     assert_eq!(stage.mark_of(&Oid::new("9a0b1c2")), Some(Mark::Working));
     assert_eq!(stage.mark_of(&Oid::new("nothing")), None);
+}
+
+#[test]
+fn an_object_both_staged_and_in_conflict_shows_the_conflict_mark() {
+    let mut stage = full();
+    stage.staged.push(change(
+        "3d4e5f6",
+        Op::Update,
+        "the conflicted one",
+        &["due"],
+    ));
+    assert_eq!(stage.mark_of(&Oid::new("3d4e5f6")), Some(Mark::Conflict));
 }
 
 #[test]
