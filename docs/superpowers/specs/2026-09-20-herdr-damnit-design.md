@@ -1214,6 +1214,18 @@ a `warnings` list, which matters to a client that adds a remote and this pane ne
 `--toon` prints the same error document as `--json`, which this pane has no use for because it reads
 JSON.
 
+**9. The objects behind an unpushed count. Blocking a mark.** `dam status --json` answers `unpushed`
+as one row per remote carrying `remote` and `commits`
+(`crates/dam-application/src/use_cases/status.rs`, `Status::unpushed`, a `Vec<(RemoteName, usize)>`,
+serialized in `crates/dam-cli/src/commands/status.rs`). No oid is published, so a client can say how
+far a remote is behind but not which objects are behind on it, and the unpushed mark in the List
+screen's mark table above has nothing to read. `dam` already holds the answer: `push` coalesces the
+unpushed commits' changes per oid (`crates/dam-application/src/use_cases/push/mutations.rs`).
+Proposed, additive and therefore a 0.2.x change: each `unpushed` row gains `"oids": [...]`, the
+objects whose changes sit in that remote's unpushed commits. The pane reads the field when it is
+there and leaves its set empty when it is not, so a `dam` without it draws every other mark as
+before and only loses the up arrow.
+
 **8. Richer date words.** `--due` accepts `today`, `tomorrow`, `YYYY-MM-DD` and `YYYY-MM-DDTHH:MM`;
 `dam` refuses `next mon` with a message naming exactly that set (measured). The old pane leaned on
 the server's parser for `next mon` and `in 3 days`, and operators will reach for those. Proposed:
