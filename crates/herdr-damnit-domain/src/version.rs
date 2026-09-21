@@ -16,11 +16,11 @@ pub const DAM_KNOWN: DamVersion = DamVersion {
     patch: 0,
 };
 
-/// The version the discard key is gated on. `dam restore` is unshipped, and 0.3 is the minor this
-/// pane assumes it lands in, so the key appears when the operator updates `dam`.
+/// The version the discard key is gated on. `dam restore` ships in 0.2.0, the same release that
+/// sets the floor, so the gate is met by every `dam` the pane agrees to draw against.
 pub const DAM_RESTORE: DamVersion = DamVersion {
     major: 0,
-    minor: 3,
+    minor: 2,
     patch: 0,
 };
 
@@ -133,10 +133,15 @@ mod tests {
         assert!(matches!(verdict(DAM_KNOWN), Verdict::Fine));
     }
 
+    /// `dam restore` ships in the same 0.2.0 that sets the floor, so every `dam` the pane agrees to
+    /// draw against clears the gate. The gate stays because the key it guards is destructive and
+    /// the day a floor moves is not the day to rediscover that.
     #[test]
-    fn the_restore_gate_is_the_minor_that_adds_the_verb() {
+    fn every_dam_the_pane_accepts_clears_the_restore_gate() {
+        assert!(DAM_MINIMUM >= DAM_RESTORE);
+        assert!(at(0, 2, 0) >= DAM_RESTORE);
+        assert!(at(0, 2, 9) >= DAM_RESTORE);
         assert!(at(0, 3, 0) >= DAM_RESTORE);
-        assert!(at(0, 4, 1) >= DAM_RESTORE);
-        assert!(at(0, 2, 9) < DAM_RESTORE);
+        assert!(at(0, 1, 9) < DAM_RESTORE, "and that dam is refused anyway");
     }
 }
