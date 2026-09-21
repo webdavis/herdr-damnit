@@ -58,29 +58,78 @@ fn set(knob: &str, value: impl AsRef<std::ffi::OsStr>) {
     unsafe { std::env::set_var(knob, value) };
 }
 
-/// One fake, in the process group `group` names, with `0` making it a leader of its own.
-fn fake_in_group(group: i32) -> Child {
-    Command::new(env!("CARGO_BIN_EXE_fake-dam"))
-        .args(["push", "--json"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .process_group(group)
-        .spawn()
-        .expect("it spawned")
+/// The gap between two looks at an observable event. Nothing here sleeps in place of
+/// synchronization; this is only how often a wait re-reads what it is waiting on.
+const POLL: Duration = Duration::from_millis(5);
+
+/// One fake, the log it writes its own argv line to, and a name for the failure messages. Each
+/// fake gets a log of its own so a wait can say which child is missing rather than reporting a
+/// total across both.
+struct Fake {
+    name: &'static str,
+    child: Child,
+    log: PathBuf,
 }
 
-/// Block until the fake's log holds `lines` argv lines, which is how a test knows each child is
-/// past its own startup and has its interrupt handler installed.
-fn await_lines(log: &Path, lines: usize) {
+impl Fake {
+    /// Spawn a fake into the process group `group` names, `0` making it a leader of its own.
+    fn spawn(name: &'static str, scratch: &Scratch, group: i32) -> Self {
+        let log = scratch.file(&format!("{name}.jsonl"));
+        set("FAKE_DAM_LOG", &log);
+        let child = Command::new(env!("CARGO_BIN_EXE_fake-dam"))
+            .args(["push", "--json"])
+            .stdin(Stdio::null())
+            // Nothing here reads the child's output, so it is given no pipe: a fake cannot stall
+            // on a buffer this test would never drain.
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .process_group(group)
+            .spawn()
+            .expect("it spawned");
+        Self { name, child, log }
+    }
+
+    fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
+    /// Block until this fake has logged its argv line, which proves it is past its own startup and
+    /// has its interrupt handler installed. A fake that exited without logging is reported at once
+    /// rather than waited out, because there is nothing left to wait for.
+    fn await_start(&mut self) {
+        let deadline = Instant::now() + PATIENCE;
+        while Instant::now() < deadline {
+            if logged(&self.log) >= 1 {
+                return;
+            }
+            if let Some(status) = self.child.try_wait().expect("the child's state") {
+                panic!("{} exited {status} before logging its argv", self.name);
+            }
+            std::thread::sleep(POLL);
+        }
+        panic!("{} logged no argv within {PATIENCE:?}", self.name);
+    }
+
+    fn wait(&mut self) -> std::process::ExitStatus {
+        self.child.wait().expect("it exited")
+    }
+
+    fn interrupts(&self) -> usize {
+        interrupts(&self.log)
+    }
+}
+
+/// Block until `log` holds one argv line, for a child this test did not spawn itself and so cannot
+/// ask about: `RunningJob` hands out a cancel and a receiver, never a pid.
+fn await_line(log: &Path, whose: &str) {
     let deadline = Instant::now() + PATIENCE;
     while Instant::now() < deadline {
-        if logged(log) >= lines {
+        if logged(log) >= 1 {
             return;
         }
-        std::thread::sleep(Duration::from_millis(5));
+        std::thread::sleep(POLL);
     }
-    panic!("the fakes logged {} of {lines} lines", logged(log));
+    panic!("{whose} logged no argv within {PATIENCE:?}");
 }
 
 fn logged(log: &Path) -> usize {
@@ -109,7 +158,7 @@ fn cancelling_sends_sigint_and_dam_answers_with_its_cancelled_code() {
     let job = runner()
         .spawn(&words(&["push", "--json"]))
         .expect("it spawned");
-    await_lines(&log, 1);
+    await_line(&log, "the push");
     (job.cancel)();
 
     let finished = job.results.recv_timeout(PATIENCE).expect("one result");
@@ -179,21 +228,21 @@ fn a_job_with_no_deadline_answers_for_itself() {
 #[test]
 fn the_interrupt_reaches_the_group_rather_than_its_leader_alone() {
     let _env = fake_env();
-    let scratch = Scratch::new("group-log");
-    let log = scratch.file("argv.jsonl");
-    set("FAKE_DAM_LOG", &log);
+    let scratch = Scratch::new("group");
     set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
 
-    let mut leader = fake_in_group(0);
-    let group = i32::try_from(leader.id()).expect("a pid");
-    let mut helper = fake_in_group(group);
-    await_lines(&log, 2);
+    let mut leader = Fake::spawn("the leader", &scratch, 0);
+    let group = i32::try_from(leader.pid()).expect("a pid");
+    let mut helper = Fake::spawn("the helper", &scratch, group);
+    leader.await_start();
+    helper.await_start();
 
-    Cancel::of(leader.id()).interrupt();
+    Cancel::of(leader.pid()).interrupt();
 
-    assert_eq!(leader.wait().expect("it exited").code(), Some(3));
-    assert_eq!(helper.wait().expect("it exited").code(), Some(3));
-    assert_eq!(interrupts(&log), 2, "the helper was left running");
+    assert_eq!(leader.wait().code(), Some(3));
+    assert_eq!(helper.wait().code(), Some(3));
+    assert_eq!(leader.interrupts(), 1, "the leader took no interrupt");
+    assert_eq!(helper.interrupts(), 1, "the helper was left running");
 }
 
 /// A `dam` deaf to `SIGINT` is killed once the grace runs out, and a killed child carries no exit
@@ -202,20 +251,18 @@ fn the_interrupt_reaches_the_group_rather_than_its_leader_alone() {
 #[test]
 fn a_dam_that_ignores_the_interrupt_is_killed_and_carries_no_code() {
     let _env = fake_env();
-    let scratch = Scratch::new("kill-log");
-    let log = scratch.file("argv.jsonl");
-    set("FAKE_DAM_LOG", &log);
+    let scratch = Scratch::new("kill");
     set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
     set("FAKE_DAM_IGNORE_SIGINT", "1");
 
-    let mut child = fake_in_group(0);
-    await_lines(&log, 1);
+    let mut deaf = Fake::spawn("the deaf dam", &scratch, 0);
+    deaf.await_start();
 
     let started = Instant::now();
-    Cancel::with_grace(child.id(), Duration::from_millis(100)).interrupt();
+    Cancel::with_grace(deaf.pid(), Duration::from_millis(100)).interrupt();
 
     assert_eq!(
-        child.wait().expect("it exited").code(),
+        deaf.wait().code(),
         None,
         "a killed child reports a signal rather than a code"
     );
@@ -224,7 +271,7 @@ fn a_dam_that_ignores_the_interrupt_is_killed_and_carries_no_code() {
         "the kill skipped the grace: {:?}",
         started.elapsed()
     );
-    assert_eq!(interrupts(&log), 0, "the fake was not deaf after all");
+    assert_eq!(deaf.interrupts(), 0, "the fake was not deaf after all");
 }
 
 /// A group that has already gone is not waited out, which is what the grace loop polls for so an
@@ -232,9 +279,10 @@ fn a_dam_that_ignores_the_interrupt_is_killed_and_carries_no_code() {
 #[test]
 fn a_group_that_has_already_gone_is_not_waited_out() {
     let _env = fake_env();
-    let mut child = fake_in_group(0);
-    let cancel = Cancel::with_grace(child.id(), Duration::from_secs(20));
-    child.wait().expect("it exited");
+    let scratch = Scratch::new("already-gone");
+    let mut gone = Fake::spawn("the finished dam", &scratch, 0);
+    let cancel = Cancel::with_grace(gone.pid(), Duration::from_secs(20));
+    gone.wait();
 
     let started = Instant::now();
     cancel.interrupt();
