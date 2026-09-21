@@ -213,19 +213,23 @@ mod tests {
         assert_eq!(palette.cyan, Color::Rgb(0x94, 0xe2, 0xd5));
     }
 
+    /// The separation the rule is ruled to hold, written out rather than read from the constant
+    /// the rule itself reads, so moving that constant in either direction fails here.
+    const RULED_SEPARATION: f64 = 30.0;
+
     /// No two marks a row can carry at once may read as one colour, so every theme's cyan stands
-    /// at least `SEPARATION` from the blue and the green beside it.
+    /// at least `RULED_SEPARATION` from the blue and the green beside it.
     #[test]
     fn every_theme_paints_a_cyan_no_mark_is_mistaken_for() {
         for name in NAMES {
             let palette = resolve(Some(name));
 
             assert!(
-                hue::distance(palette.cyan, palette.blue) >= SEPARATION,
+                hue::distance(palette.cyan, palette.blue) >= RULED_SEPARATION,
                 "{name}: cyan sits on its blue"
             );
             assert!(
-                hue::distance(palette.cyan, palette.green) >= SEPARATION,
+                hue::distance(palette.cyan, palette.green) >= RULED_SEPARATION,
                 "{name}: cyan sits on its green"
             );
         }
@@ -274,6 +278,29 @@ mod tests {
                 "{name} kept a cyan it repeats"
             );
         }
+    }
+
+    /// The ruled separation, either side of it. No shipped theme sits in that band, so the number
+    /// itself is held here rather than through a palette.
+    #[test]
+    fn a_cyan_is_rotated_below_the_ruled_separation_and_left_alone_at_it() {
+        let cyan = Color::Rgb(0x80, 0xc0, 0xc0);
+        let far = Color::Rgb(0x20, 0x20, 0x20);
+        let inside = Color::Rgb(0x80, 0xdb, 0xc0);
+        let outside = Color::Rgb(0x80, 0xe1, 0xc0);
+
+        assert_eq!(hue::distance(cyan, inside).round(), RULED_SEPARATION - 3.0);
+        assert_eq!(hue::distance(cyan, outside).round(), RULED_SEPARATION + 3.0);
+        assert_eq!(
+            separated(cyan, far, inside),
+            hue::rotate(cyan, ROTATION),
+            "a green inside the separation is left"
+        );
+        assert_eq!(
+            separated(cyan, far, outside),
+            cyan,
+            "a green outside the separation is lived with"
+        );
     }
 
     /// No theme ships a cyan that repeats both its neighbours, so the rule that picks which one to
