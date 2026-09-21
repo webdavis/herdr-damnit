@@ -2916,7 +2916,7 @@ pub struct DamVersion { pub major: u32, pub minor: u32, pub patch: u32 }
 pub const DAM_MINIMUM: DamVersion = DamVersion { major: 0, minor: 2, patch: 0 };
 pub const DAM_KNOWN: DamVersion = DamVersion { major: 0, minor: 2, patch: 0 };
 /// The version assumed to add `dam restore`, which is what the `!` key is gated on.
-pub const DAM_RESTORE: DamVersion = DamVersion { major: 0, minor: 3, patch: 0 };
+pub const DAM_RESTORE: DamVersion = DamVersion { major: 0, minor: 2, patch: 0 };
 
 pub fn parse_version(line: &str) -> Option<DamVersion>;
 
@@ -2928,10 +2928,12 @@ pub fn verdict(found: DamVersion) -> Verdict;
 `DAM_MINIMUM` and `DAM_KNOWN` are both 0.2.0, the version `dam` prints today (`crates/dam-cli`
 declares `version = "0.2.0"` at `webdavis/damnit` `84937a3`). 0.2 is also the floor on its own
 merits: the JSON error document, exit 4 for every refusal, and a change document with no embedded
-object all arrived there, and Task 14 reads all three. `DAM_RESTORE` is 0.3.0 by **assumption**:
-`dam restore` is unshipped (see the spec's Needed from dam, item 2), and 0.3 is the minor this pane
-assumes it lands in, so the `!` key appears the day the operator updates `dam`. Move the constant
-when the verb actually ships in a different minor. Below 1.0 the minor is the breaking axis, so
+object all arrived there, and Task 14 reads all three. `DAM_RESTORE` is 0.2.0 as
+well: `dam restore` ships in that release (`crates/dam-cli/src/commands/restore.rs` at
+`webdavis/damnit` `84937a3`, declared at `args.rs` `Restore(RestoreArgs)` and dispatched in
+`commands/mod.rs`), so the gate is met by every `dam` the pane agrees to draw against. The gate
+stays written and tested: the key it guards is destructive, and the day a floor moves is not the day
+to rediscover that. Below 1.0 the minor is the breaking axis, so
 `verdict` refuses below the minimum, warns when the minor is above the known one, and says nothing
 in between.
 
@@ -3000,11 +3002,16 @@ mod tests {
         assert!(matches!(verdict(DAM_KNOWN), Verdict::Fine));
     }
 
+    /// `dam restore` ships in the same 0.2.0 that sets the floor, so every `dam` the pane agrees to
+    /// draw against clears the gate. The gate stays because the key it guards is destructive and
+    /// the day a floor moves is not the day to rediscover that.
     #[test]
-    fn the_restore_gate_is_the_minor_that_adds_the_verb() {
+    fn every_dam_the_pane_accepts_clears_the_restore_gate() {
+        assert!(DAM_MINIMUM >= DAM_RESTORE);
+        assert!(at(0, 2, 0) >= DAM_RESTORE);
+        assert!(at(0, 2, 9) >= DAM_RESTORE);
         assert!(at(0, 3, 0) >= DAM_RESTORE);
-        assert!(at(0, 4, 1) >= DAM_RESTORE);
-        assert!(at(0, 2, 9) < DAM_RESTORE);
+        assert!(at(0, 1, 9) < DAM_RESTORE, "and that dam is refused anyway");
     }
 }
 ```
@@ -3037,11 +3044,11 @@ pub const DAM_KNOWN: DamVersion = DamVersion {
     patch: 0,
 };
 
-/// The version the discard key is gated on. `dam restore` is unshipped, and 0.3 is the minor this
-/// pane assumes it lands in, so the key appears when the operator updates `dam`.
+/// The version the discard key is gated on. `dam restore` ships in 0.2.0, the same release that
+/// sets the floor, so the gate is met by every `dam` the pane agrees to draw against.
 pub const DAM_RESTORE: DamVersion = DamVersion {
     major: 0,
-    minor: 3,
+    minor: 2,
     patch: 0,
 };
 
@@ -10648,7 +10655,6 @@ what makes the key appear the day the operator updates `dam`, with no pane relea
 | `!` | a row with a working change, and a `dam` at or above `DAM_RESTORE`, pressed once | a confirm names the object and the fields that would be lost |
 | `!` | the confirm is up, `!` again | `dam restore <oid>` runs and the working change is discarded |
 | `!` | the confirm is up, any other key | the confirm is dismissed and nothing is sent |
-| `!` | a `dam` older than `DAM_RESTORE` | the key is unbound and nothing happens |
 
 That gate is the only place a key depends on a `dam` version, and it exists because a confirm followed
 by a refusal is the worst shape a destructive key can have.
@@ -10682,19 +10688,8 @@ fn with_working_change(version: &str) -> super::tests::Harness {
 }
 
 #[test]
-fn the_discard_key_is_unbound_on_a_dam_that_has_no_restore() {
-    let mut harness = with_working_change("dam 0.2.0");
-    let before = harness.lines().len();
-    harness.press(KeyCode::Char('!'));
-
-    assert!(harness.app.overlay.is_none(), "it asked on a dam that cannot answer");
-    assert_eq!(harness.lines().len(), before);
-    assert!(harness.app.message.is_empty());
-}
-
-#[test]
 fn the_discard_key_asks_once_and_restores_on_the_second_press() {
-    let mut harness = with_working_change("dam 0.3.0");
+    let mut harness = with_working_change("dam 0.2.0");
     harness.press(KeyCode::Char('!'));
 
     let Some(Overlay::Confirm(confirm)) = harness.app.overlay.as_ref() else {
@@ -10708,7 +10703,7 @@ fn the_discard_key_asks_once_and_restores_on_the_second_press() {
 
 #[test]
 fn any_other_key_dismisses_the_discard_confirm_and_sends_nothing() {
-    let mut harness = with_working_change("dam 0.3.0");
+    let mut harness = with_working_change("dam 0.2.0");
     harness.press(KeyCode::Char('!'));
     let before = harness.lines().len();
     harness.press(KeyCode::Char('j'));
@@ -10719,7 +10714,7 @@ fn any_other_key_dismisses_the_discard_confirm_and_sends_nothing() {
 
 #[test]
 fn the_discard_key_does_nothing_on_a_row_with_no_working_change() {
-    let mut harness = with_working_change("dam 0.3.0");
+    let mut harness = with_working_change("dam 0.2.0");
     harness.app.select_oid(&herdr_damnit_domain::Oid::new("5d6e7f8"));
     let before = harness.lines().len();
     harness.press(KeyCode::Char('!'));
@@ -10747,6 +10742,12 @@ Expected: FAIL, `!` does nothing at any version.
 with `has_restore` reading `self.dam_version.is_some_and(|found| found >= DAM_RESTORE)` and
 `ask_discard` raising the confirm only when the oid under the cursor appears in
 `self.stage.unstaged`.
+
+**There is no test for a `dam` without `restore`, because no such `dam` reaches a key.** The verb
+ships in 0.2.0 and the handshake refuses anything below that floor before a single key is bound, so
+the unbound case is unreachable and a test for it would assert on a state the pane cannot be in. The
+gate is kept anyway: it costs one comparison, it is pinned in Task 13 against the floor, and it is
+what makes a future floor move visible at the key rather than at the first refusal.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
