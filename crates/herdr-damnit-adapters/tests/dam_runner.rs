@@ -15,7 +15,6 @@ fn runner() -> ProcessDamRunner {
 /// The fake's knobs live in this process's environment, which every test in this file shares.
 /// A test holds this lock for its whole body and starts from a cleared environment, so the file
 /// is correct under any thread count rather than only under `--test-threads=1`.
-
 fn fake_env() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let guard = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
