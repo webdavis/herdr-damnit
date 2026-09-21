@@ -1,5 +1,6 @@
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use super::*;
 use crate::{Finished, SpawnError};
@@ -11,12 +12,16 @@ struct Recorder {
     log: Arc<Mutex<Vec<Vec<String>>>>,
     senders: Arc<Mutex<Vec<Sender<Finished>>>>,
     refuse_spawn: bool,
+    io_error: Option<String>,
 }
 
 impl DamRunner for Recorder {
     fn spawn(&self, argv: &[String]) -> Result<RunningJob, SpawnError> {
         if self.refuse_spawn {
             return Err(SpawnError::NotFound);
+        }
+        if let Some(error) = &self.io_error {
+            return Err(SpawnError::Io(error.clone()));
         }
         self.log.lock().expect("the log").push(argv.to_vec());
         let (sender, results) = channel();
@@ -33,7 +38,7 @@ fn ok(stdout: &str) -> Finished {
         code: Some(0),
         stdout: stdout.to_string(),
         stderr: String::new(),
-        elapsed: std::time::Duration::from_millis(9),
+        elapsed: Duration::from_millis(9),
     }
 }
 
@@ -214,6 +219,39 @@ fn a_finished_job_leaves_the_table() {
 }
 
 #[test]
+fn each_sync_job_names_itself_in_the_refusal() {
+    assert_eq!(SyncKind::Commit.verb(), "commit");
+    assert_eq!(SyncKind::Push.verb(), "push");
+    assert_eq!(SyncKind::Pull.verb(), "pull");
+}
+
+/// A `dam` that is on `PATH` and would not start is a different sentence from one that is absent.
+#[test]
+fn a_spawn_that_failed_for_some_other_reason_carries_dams_own_error() {
+    let mut jobs = Jobs::new(Box::new(Recorder {
+        io_error: Some("permission denied".to_string()),
+        ..Recorder::default()
+    }));
+
+    let Submitted::Failed(message) = jobs.submit(JobKind::ReadStatus, crate::argv::status()) else {
+        panic!("expected a failure");
+    };
+    assert_eq!(message, "permission denied");
+    assert_eq!(jobs.in_flight(), 0);
+}
+
+/// The header's timer, read at a moment the caller chooses rather than off an ambient clock.
+#[test]
+fn the_header_times_the_job_it_names_and_nothing_when_none_runs() {
+    let mut harness = harness();
+    assert_eq!(harness.jobs.elapsed_of_current(Instant::now()), None);
+
+    harness.submit(JobKind::ReadStatus, crate::argv::status());
+    let later = Instant::now() + Duration::from_secs(5);
+    assert!(harness.jobs.elapsed_of_current(later).expect("a job runs") >= Duration::from_secs(5));
+}
+
+#[test]
 fn a_dam_that_is_not_there_is_reported_rather_than_started() {
     let recorder = Recorder {
         refuse_spawn: true,
@@ -266,6 +304,22 @@ fn a_job_whose_thread_died_without_answering_leaves_the_table() {
     assert!(jobs.drain().is_empty());
     assert_eq!(jobs.in_flight(), 0);
     assert_eq!(jobs.exclusive(), None);
+}
+
+/// The other half of the ladder: with nothing exclusive running, the signal goes to the job that
+/// has been waiting longest, which is the one the header names.
+#[test]
+fn with_no_exclusive_job_the_cancel_reaches_the_oldest_read() {
+    let cancelled = Arc::new(Mutex::new(Vec::new()));
+    let mut jobs = Jobs::new(Box::new(Marking {
+        cancelled: Arc::clone(&cancelled),
+        next: Mutex::new(0),
+    }));
+    jobs.submit(JobKind::ReadList, crate::argv::list("!done"));
+    jobs.submit(JobKind::ReadStatus, crate::argv::status());
+
+    assert!(jobs.cancel_current());
+    assert_eq!(*cancelled.lock().expect("the record"), vec![0]);
 }
 
 #[test]

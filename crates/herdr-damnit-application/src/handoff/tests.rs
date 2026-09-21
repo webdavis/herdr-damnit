@@ -225,6 +225,19 @@ fn an_agent_pane_with_no_name_of_its_own_is_called_by_its_kind() {
 }
 
 #[test]
+fn an_agent_pane_that_names_nothing_at_all_is_called_the_agent() {
+    let herdr = FakeHerdr {
+        listing: r#"{"result":{"agents":[{"pane_id":"w1:p7","workspace_id":"w1","agent":""}]}}"#
+            .to_string(),
+        ..FakeHerdr::new()
+    };
+    let HandOff::Sent { agent, .. } = hand_off(&herdr, &here(), &object(), "", "") else {
+        panic!("expected a send");
+    };
+    assert_eq!(agent.name, "the agent");
+}
+
+#[test]
 fn a_refused_send_is_a_refusal_and_a_refused_focus_is_not() {
     let refused_send = FakeHerdr {
         refuse_send: true,
