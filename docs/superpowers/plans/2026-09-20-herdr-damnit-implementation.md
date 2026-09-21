@@ -880,7 +880,7 @@ SKIP_AI_COMMIT=1 git commit -m "feat(domain): read a dam date and say where it s
   - `IconSet`, an enum of `NerdFont` and `Ascii`, with `IconSet::default()` of `NerdFont`. It carries
     no serde derive; the config reader in Task 25 maps its own string onto it.
   - `Mark`, an enum of `Priority(Priority)`, `Overdue`, `Today`, `Upcoming`, `Recurring`,
-    `Labels(usize)`, `Working`, `Staged`, `Unpushed` and `Conflict`.
+    `Labels(usize)`, `Working`, `Staged`, `Unpushed`, `Conflict` and `Notice`.
   - `Mark::glyph(self, set: IconSet) -> String` and `Mark::slot(self) -> Slot`.
   - `Mark::of_due(state: DueState) -> Option<Mark>` and
     `Mark::of_priority(priority: Priority) -> Option<Mark>`, both `None` where the spec draws
@@ -944,6 +944,16 @@ mod tests {
         }
     }
 
+    /// A notice is a decision waiting rather than the refusal a conflict is, so it draws below
+    /// red, and it draws the `!` the spec's Status screen shows in both sets: the Font Awesome
+    /// block has no glyph that reads as a notice more plainly than the character itself.
+    #[test]
+    fn a_notice_draws_the_same_bang_whichever_set_is_chosen() {
+        assert_eq!(Mark::Notice.glyph(IconSet::Ascii), "!");
+        assert_eq!(Mark::Notice.glyph(IconSet::NerdFont), "!");
+        assert_eq!(Mark::Notice.slot(), Slot::Orange);
+    }
+
     #[test]
     fn a_label_count_is_the_sigil_and_the_number() {
         assert_eq!(Mark::Labels(2).glyph(IconSet::Ascii), "@2");
@@ -973,6 +983,7 @@ mod tests {
             Mark::Staged,
             Mark::Unpushed,
             Mark::Conflict,
+            Mark::Notice,
         ] {
             let glyph = mark.glyph(IconSet::NerdFont);
             assert_eq!(glyph.chars().count(), 1, "{mark:?} drew {glyph:?}");
@@ -1007,8 +1018,8 @@ already names a cyan, use that colour.
 ```rust
 //! The marks a row carries: the object's own state, and the staging state `dam status` reports for
 //! it. Two sets draw them. The Nerd Font set uses glyphs from the Font Awesome block every Nerd
-//! Font patches in, each one cell wide; the plain set uses one character per mark, for a terminal
-//! whose font has none of those glyphs.
+//! Font patches in, each one cell wide, except the notice, which draws a plain `!` in both sets;
+//! the plain set uses one character per mark, for a terminal whose font has none of those glyphs.
 
 use crate::{DueState, Priority, Slot};
 
@@ -1032,6 +1043,7 @@ pub enum Mark {
     Staged,
     Unpushed,
     Conflict,
+    Notice,
 }
 
 impl Mark {
@@ -1063,6 +1075,7 @@ impl Mark {
             Self::Recurring | Self::Staged => Slot::Green,
             Self::Labels(_) => Slot::Purple,
             Self::Unpushed => Slot::Cyan,
+            Self::Notice => Slot::Orange,
         }
     }
 
@@ -1104,6 +1117,7 @@ impl Mark {
             (Self::Unpushed, IconSet::Ascii) => "^",
             (Self::Conflict, IconSet::NerdFont) => "\u{f00d}",
             (Self::Conflict, IconSet::Ascii) => "x",
+            (Self::Notice, _) => "!",
             (Self::Labels(_), _) => Self::labels_sigil(set),
         }
     }
@@ -1510,9 +1524,6 @@ Expected: FAIL with `unresolved module or unlinked crate 'rows'`
 
 use crate::{Date, DueState, IconSet, Mark, Object, Oid, Slot, due_state, short};
 
-#[cfg(test)]
-mod tests;
-
 /// The heading an object with no path of its own is grouped under.
 const NO_PATH: &str = "(no path)";
 
@@ -1639,6 +1650,9 @@ fn object_row(object: &Object, marks: &dyn StagingMarks, style: &RowStyle) -> Ro
         segments,
     })
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 Add to `crates/herdr-damnit-domain/src/lib.rs`:
@@ -1954,13 +1968,17 @@ mod tests {
     fn view_one_is_the_open_list_because_dam_ls_with_no_query_includes_done_objects() {
         let views = Views::new(&[]);
         assert_eq!(views.len(), 1);
+        assert!(!views.is_empty());
         assert_eq!(views.current().name, OPEN);
         assert_eq!(views.current().query, OPEN_QUERY);
     }
 
     #[test]
     fn the_configured_views_follow_it_in_the_order_they_were_written() {
-        let views = Views::new(&[view("today", "!done & due:today"), view("deep", "effort:deep")]);
+        let views = Views::new(&[
+            view("today", "!done & due:today"),
+            view("deep", "effort:deep"),
+        ]);
         assert_eq!(
             views.names().collect::<Vec<_>>(),
             vec!["open", "today", "deep"]
@@ -2118,7 +2136,7 @@ SKIP_AI_COMMIT=1 git commit -m "feat(domain): number the views over dam queries 
 pub enum Op { Create, Update, Delete }
 
 pub struct Change { pub oid: Oid, pub op: Op, pub subject: String, pub fields: Vec<String> }
-pub struct Unpushed { pub remote: String, pub commits: u64 }
+pub struct Unpushed { pub remote: String, pub commits: u64, pub oids: Vec<Oid> }
 pub struct Conflict { pub oid: Oid, pub remote: String, pub ours: String, pub theirs: String }
 pub struct Notice { pub kind: String, pub oid: Option<Oid>, pub remote: Option<String>, pub message: String }
 
@@ -2130,12 +2148,17 @@ pub struct Stage {
     pub notices: Vec<Notice>,
 }
 
-pub enum StatusRow { Heading(String), Change { oid: Oid, mark: Mark, text: String }, Line(String) }
+pub enum StatusRow {
+    Heading(String),
+    Change { oid: Oid, mark: Mark, text: String },
+    Line { mark: Option<Mark>, text: String },
+}
 
 impl Stage {
     pub fn is_clean(&self) -> bool;
     pub fn is_staged(&self, oid: &Oid) -> bool;
     pub fn staged_count(&self) -> usize;
+    pub fn is_unpushed(&self, oid: &Oid) -> bool;
     pub fn unpushed_commits(&self) -> u64;
     pub fn rows(&self) -> Vec<StatusRow>;
     pub fn summary(&self) -> String;
@@ -2145,9 +2168,35 @@ impl StagingMarks for Stage { fn mark_of(&self, oid: &Oid) -> Option<Mark> }
 ```
 
 `mark_of` resolves in one order, most urgent first: a conflict beats staged, staged beats working,
-and working beats unpushed. `Stage::rows` draws the four sections the spec names, in `dam`'s own
-order, leaving an empty section out; an entirely empty stage is one line reading
-`nothing staged, nothing changed`, which is `dam`'s own wording.
+and working beats unpushed, which is the whole ladder now that an unpushed row names the objects
+its commits touch. An `Unpushed` row carries `oids`, the objects whose changes sit in that remote's
+unpushed commits, and the row a list draws for one of them leads with the up arrow. A `dam` that
+does not publish them leaves the set empty, which costs those rows their mark and nothing else.
+`Stage::rows` draws the four sections the spec names, in `dam`'s own order, leaving an
+empty section out; an entirely empty stage is one line reading `nothing staged, nothing changed`,
+which is `dam`'s own wording.
+
+**The Unpushed row carries the up arrow the spec's mock draws.** Every other row of that screen now
+takes its mark from a field, so the one plain row that shows one takes it the same way rather than
+leaving the renderer to know which heading it sits under: `StatusRow::Line` carries an
+`Option<Mark>`, `Some(Mark::Unpushed)` on a remote's row and `None` everywhere else.
+
+**A notice that names an object draws that object and is a cursor target.** The spec's Status mock
+draws a notice as `! 7a8b9c0  removed on todoist: ...`, with a mark and the short oid, and the
+sentence under the mock makes every row that names an oid a cursor target. The four kinds that name
+one (`removed_upstream`, `push_failed`, `event_cancelled`, `kind_changed`) therefore draw as a
+`StatusRow::Change` under `Mark::Notice` from Task 6; `pull_failed` is about a remote rather than an
+object, carries no oid, draws its message alone and is not a target. The pinned target count over
+the fixture is the number of rows that name an object, which is five.
+
+`Stage::summary` counts the arrays it is handed, so over the `full()` fixture below, which holds
+two staged changes and one unstaged one, it reads `2 staged  1 changed  1 unpushed  1 notice`. The
+spec's Status screen mockup heads the same screen `3 staged  2 changed`; that header is stale
+against the two Staged rows and one Working row drawn under it, and the arrays win.
+
+Three of the fixture's oids run past seven characters, one per row builder that calls `Oid::short`,
+so a row drawn from the whole oid instead of its prefix fails rather than reading the same either
+way.
 
 `Change::fields` is the list of changed field names, which `dam` 0.2.0 carries on every change
 document as `fields` and Task 23 maps straight across. An update names the fields that moved, a
@@ -2174,22 +2223,40 @@ fn full() -> Stage {
     Stage {
         staged: vec![
             change("1a2b3c4", Op::Create, "ship the pin bump", &[]),
-            change("5d6e7f8", Op::Update, "refresh the roster row", &["due", "priority"]),
+            change(
+                "5d6e7f8a9b0",
+                Op::Update,
+                "refresh the roster row",
+                &["due", "priority"],
+            ),
         ],
-        unstaged: vec![change("9a0b1c2", Op::Update, "water the plants", &["subject"])],
-        unpushed: vec![Unpushed {
-            remote: "todoist".to_string(),
-            commits: 1,
-        }],
+        unstaged: vec![change(
+            "9a0b1c2",
+            Op::Update,
+            "water the plants",
+            &["subject"],
+        )],
+        unpushed: vec![
+            Unpushed {
+                remote: "todoist".to_string(),
+                commits: 1,
+                oids: Vec::new(),
+            },
+            Unpushed {
+                remote: "work".to_string(),
+                commits: 2,
+                oids: vec![Oid::new("c3d4e5f")],
+            },
+        ],
         conflicts: vec![Conflict {
-            oid: Oid::new("3d4e5f6"),
+            oid: Oid::new("3d4e5f6a1b2"),
             remote: "todoist".to_string(),
             ours: "mine".to_string(),
             theirs: "theirs".to_string(),
         }],
         notices: vec![Notice {
             kind: "removed_upstream".to_string(),
-            oid: Some(Oid::new("7a8b9c0")),
+            oid: Some(Oid::new("7a8b9c0d1e2")),
             remote: Some("todoist".to_string()),
             message: "removed on todoist: \"old task\" is kept here".to_string(),
         }],
@@ -2201,8 +2268,8 @@ fn drawn(stage: &Stage) -> Vec<String> {
         .rows()
         .iter()
         .map(|row| match row {
-            StatusRow::Heading(text) | StatusRow::Line(text) => text.clone(),
-            StatusRow::Change { text, .. } => text.clone(),
+            StatusRow::Heading(text) => text.clone(),
+            StatusRow::Line { text, .. } | StatusRow::Change { text, .. } => text.clone(),
         })
         .collect()
 }
@@ -2219,9 +2286,10 @@ fn the_four_sections_are_drawn_in_dams_own_order() {
             "  changed  9a0b1c2  water the plants  (subject)".to_string(),
             "Unpushed".to_string(),
             "  todoist  1 commit".to_string(),
+            "  work  2 commits".to_string(),
             "Notices".to_string(),
             "  3d4e5f6  todoist  ours: \"mine\"  theirs: \"theirs\"".to_string(),
-            "  removed on todoist: \"old task\" is kept here".to_string(),
+            "  7a8b9c0  removed on todoist: \"old task\" is kept here".to_string(),
         ]
     );
 }
@@ -2235,6 +2303,10 @@ fn an_empty_section_is_left_out_entirely() {
         notices: Vec::new(),
         ..full()
     };
+    assert!(
+        !stage.is_clean(),
+        "a stage with staged changes is not clean"
+    );
     let drawn = drawn(&stage);
     assert_eq!(drawn.first().map(String::as_str), Some("Staged"));
     assert!(!drawn.iter().any(|line| line == "Working"), "{drawn:?}");
@@ -2251,22 +2323,78 @@ fn an_empty_stage_says_so_in_dams_own_words() {
         notices: Vec::new(),
     };
     assert!(stage.is_clean());
-    assert_eq!(drawn(&stage), vec!["nothing staged, nothing changed"]);
+    assert!(!full().is_clean());
+    assert_eq!(
+        stage.rows(),
+        vec![StatusRow::Line {
+            mark: None,
+            text: "nothing staged, nothing changed".to_string(),
+        }]
+    );
 }
 
 #[test]
 fn a_conflict_outranks_staged_and_staged_outranks_working() {
     let stage = full();
-    assert_eq!(stage.mark_of(&Oid::new("3d4e5f6")), Some(Mark::Conflict));
+    assert_eq!(stage.staged_count(), 2);
+    assert_eq!(
+        stage.mark_of(&Oid::new("3d4e5f6a1b2")),
+        Some(Mark::Conflict)
+    );
     assert_eq!(stage.mark_of(&Oid::new("1a2b3c4")), Some(Mark::Staged));
     assert_eq!(stage.mark_of(&Oid::new("9a0b1c2")), Some(Mark::Working));
     assert_eq!(stage.mark_of(&Oid::new("nothing")), None);
 }
 
 #[test]
+fn an_object_only_in_an_unpushed_commit_carries_the_unpushed_mark() {
+    assert_eq!(full().mark_of(&Oid::new("c3d4e5f")), Some(Mark::Unpushed));
+}
+
+#[test]
+fn a_working_change_outranks_an_unpushed_commit() {
+    let mut stage = full();
+    stage.unpushed[1].oids.push(Oid::new("9a0b1c2"));
+    assert_eq!(stage.mark_of(&Oid::new("9a0b1c2")), Some(Mark::Working));
+}
+
+#[test]
+fn a_dam_that_sends_no_oids_leaves_the_unpushed_set_empty() {
+    let stage = Stage {
+        unpushed: vec![Unpushed {
+            remote: "work".to_string(),
+            commits: 2,
+            oids: Vec::new(),
+        }],
+        ..full()
+    };
+    assert_eq!(stage.mark_of(&Oid::new("c3d4e5f")), None);
+}
+
+#[test]
+fn an_object_both_staged_and_in_conflict_shows_the_conflict_mark() {
+    let mut stage = full();
+    stage.staged.push(change(
+        "3d4e5f6a1b2",
+        Op::Update,
+        "the conflicted one",
+        &["due"],
+    ));
+    assert_eq!(
+        stage.mark_of(&Oid::new("3d4e5f6a1b2")),
+        Some(Mark::Conflict)
+    );
+}
+
+#[test]
 fn an_object_both_staged_and_changed_again_shows_the_staged_mark() {
     let mut stage = full();
-    stage.unstaged.push(change("1a2b3c4", Op::Update, "ship the pin bump", &["body"]));
+    stage.unstaged.push(change(
+        "1a2b3c4",
+        Op::Update,
+        "ship the pin bump",
+        &["body"],
+    ));
     assert_eq!(stage.mark_of(&Oid::new("1a2b3c4")), Some(Mark::Staged));
 }
 
@@ -2277,22 +2405,157 @@ fn every_row_naming_an_oid_is_a_cursor_target() {
         .into_iter()
         .filter(|row| matches!(row, StatusRow::Change { .. }))
         .count();
-    assert_eq!(targets, 4, "staged two, working one, conflict one");
+    assert_eq!(
+        targets, 5,
+        "staged two, working one, conflict one, notice one"
+    );
+}
+
+/// The spec's Status mock leads the unpushed row with the up arrow, and every other plain row with
+/// nothing, so the mark is a field rather than a character the renderer has to know to add.
+#[test]
+fn the_unpushed_row_carries_its_own_mark_and_no_other_plain_row_does() {
+    let mut stage = full();
+    stage.notices.push(Notice {
+        kind: "pull_failed".to_string(),
+        oid: None,
+        remote: Some("todoist".to_string()),
+        message: "pull failed on todoist: the service did not answer".to_string(),
+    });
+
+    let marks: Vec<Option<Mark>> = stage
+        .rows()
+        .into_iter()
+        .filter_map(|row| match row {
+            StatusRow::Line { mark, .. } => Some(mark),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        marks,
+        vec![Some(Mark::Unpushed), Some(Mark::Unpushed), None],
+        "two unpushed remotes and one notice about no object"
+    );
+}
+
+#[test]
+fn a_notice_about_no_object_in_particular_draws_its_message_alone() {
+    let stage = Stage {
+        notices: vec![Notice {
+            kind: "pull_failed".to_string(),
+            oid: None,
+            remote: Some("todoist".to_string()),
+            message: "pull failed on todoist: the service did not answer".to_string(),
+        }],
+        ..full()
+    };
+
+    assert!(
+        drawn(&stage).contains(&"  pull failed on todoist: the service did not answer".to_string()),
+        "{:?}",
+        drawn(&stage)
+    );
+    assert_eq!(
+        stage
+            .rows()
+            .into_iter()
+            .filter(|row| matches!(row, StatusRow::Change { .. }))
+            .count(),
+        4,
+        "a notice naming no object is not a cursor target"
+    );
+}
+
+#[test]
+fn a_notice_that_names_an_object_carries_its_mark() {
+    let marked = full()
+        .rows()
+        .into_iter()
+        .find(|row| matches!(row, StatusRow::Change { oid, .. } if oid.as_str() == "7a8b9c0d1e2"));
+    let Some(StatusRow::Change { mark, .. }) = marked else {
+        panic!("the notice row is not a cursor target");
+    };
+    assert_eq!(mark, Mark::Notice);
+}
+
+#[test]
+fn a_conflict_value_is_quoted_without_leaking_rust_escaping() {
+    let stage = Stage {
+        conflicts: vec![Conflict {
+            oid: Oid::new("3d4e5f6"),
+            remote: "todoist".to_string(),
+            ours: "say \"hi\"".to_string(),
+            theirs: "a\\b".to_string(),
+        }],
+        ..full()
+    };
+
+    assert!(
+        drawn(&stage)
+            .contains(&"  3d4e5f6  todoist  ours: \"say \"hi\"\"  theirs: \"a\\b\"".to_string()),
+        "{:?}",
+        drawn(&stage)
+    );
+}
+
+#[test]
+fn a_conflict_value_that_spans_lines_still_draws_as_one_row() {
+    let stage = Stage {
+        conflicts: vec![Conflict {
+            oid: Oid::new("3d4e5f6"),
+            remote: "todoist".to_string(),
+            ours: "line\nbreak".to_string(),
+            theirs: "carriage\rreturn".to_string(),
+        }],
+        ..full()
+    };
+
+    assert!(
+        drawn(&stage)
+            .iter()
+            .all(|line| !line.contains('\n') && !line.contains('\r')),
+        "{:?}",
+        drawn(&stage)
+    );
+    assert!(
+        drawn(&stage).contains(
+            &"  3d4e5f6  todoist  ours: \"line break\"  theirs: \"carriage return\"".to_string()
+        ),
+        "{:?}",
+        drawn(&stage)
+    );
 }
 
 #[test]
 fn the_summary_counts_what_the_status_line_carries() {
-    assert_eq!(full().summary(), "3 staged  2 changed  1 unpushed  1 notice");
+    assert_eq!(
+        full().summary(),
+        "2 staged  1 changed  3 unpushed  1 notice"
+    );
+    assert_eq!(
+        full().unpushed_commits(),
+        3,
+        "two remotes, one and two commits"
+    );
 }
 
 #[test]
 fn one_commit_and_two_commits_are_both_spelled_correctly() {
     let one = Stage {
-        unpushed: vec![Unpushed { remote: "todoist".to_string(), commits: 1 }],
+        unpushed: vec![Unpushed {
+            remote: "todoist".to_string(),
+            commits: 1,
+            oids: Vec::new(),
+        }],
         ..full()
     };
     let two = Stage {
-        unpushed: vec![Unpushed { remote: "todoist".to_string(), commits: 2 }],
+        unpushed: vec![Unpushed {
+            remote: "todoist".to_string(),
+            commits: 2,
+            oids: Vec::new(),
+        }],
         ..full()
     };
     assert!(drawn(&one).contains(&"  todoist  1 commit".to_string()));
@@ -2316,8 +2579,66 @@ deriving `Clone`, `Debug`, `PartialEq` and `Eq`, plus:
 
 use crate::{Mark, Oid, StagingMarks};
 
-#[cfg(test)]
-mod tests;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Op {
+    Create,
+    Update,
+    Delete,
+}
+
+/// One object `dam` reports as changed, and the field names the change touches.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Change {
+    pub oid: Oid,
+    pub op: Op,
+    pub subject: String,
+    pub fields: Vec<String>,
+}
+
+/// How far one remote is behind the local commits, and which objects those commits touch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Unpushed {
+    pub remote: String,
+    pub commits: u64,
+    /// The objects whose changes sit in this remote's unpushed commits. Empty when the `dam` that
+    /// answered does not publish them, which costs the rows their unpushed mark and nothing else.
+    pub oids: Vec<Oid>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Conflict {
+    pub oid: Oid,
+    pub remote: String,
+    pub ours: String,
+    pub theirs: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Notice {
+    pub kind: String,
+    pub oid: Option<Oid>,
+    pub remote: Option<String>,
+    pub message: String,
+}
+
+/// The five arrays `dam status --json` answers with.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Stage {
+    pub staged: Vec<Change>,
+    pub unstaged: Vec<Change>,
+    pub unpushed: Vec<Unpushed>,
+    pub conflicts: Vec<Conflict>,
+    pub notices: Vec<Notice>,
+}
+
+/// One line of the Status screen. A `Change` row names an oid and is therefore a cursor target; a
+/// `Line` names none, and carries a mark only where the screen draws one beside it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StatusRow {
+    Heading(String),
+    Change { oid: Oid, mark: Mark, text: String },
+    Line { mark: Option<Mark>, text: String },
+}
 
 impl Stage {
     pub fn is_clean(&self) -> bool {
@@ -2334,6 +2655,13 @@ impl Stage {
 
     pub fn staged_count(&self) -> usize {
         self.staged.len()
+    }
+
+    /// Whether an object's changes sit in some remote's unpushed commits.
+    pub fn is_unpushed(&self, oid: &Oid) -> bool {
+        self.unpushed
+            .iter()
+            .any(|remote| remote.oids.iter().any(|unpushed| unpushed == oid))
     }
 
     pub fn unpushed_commits(&self) -> u64 {
@@ -2358,12 +2686,15 @@ impl Stage {
         if self.unpushed.iter().any(|remote| remote.commits > 0) {
             rows.push(StatusRow::Heading("Unpushed".to_string()));
             for remote in self.unpushed.iter().filter(|remote| remote.commits > 0) {
-                rows.push(StatusRow::Line(format!(
-                    "  {}  {} commit{}",
-                    remote.remote,
-                    remote.commits,
-                    if remote.commits == 1 { "" } else { "s" }
-                )));
+                rows.push(StatusRow::Line {
+                    mark: Some(Mark::Unpushed),
+                    text: format!(
+                        "  {}  {} commit{}",
+                        remote.remote,
+                        remote.commits,
+                        if remote.commits == 1 { "" } else { "s" }
+                    ),
+                });
             }
         }
         if !self.conflicts.is_empty() || !self.notices.is_empty() {
@@ -2373,23 +2704,30 @@ impl Stage {
                     oid: conflict.oid.clone(),
                     mark: Mark::Conflict,
                     text: format!(
-                        "  {}  {}  ours: {:?}  theirs: {:?}",
+                        "  {}  {}  ours: \"{}\"  theirs: \"{}\"",
                         conflict.oid.short(),
                         conflict.remote,
-                        conflict.ours,
-                        conflict.theirs
+                        one_line(&conflict.ours),
+                        one_line(&conflict.theirs)
                     ),
                 });
             }
-            for notice in &self.notices {
-                rows.push(StatusRow::Line(format!("  {}", notice.message)));
-            }
+            rows.extend(self.notices.iter().map(Notice::row));
         }
         if rows.is_empty() {
-            rows.push(StatusRow::Line("nothing staged, nothing changed".to_string()));
+            rows.push(StatusRow::Line {
+                mark: None,
+                text: "nothing staged, nothing changed".to_string(),
+            });
         }
         rows
     }
+}
+
+/// A conflicting value as one row can carry it. The quotes are the spec's; a newline becomes a
+/// space so a multi-line value cannot break the row it is drawn in.
+fn one_line(value: &str) -> String {
+    value.replace(['\n', '\r'], " ")
 }
 
 fn section(rows: &mut Vec<StatusRow>, heading: &str, changes: &[Change], mark: Mark) {
@@ -2421,6 +2759,24 @@ impl Change {
     }
 }
 
+impl Notice {
+    /// A notice that names an object is a cursor target, the way a conflict is. One about a remote
+    /// rather than an object, such as a failed pull, names none and draws its message alone.
+    fn row(&self) -> StatusRow {
+        match &self.oid {
+            Some(oid) => StatusRow::Change {
+                oid: oid.clone(),
+                mark: Mark::Notice,
+                text: format!("  {}  {}", oid.short(), self.message),
+            },
+            None => StatusRow::Line {
+                mark: None,
+                text: format!("  {}", self.message),
+            },
+        }
+    }
+}
+
 impl StagingMarks for Stage {
     /// Most urgent first: a conflict beats staged, staged beats working, and working beats
     /// unpushed.
@@ -2434,9 +2790,15 @@ impl StagingMarks for Stage {
         if self.unstaged.iter().any(|change| &change.oid == oid) {
             return Some(Mark::Working);
         }
+        if self.is_unpushed(oid) {
+            return Some(Mark::Unpushed);
+        }
         None
     }
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 Add to `crates/herdr-damnit-domain/src/lib.rs`:
@@ -2490,7 +2852,7 @@ object has nothing for is left out rather than written empty.
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Kind, Priority, TaskFields, parse_date};
+    use crate::{Kind, Oid, Priority, TaskFields, parse_date};
 
     fn task() -> Object {
         Object {
@@ -2561,6 +2923,23 @@ mod tests {
         };
 
         assert!(brief(&event, "").starts_with("dam event: file taxes\n"));
+    }
+
+    #[test]
+    fn a_deadline_sits_under_the_due_date_when_the_task_carries_one() {
+        let dated = Object {
+            task: Some(TaskFields {
+                deadline: parse_date("2026-10-01"),
+                ..task().task.expect("a task")
+            }),
+            ..task()
+        };
+
+        assert!(
+            brief(&dated, "").contains("due: 2026-09-20\ndeadline: 2026-10-01\n"),
+            "{}",
+            brief(&dated, "")
+        );
     }
 
     #[test]
@@ -2660,9 +3039,9 @@ SKIP_AI_COMMIT=1 git commit -m "feat(domain): write the agent brief from a dam o
 ```rust
 pub struct DamVersion { pub major: u32, pub minor: u32, pub patch: u32 }
 
-pub const DAM_MINIMUM: DamVersion = DamVersion { major: 0, minor: 1, patch: 0 };
-pub const DAM_KNOWN: DamVersion = DamVersion { major: 0, minor: 1, patch: 0 };
-/// The version that adds `dam restore`, which is what the `!` key is gated on.
+pub const DAM_MINIMUM: DamVersion = DamVersion { major: 0, minor: 2, patch: 0 };
+pub const DAM_KNOWN: DamVersion = DamVersion { major: 0, minor: 2, patch: 0 };
+/// The version assumed to add `dam restore`, which is what the `!` key is gated on.
 pub const DAM_RESTORE: DamVersion = DamVersion { major: 0, minor: 2, patch: 0 };
 
 pub fn parse_version(line: &str) -> Option<DamVersion>;
@@ -2672,9 +3051,17 @@ pub enum Verdict { Fine, Warn(String), Refuse(String) }
 pub fn verdict(found: DamVersion) -> Verdict;
 ```
 
-`DAM_MINIMUM` and `DAM_KNOWN` are both 0.1.0, the version `dam` prints today (`crates/dam-cli`
-declares `version = "0.1.0"`). Below 1.0 the minor is the breaking axis, so `verdict` refuses below
-the minimum, warns when the minor is above the known one, and says nothing in between.
+`DAM_MINIMUM` and `DAM_KNOWN` are both 0.2.0, the version `dam` prints today (`crates/dam-cli`
+declares `version = "0.2.0"` at `webdavis/damnit` `84937a3`). 0.2 is also the floor on its own
+merits: the JSON error document, exit 4 for every refusal, and a change document with no embedded
+object all arrived there, and Task 14 reads all three. `DAM_RESTORE` is 0.2.0 as
+well: `dam restore` ships in that release (`crates/dam-cli/src/commands/restore.rs` at
+`webdavis/damnit` `84937a3`, declared at `args.rs` `Restore(RestoreArgs)` and dispatched in
+`commands/mod.rs`), so the gate is met by every `dam` the pane agrees to draw against. The gate
+stays written and tested: the key it guards is destructive, and the day a floor moves is not the day
+to rediscover that. Below 1.0 the minor is the breaking axis, so
+`verdict` refuses below the minimum, warns when the minor is above the known one, and says nothing
+in between.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2686,7 +3073,11 @@ mod tests {
     use super::*;
 
     fn at(major: u32, minor: u32, patch: u32) -> DamVersion {
-        DamVersion { major, minor, patch }
+        DamVersion {
+            major,
+            minor,
+            patch,
+        }
     }
 
     #[test]
@@ -2702,6 +3093,7 @@ mod tests {
         assert_eq!(parse_version("dam"), None);
         assert_eq!(parse_version("dam 0.1"), None);
         assert_eq!(parse_version("dam version one"), None);
+        assert_eq!(parse_version("dam 0.1.0.4"), None);
     }
 
     #[test]
@@ -2711,7 +3103,11 @@ mod tests {
         };
         assert_eq!(
             message,
-            "dam 0.0.9 is older than the 0.1 this pane needs; run cargo install damnit to update it."
+            "dam 0.0.9 is older than the 0.2 this pane needs; run cargo install damnit to update it."
+        );
+        assert!(
+            matches!(verdict(at(0, 1, 9)), Verdict::Refuse(_)),
+            "the error document and the exit codes this pane reads arrived in 0.2"
         );
     }
 
@@ -2728,15 +3124,20 @@ mod tests {
 
     #[test]
     fn a_newer_patch_of_a_known_minor_says_nothing() {
-        assert!(matches!(verdict(at(0, 1, 7)), Verdict::Fine));
+        assert!(matches!(verdict(at(0, 2, 7)), Verdict::Fine));
         assert!(matches!(verdict(DAM_KNOWN), Verdict::Fine));
     }
 
+    /// `dam restore` ships in the same 0.2.0 that sets the floor, so every `dam` the pane agrees to
+    /// draw against clears the gate. The gate stays because the key it guards is destructive and
+    /// the day a floor moves is not the day to rediscover that.
     #[test]
-    fn the_restore_gate_is_the_minor_that_adds_the_verb() {
+    fn every_dam_the_pane_accepts_clears_the_restore_gate() {
+        assert!(DAM_MINIMUM >= DAM_RESTORE);
         assert!(at(0, 2, 0) >= DAM_RESTORE);
-        assert!(at(0, 3, 1) >= DAM_RESTORE);
-        assert!(at(0, 1, 9) < DAM_RESTORE);
+        assert!(at(0, 2, 9) >= DAM_RESTORE);
+        assert!(at(0, 3, 0) >= DAM_RESTORE);
+        assert!(at(0, 1, 9) < DAM_RESTORE, "and that dam is refused anyway");
     }
 }
 ```
@@ -2754,21 +3155,23 @@ Expected: FAIL with `unresolved module or unlinked crate 'version'`
 //! The version of `dam` the pane was written against, and what to do about the one it found.
 //! Below 1.0 the minor is the breaking axis, so that is the number the two rules compare.
 
-/// The lowest version whose command surface this pane was written against.
+/// The lowest version whose command surface this pane was written against. 0.2 is where the error
+/// document, exit 4 for every refusal, and a change document with no embedded object arrived.
 pub const DAM_MINIMUM: DamVersion = DamVersion {
     major: 0,
-    minor: 1,
+    minor: 2,
     patch: 0,
 };
 
 /// The highest version this pane was tested against.
 pub const DAM_KNOWN: DamVersion = DamVersion {
     major: 0,
-    minor: 1,
+    minor: 2,
     patch: 0,
 };
 
-/// The version that adds `dam restore`, which is what the discard key is gated on.
+/// The version the discard key is gated on. `dam restore` ships in 0.2.0, the same release that
+/// sets the floor, so the gate is met by every `dam` the pane agrees to draw against.
 pub const DAM_RESTORE: DamVersion = DamVersion {
     major: 0,
     minor: 2,
@@ -2851,7 +3254,9 @@ SKIP_AI_COMMIT=1 git commit -m "feat(domain): compare the dam this pane found ag
 
 **Files:**
 - Create: `crates/herdr-damnit-domain/src/failure.rs`
+- Create: `crates/herdr-damnit-domain/src/failure/kind.rs`
 - Create: `crates/herdr-damnit-domain/src/failure/rule.rs`
+- Create: `crates/herdr-damnit-domain/src/failure/tests.rs`
 - Modify: `crates/herdr-damnit-domain/src/lib.rs`
 
 **Interfaces:**
@@ -2860,7 +3265,7 @@ SKIP_AI_COMMIT=1 git commit -m "feat(domain): compare the dam this pane found ag
 
 ```rust
 pub enum Rule { /* dam's eighteen rule words, plus Unknown(String) */ }
-pub enum ErrorKind { Refused, Store, Helper, Credential, Parse, Usage, Cancelled }
+pub enum ErrorKind { /* dam's eight kind words, plus Unknown(String) */ }
 
 pub struct ErrorDocument {
     pub kind: ErrorKind,
@@ -2899,177 +3304,227 @@ a rule `dam` adds later reaches the status line as its message rather than being
 
 A `Store` failure is an exit 1 whose document says `store` and whose message names the SQLite busy
 timeout; it takes four extra words, because the usual cause is a long `dam pull` in another pane and
-a retry loop would queue behind it.
+a retry loop would queue behind it. **Both halves are required.** `kind` of `store` covers every
+store, config and io failure, so a disk error would otherwise be told to wait for a writer that is
+not there, and the message alone would attach the advice to a helper quoting SQLite's sentence back.
+A failure with no document at all is judged on its line, which is what a `dam` too old to print one
+leaves behind.
 
 - [ ] **Step 1: Write the failing tests**
 
-`crates/herdr-damnit-domain/src/failure.rs`, inside `mod tests`:
+`crates/herdr-damnit-domain/src/failure/tests.rs`, which is a file of its own because the module
+and its tests together run past the 300 line ideal:
 
 ```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
+use super::*;
 
-    fn refusal(rule: &str, message: &str, oids: &[&str]) -> ErrorDocument {
-        ErrorDocument {
-            kind: ErrorKind::Refused,
-            message: message.to_string(),
-            rule: Some(Rule::named(rule)),
-            oids: oids.iter().map(|oid| Oid::new(*oid)).collect(),
-        }
+fn refusal(rule: &str, message: &str, oids: &[&str]) -> ErrorDocument {
+    ErrorDocument {
+        kind: ErrorKind::Refused,
+        message: message.to_string(),
+        rule: Some(Rule::named(rule)),
+        oids: oids.iter().map(|oid| Oid::new(*oid)).collect(),
     }
+}
 
-    #[test]
-    fn a_refusal_carries_dams_own_sentence_its_rule_and_its_oids() {
-        let failure = classify(
-            Some(4),
-            Some(refusal(
-                "blocked",
-                "98d8780 cannot be completed: child a9db854 is open",
-                &["98d8780", "a9db854"],
-            )),
-            "",
-        );
-        assert_eq!(
-            failure,
-            Failure::Refused {
-                rule: Rule::Blocked,
-                said: "98d8780 cannot be completed: child a9db854 is open".to_string(),
-                oids: vec![Oid::new("98d8780"), Oid::new("a9db854")],
-            }
-        );
-        assert_eq!(message(&failure), "98d8780 cannot be completed: child a9db854 is open");
-        assert!(leaves_model_untouched(&failure));
-    }
-
-    #[test]
-    fn every_rule_word_dam_publishes_has_a_variant_of_its_own() {
-        for word in [
+#[test]
+fn a_refusal_carries_dams_own_sentence_its_rule_and_its_oids() {
+    let failure = classify(
+        Some(4),
+        Some(refusal(
             "blocked",
-            "cycle",
-            "exclusive_label",
-            "unknown_category",
-            "no_such_object",
-            "no_working_object",
-            "no_such_remote",
-            "not_a_task",
-            "not_an_event",
-            "not_completed",
-            "not_committed",
-            "dirty_on_pull",
-            "move_inside_itself",
-            "nothing_to_commit",
-            "needs_an_answer",
-            "needs_an_editor",
-            "unresolved_conflicts",
-            "missing_credential",
-        ] {
-            assert!(
-                !matches!(Rule::named(word), Rule::Unknown(_)),
-                "{word} has no variant"
-            );
+            "98d8780 cannot be completed: child a9db854 is open",
+            &["98d8780", "a9db854"],
+        )),
+        "",
+    );
+    assert_eq!(
+        failure,
+        Failure::Refused {
+            rule: Rule::Blocked,
+            said: "98d8780 cannot be completed: child a9db854 is open".to_string(),
+            oids: vec![Oid::new("98d8780"), Oid::new("a9db854")],
         }
-    }
+    );
+    assert_eq!(
+        message(&failure),
+        "98d8780 cannot be completed: child a9db854 is open"
+    );
+    assert!(leaves_model_untouched(&failure));
+}
 
-    #[test]
-    fn a_rule_this_pane_has_not_heard_of_keeps_its_word() {
-        assert_eq!(
-            Rule::named("invented_tomorrow"),
-            Rule::Unknown("invented_tomorrow".to_string())
-        );
-    }
-
-    #[test]
-    fn an_empty_stage_is_a_refusal_now_rather_than_an_ordinary_failure() {
-        let failure = classify(
-            Some(4),
-            Some(refusal("nothing_to_commit", "nothing to commit", &[])),
-            "",
-        );
-        assert!(leaves_model_untouched(&failure));
-        assert_eq!(message(&failure), "nothing to commit");
-    }
-
-    #[test]
-    fn a_held_store_says_who_is_holding_it_and_what_to_press() {
-        let failure = classify(
-            Some(1),
-            Some(ErrorDocument {
-                kind: ErrorKind::Store,
-                message: "database is locked".to_string(),
-                rule: None,
-                oids: Vec::new(),
-            }),
-            "",
-        );
-        assert_eq!(
-            message(&failure),
-            "database is locked; another dam is writing, press R to retry."
-        );
-    }
-
-    /// clap answers a bad command line before `dam` runs, so there is no document to read.
-    #[test]
-    fn a_command_line_dam_would_not_read_falls_back_to_its_first_line() {
-        let failure = classify(
-            Some(2),
-            None,
-            "error: unexpected argument '--nope'\n\nUsage: dam ls [QUERY]\n",
-        );
-        assert_eq!(message(&failure), "error: unexpected argument '--nope'");
+#[test]
+fn every_rule_word_dam_publishes_has_a_variant_of_its_own() {
+    for word in [
+        "blocked",
+        "cycle",
+        "exclusive_label",
+        "unknown_category",
+        "no_such_object",
+        "no_working_object",
+        "no_such_remote",
+        "not_a_task",
+        "not_an_event",
+        "not_completed",
+        "not_committed",
+        "dirty_on_pull",
+        "move_inside_itself",
+        "nothing_to_commit",
+        "needs_an_answer",
+        "needs_an_editor",
+        "unresolved_conflicts",
+        "missing_credential",
+    ] {
         assert!(
-            !leaves_model_untouched(&failure),
-            "a bad command line is this pane's own bug, not a rule dam kept"
+            !matches!(Rule::named(word), Rule::Unknown(_)),
+            "{word} has no variant"
         );
     }
+}
 
-    #[test]
-    fn a_dam_too_old_to_print_a_document_still_reaches_the_status_line() {
-        let failure = classify(Some(1), None, "dam: no object matches \"zzzzzzz\"\n");
-        assert_eq!(message(&failure), "no object matches \"zzzzzzz\"");
-    }
+#[test]
+fn a_rule_this_pane_has_not_heard_of_keeps_its_word() {
+    assert_eq!(
+        Rule::named("invented_tomorrow"),
+        Rule::Unknown("invented_tomorrow".to_string())
+    );
+}
 
-    #[test]
-    fn a_cancelled_run_is_never_an_error_banner() {
-        assert_eq!(message(&classify(Some(3), None, "")), "cancelled");
-        assert_eq!(
-            message(&Failure::Cancelled { killed: true }),
-            "cancelled (killed)"
-        );
-        assert!(leaves_model_untouched(&Failure::Cancelled { killed: false }));
-    }
+#[test]
+fn an_empty_stage_is_a_refusal_now_rather_than_an_ordinary_failure() {
+    let failure = classify(
+        Some(4),
+        Some(refusal("nothing_to_commit", "nothing to commit", &[])),
+        "",
+    );
+    assert!(leaves_model_untouched(&failure));
+    assert_eq!(message(&failure), "nothing to commit");
+}
 
-    #[test]
-    fn a_dam_that_is_not_there_says_how_to_get_one() {
-        assert_eq!(
-            message(&Failure::NotInstalled),
-            "dam is not on PATH; install it with cargo install damnit, then press R."
-        );
-    }
+#[test]
+fn a_held_store_says_who_is_holding_it_and_what_to_press() {
+    let failure = classify(
+        Some(1),
+        Some(ErrorDocument {
+            kind: ErrorKind::Store,
+            message: "database is locked".to_string(),
+            rule: None,
+            oids: Vec::new(),
+        }),
+        "",
+    );
+    assert_eq!(
+        message(&failure),
+        "database is locked; another dam is writing, press R to retry."
+    );
+    let without_document = classify(Some(1), None, "dam: database is locked\n");
+    assert_eq!(
+        message(&without_document),
+        "database is locked; another dam is writing, press R to retry."
+    );
+}
 
-    #[test]
-    fn output_that_will_not_parse_says_so_without_quoting_it() {
-        assert_eq!(
-            message(&Failure::Unreadable),
-            "dam answered with something this pane could not read."
-        );
-    }
+/// clap answers a bad command line before `dam` runs, so there is no document to read.
+#[test]
+fn a_failure_whose_own_kind_is_not_the_store_takes_no_retry_advice() {
+    let failure = classify(
+        Some(1),
+        Some(ErrorDocument {
+            kind: ErrorKind::Helper,
+            message: "the todoist helper says the database is locked".to_string(),
+            rule: None,
+            oids: Vec::new(),
+        }),
+        "",
+    );
+    assert_eq!(
+        message(&failure),
+        "the todoist helper says the database is locked"
+    );
+}
 
-    #[test]
-    fn a_read_past_its_deadline_names_the_command_and_the_wait() {
-        assert_eq!(
-            message(&Failure::Deadline("dam ls".to_string())),
-            "dam ls took longer than 30s and was cancelled."
-        );
-    }
+#[test]
+fn a_store_failure_that_is_not_the_busy_timeout_takes_no_retry_advice() {
+    let failure = classify(
+        Some(1),
+        Some(ErrorDocument {
+            kind: ErrorKind::Store,
+            message: "disk I/O error".to_string(),
+            rule: None,
+            oids: Vec::new(),
+        }),
+        "",
+    );
+    assert_eq!(message(&failure), "disk I/O error");
+}
 
-    #[test]
-    fn a_signal_death_with_no_code_is_reported_rather_than_swallowed() {
-        assert_eq!(
-            message(&classify(None, None, "")),
-            "dam was killed before it answered."
-        );
-    }
+#[test]
+fn a_command_line_dam_would_not_read_falls_back_to_its_first_line() {
+    let failure = classify(
+        Some(2),
+        None,
+        "error: unexpected argument '--nope'\n\nUsage: dam ls [QUERY]\n",
+    );
+    assert_eq!(message(&failure), "error: unexpected argument '--nope'");
+    assert!(
+        !leaves_model_untouched(&failure),
+        "a bad command line is this pane's own bug, not a rule dam kept"
+    );
+}
+
+#[test]
+fn a_dam_too_old_to_print_a_document_still_reaches_the_status_line() {
+    let failure = classify(Some(1), None, "dam: no object matches \"zzzzzzz\"\n");
+    assert_eq!(message(&failure), "no object matches \"zzzzzzz\"");
+}
+
+#[test]
+fn a_cancelled_run_is_never_an_error_banner() {
+    assert_eq!(
+        classify(Some(3), None, ""),
+        Failure::Cancelled { killed: false }
+    );
+    assert!(leaves_model_untouched(&classify(Some(3), None, "")));
+    assert_eq!(message(&classify(Some(3), None, "")), "cancelled");
+    assert_eq!(
+        message(&Failure::Cancelled { killed: true }),
+        "cancelled (killed)"
+    );
+    assert!(leaves_model_untouched(&Failure::Cancelled {
+        killed: false
+    }));
+}
+
+#[test]
+fn a_dam_that_is_not_there_says_how_to_get_one() {
+    assert_eq!(
+        message(&Failure::NotInstalled),
+        "dam is not on PATH; install it with cargo install damnit, then press R."
+    );
+}
+
+#[test]
+fn output_that_will_not_parse_says_so_without_quoting_it() {
+    assert_eq!(
+        message(&Failure::Unreadable),
+        "dam answered with something this pane could not read."
+    );
+}
+
+#[test]
+fn a_read_past_its_deadline_names_the_command_and_the_wait() {
+    assert_eq!(
+        message(&Failure::Deadline("dam ls".to_string())),
+        "dam ls took longer than 30s and was cancelled."
+    );
+}
+
+#[test]
+fn a_signal_death_with_no_code_is_reported_rather_than_swallowed() {
+    assert_eq!(
+        message(&classify(None, None, "")),
+        "dam was killed before it answered."
+    );
 }
 ```
 
@@ -3078,7 +3533,82 @@ mod tests {
 Run: `cargo test -p herdr-damnit-domain --locked failure`
 Expected: FAIL, the test module naming types that do not exist yet.
 
-- [ ] **Step 3: Write the rule words**
+- [ ] **Step 3: Write the kind words**
+
+`crates/herdr-damnit-domain/src/failure/kind.rs`:
+
+```rust
+//! The `kind` `dam` names on an error document. One word per kind, and the word itself for one
+//! `dam` adds later, so a parser has somewhere to put a word this pane has not heard of.
+
+/// Every kind word `dam` 0.2.0 publishes, and the word itself for one it adds later.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ErrorKind {
+    Refused,
+    Store,
+    Helper,
+    Credential,
+    Parse,
+    Usage,
+    Cancelled,
+    Editor,
+    Unknown(String),
+}
+
+impl ErrorKind {
+    pub fn named(word: &str) -> Self {
+        match word {
+            "refused" => Self::Refused,
+            "store" => Self::Store,
+            "helper" => Self::Helper,
+            "credential" => Self::Credential,
+            "parse" => Self::Parse,
+            "usage" => Self::Usage,
+            "cancelled" => Self::Cancelled,
+            "editor" => Self::Editor,
+            other => Self::Unknown(other.to_string()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_kind_word_dam_publishes_has_a_variant_of_its_own() {
+        for word in [
+            "refused",
+            "store",
+            "helper",
+            "credential",
+            "parse",
+            "usage",
+            "cancelled",
+            "editor",
+        ] {
+            assert!(
+                !matches!(ErrorKind::named(word), ErrorKind::Unknown(_)),
+                "{word} has no variant"
+            );
+        }
+    }
+
+    #[test]
+    fn a_kind_this_pane_has_not_heard_of_keeps_its_word_rather_than_failing_the_parse() {
+        assert_eq!(
+            ErrorKind::named("invented_tomorrow"),
+            ErrorKind::Unknown("invented_tomorrow".to_string())
+        );
+    }
+}
+```
+
+`dam`'s `kind()` emits eight words (`crates/dam-cli/src/error.rs`), `editor` among them, and
+`Unknown` is what keeps a ninth reaching the status line with `dam`'s own sentence instead of being
+dropped, the way `Rule::Unknown` does for a rule word.
+
+- [ ] **Step 4: Write the rule words**
 
 `crates/herdr-damnit-domain/src/failure/rule.rs`:
 
@@ -3137,7 +3667,7 @@ impl Rule {
 }
 ```
 
-- [ ] **Step 4: Write the module**
+- [ ] **Step 5: Write the module**
 
 `crates/herdr-damnit-domain/src/failure.rs`, above its test module:
 
@@ -3147,25 +3677,15 @@ impl Rule {
 
 use crate::Oid;
 
+mod kind;
 mod rule;
 
+pub use kind::ErrorKind;
 pub use rule::Rule;
 
 /// The read deadline the pane cancels a local read at. A SQLite read that takes this long is a
 /// wedged store rather than a slow one.
 pub const READ_DEADLINE_SECONDS: u64 = 30;
-
-/// The `kind` of `dam`'s error document.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ErrorKind {
-    Refused,
-    Store,
-    Helper,
-    Credential,
-    Parse,
-    Usage,
-    Cancelled,
-}
 
 /// `dam`'s error document, parsed by the adapters crate and handed here.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -3207,7 +3727,9 @@ pub fn classify(code: Option<i32>, error: Option<ErrorDocument>, fallback: &str)
     };
     match (code, error) {
         (Some(REFUSED), Some(document)) => Failure::Refused {
-            rule: document.rule.unwrap_or_else(|| Rule::Unknown(String::new())),
+            rule: document
+                .rule
+                .unwrap_or_else(|| Rule::Unknown(String::new())),
             said: document.message,
             oids: document.oids,
         },
@@ -3249,15 +3771,26 @@ fn first_line(stderr: &str) -> String {
     line.strip_prefix("dam: ").unwrap_or(line).to_string()
 }
 
-/// SQLite's own words for a store another writer is holding past the five-second busy timeout.
+/// A held store is both halves `dam` reports: its own `store` kind, and SQLite's words for a
+/// writer holding the store past the five-second busy timeout. A disk error under the same kind
+/// takes no advice about waiting for another writer. A failure with no document is judged on its
+/// line alone, which is what a `dam` too old to print one leaves behind.
 fn is_store(error: &Option<ErrorDocument>, fallback: &str) -> bool {
     let said = match error {
-        Some(document) => document.message.as_str(),
+        Some(document) => {
+            if document.kind != ErrorKind::Store {
+                return false;
+            }
+            document.message.as_str()
+        }
         None => fallback,
     }
     .to_ascii_lowercase();
     said.contains("database is locked") || said.contains("database table is locked")
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 Add to `crates/herdr-damnit-domain/src/lib.rs`:
@@ -3271,12 +3804,12 @@ pub use failure::{
 };
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [ ] **Step 6: Run the tests to verify they pass**
 
 Run: `cargo test --workspace --locked && cargo clippy --workspace --all-targets --locked -- -D warnings`
 Expected: PASS and clean.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -3681,9 +4214,6 @@ Expected: FAIL with `unresolved module or unlinked crate 'argv'`
 
 use herdr_damnit_domain::{Oid, Priority};
 
-#[cfg(test)]
-mod tests;
-
 /// `--json` is a global flag on `dam`. It selects the report on standard output and the error
 /// document on standard error, so every command whose failure the pane reports ends with it.
 pub const JSON: &str = "--json";
@@ -3813,6 +4343,9 @@ pub fn restore(oid: &Oid) -> Vec<String> {
 fn words(argv: &[&str]) -> Vec<String> {
     argv.iter().map(|word| word.to_string()).collect()
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 Add to `crates/herdr-damnit-application/src/lib.rs`:
@@ -4115,9 +4648,6 @@ use herdr_damnit_domain::Oid;
 
 use crate::{DamRunner, Finished, RunningJob, SpawnError};
 
-#[cfg(test)]
-mod tests;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SyncKind {
     Commit,
@@ -4285,6 +4815,9 @@ impl Jobs {
             .or_else(|| self.running.first())
     }
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 Add to `crates/herdr-damnit-application/src/lib.rs`:
@@ -4351,10 +4884,10 @@ mod tests {
 
     #[test]
     fn a_dam_at_the_floor_with_the_five_keys_is_ready_and_quiet() {
-        let Handshake::Ready { version, warning } = handshake("dam 0.1.0\n", STATUS) else {
+        let Handshake::Ready { version, warning } = handshake("dam 0.2.0\n", STATUS) else {
             panic!("expected ready");
         };
-        assert_eq!(version.to_string(), "0.1.0");
+        assert_eq!(version.to_string(), "0.2.0");
         assert_eq!(warning, None);
     }
 
@@ -4374,7 +4907,7 @@ mod tests {
         let Handshake::Refuse(message) = handshake("dam 0.0.9", STATUS) else {
             panic!("expected a refusal");
         };
-        assert!(message.contains("is older than the 0.1 this pane needs"), "{message}");
+        assert!(message.contains("is older than the 0.2 this pane needs"), "{message}");
     }
 
     #[test]
@@ -4391,7 +4924,7 @@ mod tests {
     #[test]
     fn a_status_document_missing_a_key_fails_the_handshake_and_names_it() {
         let missing = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[]}"#;
-        let Handshake::Refuse(message) = handshake("dam 0.1.0", missing) else {
+        let Handshake::Refuse(message) = handshake("dam 0.2.0", missing) else {
             panic!("expected a refusal");
         };
         assert_eq!(
@@ -4402,7 +4935,7 @@ mod tests {
 
     #[test]
     fn a_status_document_that_is_not_json_fails_the_handshake() {
-        let Handshake::Refuse(message) = handshake("dam 0.1.0", "not json") else {
+        let Handshake::Refuse(message) = handshake("dam 0.2.0", "not json") else {
             panic!("expected a refusal");
         };
         assert_eq!(message, "dam answered with something this pane could not read.");
@@ -4781,9 +5314,6 @@ use serde::Deserialize;
 use crate::Herdr;
 use crate::argv;
 
-#[cfg(test)]
-mod tests;
-
 const PASTE_START: &str = "\x1b[200~";
 const PASTE_END: &str = "\x1b[201~";
 
@@ -4913,6 +5443,9 @@ fn pasted(text: &str) -> String {
     }
     format!("{PASTE_START}{body}{PASTE_END}")
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 Add to `crates/herdr-damnit-application/src/lib.rs`:
@@ -5304,7 +5837,7 @@ fn main() -> std::process::ExitCode {
     }
 
     if argv.first().map(String::as_str) == Some("--version") {
-        print!("{}", read("version.txt").unwrap_or_else(|| "dam 0.1.0\n".to_string()));
+        print!("{}", read("version.txt").unwrap_or_else(|| "dam 0.2.0\n".to_string()));
         return std::process::ExitCode::SUCCESS;
     }
 
@@ -6069,6 +6602,10 @@ fn a_conflict_and_a_notice_carry_the_text_the_status_screen_draws() {
     assert_eq!(stage.conflicts[0].ours, "mine");
     assert_eq!(stage.conflicts[0].theirs, "theirs");
     assert_eq!(stage.unpushed[0].commits, 2);
+    assert!(
+        stage.unpushed[0].oids.is_empty(),
+        "a dam that sends no oids leaves the set empty"
+    );
     assert_eq!(stage.notices[0].kind, "pull_failed");
     assert_eq!(
         stage.notices[0].message,
@@ -6160,9 +6697,6 @@ use herdr_damnit_domain::{
     TaskFields, Unpushed, parse_date,
 };
 use serde::Deserialize;
-
-#[cfg(test)]
-mod tests;
 
 #[derive(Deserialize)]
 struct WireObject {
@@ -6273,6 +6807,9 @@ fn into_object(wire: WireObject) -> Object {
 fn read<T: serde::de::DeserializeOwned>(json: &str) -> Result<T, String> {
     serde_json::from_str(json).map_err(|error| error.to_string())
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 The status, log and sync readers go in a sibling file to keep both inside the line cap:
@@ -6321,6 +6858,10 @@ struct WireConflict {
 struct WireUnpushed {
     remote: String,
     commits: u64,
+    /// Added in `dam` 0.2.x. A `dam` that does not send it leaves the set empty, which costs the
+    /// rows their unpushed mark and nothing else.
+    #[serde(default)]
+    oids: Vec<String>,
 }
 
 pub fn stage(json: &str) -> Result<Stage, String> {
@@ -6334,6 +6875,7 @@ pub fn stage(json: &str) -> Result<Stage, String> {
             .map(|remote| Unpushed {
                 remote: remote.remote,
                 commits: remote.commits,
+                oids: remote.oids.into_iter().map(Oid::new).collect(),
             })
             .collect(),
         conflicts: status
@@ -6761,9 +7303,6 @@ use std::path::{Path, PathBuf};
 use herdr_damnit_domain::{IconSet, OPEN, View};
 use serde::Deserialize;
 
-#[cfg(test)]
-mod tests;
-
 /// The interval read, which is two local reads rather than three network requests.
 pub const DEFAULT_REFRESH_SECONDS: u64 = 300;
 
@@ -6832,6 +7371,9 @@ fn default_icons() -> Icons {
 fn default_handoff_label() -> String {
     DEFAULT_HANDOFF_LABEL.to_string()
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 `Placement` and `Side` carry over from `crates/herdr-damnit/src/placement.rs` and
@@ -7322,9 +7864,6 @@ use herdr_damnit_domain::{
     Cursor, Date, Failure, Object, Stage, Views, classify, message, rows,
 };
 
-#[cfg(test)]
-mod tests;
-
 /// The poll window while a job is in flight, which is what makes the spinner animate.
 const BUSY_WINDOW: Duration = Duration::from_millis(50);
 
@@ -7476,6 +8015,9 @@ fn elapsed_text(elapsed: Duration) -> String {
         false => format!("{}s", elapsed.as_secs()),
     }
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 `App` also holds `objects: Vec<Object>`, the model the List screen is drawn from, and
@@ -7757,9 +8299,6 @@ use crate::theme::Palette;
 
 mod list;
 
-#[cfg(test)]
-mod tests;
-
 /// The keys the hint line offers, cut to the pane's width.
 const HINTS: &str = "x X dd p s D l m a S e <CR> <Space> c P L v Tab";
 
@@ -7800,6 +8339,9 @@ pub fn render_to_text(app: &App, width: u16, height: u16) -> String {
         .trim_end()
         .to_string()
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 `status_line` puts `App::header(Instant::now())` on the left and the counts on the right, cutting the
@@ -7866,7 +8408,7 @@ mod tests {
     fn opening_asks_for_the_version_and_the_status_before_anything_else() {
         let mut harness = harness();
         start(&mut harness.app);
-        harness.answer(0, 0, "dam 0.1.0\n", "");
+        harness.answer(0, 0, "dam 0.2.0\n", "");
         harness.answer(1, 0, CLEAN, "");
 
         let lines = harness.lines();
@@ -7885,7 +8427,7 @@ mod tests {
         assert!(harness.app.refusal.is_some());
         assert!(
             crate::screens::render_to_text(&harness.app, 32, 6)
-                .contains("is older than the 0.1 this pane needs"),
+                .contains("is older than the 0.2 this pane needs"),
             "{}",
             crate::screens::render_to_text(&harness.app, 32, 6)
         );
@@ -7917,7 +8459,7 @@ mod tests {
     fn a_status_document_missing_a_key_refuses_to_draw() {
         let mut harness = harness();
         start(&mut harness.app);
-        harness.answer(0, 0, "dam 0.1.0\n", "");
+        harness.answer(0, 0, "dam 0.2.0\n", "");
         harness.answer(
             1,
             0,
@@ -7960,13 +8502,13 @@ use herdr_damnit_application::{JobKind, argv, handshake};
 
 use crate::app::App;
 
-#[cfg(test)]
-mod tests;
-
 /// Ask `dam` its version. Everything else follows from the answer.
 pub fn start(app: &mut App) {
     app.submit(JobKind::Version, argv::version());
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 `JobKind` gains two variants for the handshake, `Version` and `Handshake`, and `App` gains
@@ -8307,8 +8849,9 @@ Expected: FAIL with `no variant named 'ReadDone'`
 with `Screen::next` and `Screen::previous` cycling `List`, `Status`, `Done` and leaving `Detail`
 alone, and `App::show` submitting `ReadDone` and `ReadLog` on the first entry to `Done`.
 
-`screens/status.rs` renders `app.stage.rows()`, each `StatusRow::Change` coloured by its mark and the
-rest plain. `screens/done.rs` groups by completion date, newest first, with the uncommitted ones
+`screens/status.rs` renders `app.stage.rows()`, each `StatusRow::Change` coloured by its mark, each
+`StatusRow::Line` drawing its `Option<Mark>` in the same mark column when it carries one, and a
+`Heading` plain. No row's mark is inferred from the section it sits under. `screens/done.rs` groups by completion date, newest first, with the uncommitted ones
 under a `not committed` heading at the top, and draws `YYYY-MM-DD  <subject>` with the date first.
 
 - [ ] **Step 4: Run the tests to verify they pass**
@@ -8546,6 +9089,13 @@ and these keys on `App`:
 The `view` action runs as its own process, so its request arrives as a file rather than as a key:
 `App::tick` takes it with `state::take_requested_view` and selects that view. The read is consuming,
 so the pane does not pull itself back to it after the operator has moved on.
+
+**`Views::select` and `Views::select_named` cannot tell a refusal from a no-op.** Both answer `false`
+for an index past the end, a name that is not there, and a selection that was already showing, so
+the number keys must not read that `false` as "no such view": pressing `7` with six views configured
+is the message `the config has 6 views.`, while pressing the number of the view already showing is
+silence. Ask `name_of_number` first, which answers `None` only when the view is absent, and use
+`select` for the move.
 
 The interval read defaults to 300 seconds and is held back while an overlay is open or a screen other
 than List is showing, so a half-typed line is never redrawn away.
@@ -10234,7 +10784,6 @@ what makes the key appear the day the operator updates `dam`, with no pane relea
 | `!` | a row with a working change, and a `dam` at or above `DAM_RESTORE`, pressed once | a confirm names the object and the fields that would be lost |
 | `!` | the confirm is up, `!` again | `dam restore <oid>` runs and the working change is discarded |
 | `!` | the confirm is up, any other key | the confirm is dismissed and nothing is sent |
-| `!` | a `dam` older than `DAM_RESTORE` | the key is unbound and nothing happens |
 
 That gate is the only place a key depends on a `dam` version, and it exists because a confirm followed
 by a refusal is the worst shape a destructive key can have.
@@ -10265,17 +10814,6 @@ fn with_working_change(version: &str) -> super::tests::Harness {
     );
     harness.app.select_oid(&herdr_damnit_domain::Oid::new("1a2b3c4"));
     harness
-}
-
-#[test]
-fn the_discard_key_is_unbound_on_a_dam_that_has_no_restore() {
-    let mut harness = with_working_change("dam 0.1.0");
-    let before = harness.lines().len();
-    harness.press(KeyCode::Char('!'));
-
-    assert!(harness.app.overlay.is_none(), "it asked on a dam that cannot answer");
-    assert_eq!(harness.lines().len(), before);
-    assert!(harness.app.message.is_empty());
 }
 
 #[test]
@@ -10334,6 +10872,12 @@ with `has_restore` reading `self.dam_version.is_some_and(|found| found >= DAM_RE
 `ask_discard` raising the confirm only when the oid under the cursor appears in
 `self.stage.unstaged`.
 
+**There is no test for a `dam` without `restore`, because no such `dam` reaches a key.** The verb
+ships in 0.2.0 and the handshake refuses anything below that floor before a single key is bound, so
+the unbound case is unreachable and a test for it would assert on a state the pane cannot be in. The
+gate is kept anyway: it costs one comparison, it is pinned in Task 13 against the floor, and it is
+what makes a future floor move visible at the key rather than at the first refusal.
+
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test --workspace --locked -- --test-threads=1`
@@ -10384,8 +10928,8 @@ mod tests {
 
     #[test]
     fn a_dam_that_answers_reports_its_version_and_the_verdict() {
-        let report = report_from("dam 0.1.0\n", Some(CLEAN), "example\n");
-        assert!(report.contains("dam 0.1.0"), "{report}");
+        let report = report_from("dam 0.2.0\n", Some(CLEAN), "example\n");
+        assert!(report.contains("dam 0.2.0"), "{report}");
         assert!(report.contains("status: ok"), "{report}");
         assert!(report.contains("example"), "{report}");
     }
@@ -10393,13 +10937,13 @@ mod tests {
     #[test]
     fn a_dam_below_the_floor_is_reported_as_the_problem_it_is() {
         let report = report_from("dam 0.0.9\n", Some(CLEAN), "");
-        assert!(report.contains("is older than the 0.1 this pane needs"), "{report}");
+        assert!(report.contains("is older than the 0.2 this pane needs"), "{report}");
     }
 
     #[test]
     fn a_status_missing_a_key_is_reported_by_name() {
         let report = report_from(
-            "dam 0.1.0\n",
+            "dam 0.2.0\n",
             Some(r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[]}"#),
             "",
         );
@@ -10415,7 +10959,7 @@ mod tests {
 
     #[test]
     fn no_configured_remote_is_reported_rather_than_left_blank() {
-        let report = report_from("dam 0.1.0\n", Some(CLEAN), "");
+        let report = report_from("dam 0.2.0\n", Some(CLEAN), "");
         assert!(report.contains("no remotes configured"), "{report}");
     }
 }

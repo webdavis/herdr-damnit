@@ -1,19 +1,34 @@
 //! The pane's rules, over `std` and `jiff` alone: no serde, no ratatui, no process call.
 
+mod brief;
 mod cursor;
 mod dates;
+mod failure;
 mod marks;
 mod object;
 mod oid;
 mod priority;
 mod rows;
 mod slot;
+mod stage;
+mod version;
+mod views;
 
+pub use brief::brief;
 pub use cursor::Cursor;
 pub use dates::{Date, DueState, due_state, long, parse_date, short};
+pub use failure::{
+    ErrorDocument, ErrorKind, Failure, READ_DEADLINE_SECONDS, Rule, classify,
+    leaves_model_untouched, message,
+};
 pub use marks::{IconSet, Mark};
 pub use object::{Attendee, EventFields, Kind, Object, TaskFields};
 pub use oid::Oid;
 pub use priority::Priority;
 pub use rows::{ObjectRow, Row, RowStyle, Segment, StagingMarks, rows};
 pub use slot::Slot;
+pub use stage::{Change, Conflict, Notice, Op, Stage, StatusRow, Unpushed};
+pub use version::{
+    DAM_KNOWN, DAM_MINIMUM, DAM_RESTORE, DamVersion, Verdict, parse_version, verdict,
+};
+pub use views::{DONE_QUERY, MAX_NUMBERED_VIEW, OPEN, OPEN_QUERY, View, Views};

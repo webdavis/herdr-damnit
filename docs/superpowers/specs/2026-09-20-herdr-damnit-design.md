@@ -231,12 +231,14 @@ link.
 
 ### The version handshake
 
-On start, before the first read, the pane runs `dam --version`. The binary prints `dam 0.1.0`
-(measured; `clap`'s standard `-V`). The pane parses `dam <major>.<minor>.<patch>` and compares
-against two compiled-in constants:
+On start, before the first read, the pane runs `dam --version`. The binary prints `dam 0.2.0`
+(`crates/dam-cli/Cargo.toml` at `webdavis/damnit` `84937a3`; `clap`'s standard `-V`). The pane
+parses `dam <major>.<minor>.<patch>` and compares against two compiled-in constants:
 
-- `DAM_MINIMUM`, the lowest version whose command surface the pane was written against.
-- `DAM_KNOWN`, the highest version the pane was tested against.
+- `DAM_MINIMUM`, the lowest version whose command surface the pane was written against: 0.2.0,
+  which is where the error document, exit 4 for every refusal, and a change document with no
+  embedded object arrived, all three of which the pane reads.
+- `DAM_KNOWN`, the highest version the pane was tested against: 0.2.0.
 
 Below 1.0, the minor is the breaking axis, so the rule is:
 
@@ -281,7 +283,9 @@ the stream rather than hunting a line in it:
           "a9db854060d1943ef9eb9f6d7a8ac0b1ace45d77"]}}
 ```
 
-`kind` is one of `refused`, `store`, `helper`, `credential`, `parse`, `usage` and `cancelled`.
+`kind` is one of `refused`, `store`, `helper`, `credential`, `parse`, `usage`, `cancelled` and
+`editor` (`crates/dam-cli/src/error.rs`, `kind`). A client reads a word it does not know as an
+unknown kind and keeps `dam`'s own sentence, rather than failing the parse and losing it.
 `rule` is one stable snake_case word on a refusal and null on every other kind: `blocked`, `cycle`,
 `exclusive_label`, `unknown_category`, `no_such_object`, `no_working_object`, `no_such_remote`,
 `not_a_task`, `not_an_event`, `not_completed`, `not_committed`, `dirty_on_pull`,
@@ -1153,8 +1157,9 @@ Made while writing this design, on 2026-09-20:
 ### Needed from dam
 
 Each item names what the pane needs, why, and the `dam` change that would provide it. None of them
-blocks the pane shipping; the two marked **blocking a key** are the reason a key is absent or
-re-aimed in version one.
+blocks the pane shipping. The one marked **blocking a key** is why a key is re-aimed in version one,
+and the one marked **blocking a mark** is why a mark in the List screen's table stays unlit until
+`dam` publishes the field behind it.
 
 **1. Clear `done` on a task. Blocking a key.** `dam` version one has `done` and no inverse:
 `dam edit --help` lists no done flag, and there is no `undone` or `reopen` subcommand
@@ -1163,16 +1168,18 @@ client. Proposed: `dam edit <oid> --undone`, next to the other paired flags `--n
 `--no-deadline`, `--no-recurrence` and `--detach`, which already establish the shape. The pane would
 bind it to `u`, matching the completed list's existing key.
 
-**2. Discard a working change. Blocking a key.** `dam reset` unstages; nothing restores an object to
-its last committed state. The pane's `!` key has no verb to call. Proposed: `dam restore <oid>...`,
-git's own word for it since 2.23, refusing on an object with no commit behind it and naming that in
-the refusal. `dam reset --hard` would also work and reads worse, because `dam reset` already means
-unstage.
+**2. Discard a working change. DELIVERED in `dam` 0.2.0.** `dam reset` unstages, and
+`dam restore <oid>...` puts an object back to its last committed state: git's own word for it since
+2.23 (`crates/dam-cli/src/commands/restore.rs` at `webdavis/damnit` `84937a3`, declared at
+`args.rs` as `Restore(RestoreArgs)` and dispatched in `commands/mod.rs`). The pane's `!` key has its
+verb.
 
-The pane binds `!` only when the version the handshake read is at or above the one that adds
-`restore`, so the key appears the day the operator updates `dam` and no pane release is needed for
-it. That gate is the only place a key depends on a `dam` version, and it exists because a confirm
-followed by a refusal is the worst shape a destructive key can have.
+The pane binds `!` only when the version the handshake read is at or above `DAM_RESTORE`, which is
+0.2.0, the same release that sets the floor, so every `dam` the pane agrees to draw against clears
+it. The gate stays written and tested rather than deleted: it is the only place a key depends on a
+`dam` version, it costs one comparison, and it exists because a confirm followed by a refusal is the
+worst shape a destructive key can have. A floor that moves later shows up at the key rather than at
+the first refusal.
 
 **3. A JSON error envelope under `--json`. DELIVERED in `dam` 0.2.0.** Under `--json` and `--toon`
 a failure is one document on standard error and nothing else,
@@ -1208,6 +1215,18 @@ not, because it polls `status` per render, which is the measurement that moved t
 a `warnings` list, which matters to a client that adds a remote and this pane never does, and
 `--toon` prints the same error document as `--json`, which this pane has no use for because it reads
 JSON.
+
+**9. The objects behind an unpushed count. Blocking a mark.** `dam status --json` answers `unpushed`
+as one row per remote carrying `remote` and `commits`
+(`crates/dam-application/src/use_cases/status.rs`, `Status::unpushed`, a `Vec<(RemoteName, usize)>`,
+serialized in `crates/dam-cli/src/commands/status.rs`). No oid is published, so a client can say how
+far a remote is behind but not which objects are behind on it, and the unpushed mark in the List
+screen's mark table above has nothing to read. `dam` already holds the answer: `push` coalesces the
+unpushed commits' changes per oid (`crates/dam-application/src/use_cases/push/mutations.rs`).
+Proposed, additive and therefore a 0.2.x change: each `unpushed` row gains `"oids": [...]`, the
+objects whose changes sit in that remote's unpushed commits. The pane reads the field when it is
+there and leaves its set empty when it is not, so a `dam` without it draws every other mark as
+before and only loses the up arrow.
 
 **8. Richer date words.** `--due` accepts `today`, `tomorrow`, `YYYY-MM-DD` and `YYYY-MM-DDTHH:MM`;
 `dam` refuses `next mon` with a message naming exactly that set (measured). The old pane leaned on

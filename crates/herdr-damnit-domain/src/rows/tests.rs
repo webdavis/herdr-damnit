@@ -101,6 +101,17 @@ fn the_marks_lead_the_line_in_one_order() {
     assert_eq!(rows[1].text(), "  + ! < 09-18 ~ pay the rent @2");
 }
 
+/// The spec's List mock draws an object whose commits have not reached the remote with the up
+/// arrow leading, which is the staging column `mark_of` fills.
+#[test]
+fn an_unpushed_object_draws_the_up_arrow_in_the_staging_column() {
+    let object = task("1", "home", "refresh the roster row");
+
+    let rows = rows(&[object], &OneMark(Oid::new("1"), Mark::Unpushed), style());
+
+    assert_eq!(rows[1].text(), "  ^ refresh the roster row");
+}
+
 #[test]
 fn a_date_due_today_carries_its_mark_and_no_date_beside_it() {
     let mut object = task("1", "home", "call the bank");

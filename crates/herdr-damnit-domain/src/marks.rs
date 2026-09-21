@@ -1,7 +1,7 @@
 //! The marks a row carries: the object's own state, and the staging state `dam status` reports for
 //! it. Two sets draw them. The Nerd Font set uses glyphs from the Font Awesome block every Nerd
-//! Font patches in, each one cell wide; the plain set uses one character per mark, for a terminal
-//! whose font has none of those glyphs.
+//! Font patches in, each one cell wide, except the notice, which draws a plain `!` in both sets;
+//! the plain set uses one character per mark, for a terminal whose font has none of those glyphs.
 
 use crate::{DueState, Priority, Slot};
 
@@ -25,6 +25,7 @@ pub enum Mark {
     Staged,
     Unpushed,
     Conflict,
+    Notice,
 }
 
 impl Mark {
@@ -56,6 +57,7 @@ impl Mark {
             Self::Recurring | Self::Staged => Slot::Green,
             Self::Labels(_) => Slot::Purple,
             Self::Unpushed => Slot::Cyan,
+            Self::Notice => Slot::Orange,
         }
     }
 
@@ -97,6 +99,7 @@ impl Mark {
             (Self::Unpushed, IconSet::Ascii) => "^",
             (Self::Conflict, IconSet::NerdFont) => "\u{f00d}",
             (Self::Conflict, IconSet::Ascii) => "x",
+            (Self::Notice, _) => "!",
             (Self::Labels(_), _) => Self::labels_sigil(set),
         }
     }
@@ -152,6 +155,16 @@ mod tests {
         }
     }
 
+    /// A notice is a decision waiting rather than the refusal a conflict is, so it draws below
+    /// red, and it draws the `!` the spec's Status screen shows in both sets: the Font Awesome
+    /// block has no glyph that reads as a notice more plainly than the character itself.
+    #[test]
+    fn a_notice_draws_the_same_bang_whichever_set_is_chosen() {
+        assert_eq!(Mark::Notice.glyph(IconSet::Ascii), "!");
+        assert_eq!(Mark::Notice.glyph(IconSet::NerdFont), "!");
+        assert_eq!(Mark::Notice.slot(), Slot::Orange);
+    }
+
     #[test]
     fn a_label_count_is_the_sigil_and_the_number() {
         assert_eq!(Mark::Labels(2).glyph(IconSet::Ascii), "@2");
@@ -202,6 +215,7 @@ mod tests {
             Mark::Staged,
             Mark::Unpushed,
             Mark::Conflict,
+            Mark::Notice,
         ] {
             let glyph = mark.glyph(IconSet::NerdFont);
             assert_eq!(glyph.chars().count(), 1, "{mark:?} drew {glyph:?}");
