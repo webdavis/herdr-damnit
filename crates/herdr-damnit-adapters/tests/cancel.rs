@@ -7,9 +7,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+mod support;
+
 use herdr_damnit_adapters::{Cancel, ProcessDamRunner};
 use herdr_damnit_application::DamRunner;
 use std::os::unix::process::CommandExt;
+use support::Scratch;
 
 /// Longer than any fake in this file needs, so a machine under load waits rather than fails.
 const PATIENCE: Duration = Duration::from_secs(20);
@@ -21,12 +24,6 @@ const FOREVER_MS: &str = "30000";
 
 fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
-}
-
-fn scratch(name: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("herdr-damnit-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_file(&path);
-    path
 }
 
 fn runner() -> ProcessDamRunner {
@@ -102,7 +99,8 @@ fn interrupts(log: &Path) -> usize {
 #[test]
 fn cancelling_sends_sigint_and_dam_answers_with_its_cancelled_code() {
     let _env = fake_env();
-    let log = scratch("cancel-log");
+    let scratch = Scratch::new("cancel-log");
+    let log = scratch.file("argv.jsonl");
     set("FAKE_DAM_LOG", &log);
     set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
     set("FAKE_DAM_FIXTURE_DIR", fixtures());
@@ -181,7 +179,8 @@ fn a_job_with_no_deadline_answers_for_itself() {
 #[test]
 fn the_interrupt_reaches_the_group_rather_than_its_leader_alone() {
     let _env = fake_env();
-    let log = scratch("group-log");
+    let scratch = Scratch::new("group-log");
+    let log = scratch.file("argv.jsonl");
     set("FAKE_DAM_LOG", &log);
     set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
 
@@ -203,7 +202,8 @@ fn the_interrupt_reaches_the_group_rather_than_its_leader_alone() {
 #[test]
 fn a_dam_that_ignores_the_interrupt_is_killed_and_carries_no_code() {
     let _env = fake_env();
-    let log = scratch("kill-log");
+    let scratch = Scratch::new("kill-log");
+    let log = scratch.file("argv.jsonl");
     set("FAKE_DAM_LOG", &log);
     set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
     set("FAKE_DAM_IGNORE_SIGINT", "1");

@@ -4,6 +4,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+mod support;
+
+use support::Scratch;
+
 fn fake() -> &'static str {
     env!("CARGO_BIN_EXE_fake-dam")
 }
@@ -12,10 +16,18 @@ fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
 }
 
-fn scratch(name: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("herdr-damnit-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_file(&path);
-    path
+/// Every temp path a test here writes lives in a directory the test owns, so a run leaves nothing
+/// behind in the system temp directory whether it passed, failed or panicked.
+#[test]
+fn a_scratch_directory_is_gone_once_its_owner_drops() {
+    let path = {
+        let scratch = Scratch::new("drop-check");
+        std::fs::write(scratch.file("a-log"), "written").expect("a file in the scratch");
+        assert!(scratch.dir().is_dir(), "the scratch was never created");
+        scratch.dir().to_path_buf()
+    };
+
+    assert!(!path.exists(), "the scratch outlived its owner");
 }
 
 #[test]
@@ -35,7 +47,8 @@ fn the_fake_replays_the_fixture_named_by_its_subcommand() {
 
 #[test]
 fn the_fake_appends_one_json_line_of_argv_per_call() {
-    let log = scratch("argv-log");
+    let scratch = Scratch::new("argv-log");
+    let log = scratch.file("argv.jsonl");
     for argv in [vec!["status", "--json"], vec!["ls", "!done", "--json"]] {
         Command::new(fake())
             .args(&argv)
@@ -155,7 +168,8 @@ fn the_subcommand_alone_chooses_the_fixture_when_no_name_overrides_it() {
 /// exit 3, with the signal recorded for the cancellation tests to read.
 #[test]
 fn an_interrupt_is_recorded_and_answered_with_the_cancelled_code() {
-    let log = scratch("signal-log");
+    let scratch = Scratch::new("signal-log");
+    let log = scratch.file("argv.jsonl");
     let mut child = Command::new(fake())
         .args(["push", "--json"])
         .env("FAKE_DAM_LOG", &log)
