@@ -1524,9 +1524,6 @@ Expected: FAIL with `unresolved module or unlinked crate 'rows'`
 
 use crate::{Date, DueState, IconSet, Mark, Object, Oid, Slot, due_state, short};
 
-#[cfg(test)]
-mod tests;
-
 /// The heading an object with no path of its own is grouped under.
 const NO_PATH: &str = "(no path)";
 
@@ -1653,6 +1650,9 @@ fn object_row(object: &Object, marks: &dyn StagingMarks, style: &RowStyle) -> Ro
         segments,
     })
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 Add to `crates/herdr-damnit-domain/src/lib.rs`:
@@ -3812,9 +3812,6 @@ Expected: FAIL with `unresolved module or unlinked crate 'argv'`
 
 use herdr_damnit_domain::{Oid, Priority};
 
-#[cfg(test)]
-mod tests;
-
 /// `--json` is a global flag on `dam`. It selects the report on standard output and the error
 /// document on standard error, so every command whose failure the pane reports ends with it.
 pub const JSON: &str = "--json";
@@ -3944,6 +3941,9 @@ pub fn restore(oid: &Oid) -> Vec<String> {
 fn words(argv: &[&str]) -> Vec<String> {
     argv.iter().map(|word| word.to_string()).collect()
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 Add to `crates/herdr-damnit-application/src/lib.rs`:
@@ -4246,9 +4246,6 @@ use herdr_damnit_domain::Oid;
 
 use crate::{DamRunner, Finished, RunningJob, SpawnError};
 
-#[cfg(test)]
-mod tests;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SyncKind {
     Commit,
@@ -4416,6 +4413,9 @@ impl Jobs {
             .or_else(|| self.running.first())
     }
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 Add to `crates/herdr-damnit-application/src/lib.rs`:
@@ -4912,9 +4912,6 @@ use serde::Deserialize;
 use crate::Herdr;
 use crate::argv;
 
-#[cfg(test)]
-mod tests;
-
 const PASTE_START: &str = "\x1b[200~";
 const PASTE_END: &str = "\x1b[201~";
 
@@ -5044,6 +5041,9 @@ fn pasted(text: &str) -> String {
     }
     format!("{PASTE_START}{body}{PASTE_END}")
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 Add to `crates/herdr-damnit-application/src/lib.rs`:
@@ -6292,9 +6292,6 @@ use herdr_damnit_domain::{
 };
 use serde::Deserialize;
 
-#[cfg(test)]
-mod tests;
-
 #[derive(Deserialize)]
 struct WireObject {
     oid: String,
@@ -6404,6 +6401,9 @@ fn into_object(wire: WireObject) -> Object {
 fn read<T: serde::de::DeserializeOwned>(json: &str) -> Result<T, String> {
     serde_json::from_str(json).map_err(|error| error.to_string())
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 The status, log and sync readers go in a sibling file to keep both inside the line cap:
@@ -6892,9 +6892,6 @@ use std::path::{Path, PathBuf};
 use herdr_damnit_domain::{IconSet, OPEN, View};
 use serde::Deserialize;
 
-#[cfg(test)]
-mod tests;
-
 /// The interval read, which is two local reads rather than three network requests.
 pub const DEFAULT_REFRESH_SECONDS: u64 = 300;
 
@@ -6963,6 +6960,9 @@ fn default_icons() -> Icons {
 fn default_handoff_label() -> String {
     DEFAULT_HANDOFF_LABEL.to_string()
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 `Placement` and `Side` carry over from `crates/herdr-damnit/src/placement.rs` and
@@ -7453,9 +7453,6 @@ use herdr_damnit_domain::{
     Cursor, Date, Failure, Object, Stage, Views, classify, message, rows,
 };
 
-#[cfg(test)]
-mod tests;
-
 /// The poll window while a job is in flight, which is what makes the spinner animate.
 const BUSY_WINDOW: Duration = Duration::from_millis(50);
 
@@ -7607,6 +7604,9 @@ fn elapsed_text(elapsed: Duration) -> String {
         false => format!("{}s", elapsed.as_secs()),
     }
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 `App` also holds `objects: Vec<Object>`, the model the List screen is drawn from, and
@@ -7888,9 +7888,6 @@ use crate::theme::Palette;
 
 mod list;
 
-#[cfg(test)]
-mod tests;
-
 /// The keys the hint line offers, cut to the pane's width.
 const HINTS: &str = "x X dd p s D l m a S e <CR> <Space> c P L v Tab";
 
@@ -7931,6 +7928,9 @@ pub fn render_to_text(app: &App, width: u16, height: u16) -> String {
         .trim_end()
         .to_string()
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 `status_line` puts `App::header(Instant::now())` on the left and the counts on the right, cutting the
@@ -8091,13 +8091,13 @@ use herdr_damnit_application::{JobKind, argv, handshake};
 
 use crate::app::App;
 
-#[cfg(test)]
-mod tests;
-
 /// Ask `dam` its version. Everything else follows from the answer.
 pub fn start(app: &mut App) {
     app.submit(JobKind::Version, argv::version());
 }
+
+#[cfg(test)]
+mod tests;
 ```
 
 `JobKind` gains two variants for the handshake, `Version` and `Handshake`, and `App` gains
