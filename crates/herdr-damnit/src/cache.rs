@@ -150,7 +150,7 @@ mod tests {
 
     pub(crate) fn scratch(name: &str) -> PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("herdr-todoist-cache-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("herdr-damnit-cache-{name}-{}", std::process::id()));
         clear(&dir);
         dir
     }

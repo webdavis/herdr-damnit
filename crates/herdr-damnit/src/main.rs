@@ -33,7 +33,7 @@ use config::Config;
 use pane::Mode;
 
 const USAGE: &str = "\
-usage: herdr-todoist [<command>]
+usage: herdr-damnit [<command>]
 
   (no command)   run the Todoist pane
   open           open the pane in this workspace, or focus it when it is already open
@@ -94,6 +94,6 @@ fn report(outcome: Result<String, String>) -> std::process::ExitCode {
 }
 
 fn fail(error: &str) -> std::process::ExitCode {
-    eprintln!("herdr-todoist: {error}");
+    eprintln!("herdr-damnit: {error}");
     std::process::ExitCode::FAILURE
 }

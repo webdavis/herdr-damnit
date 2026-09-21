@@ -187,11 +187,11 @@ impl Config {
 }
 
 /// herdr hands the plugin its own config directory; the documented path is the fallback for a run
-/// outside herdr, such as `herdr-todoist doctor` from a shell.
+/// outside herdr, such as `herdr-damnit doctor` from a shell.
 fn config_path() -> PathBuf {
     let dir = match std::env::var_os("HERDR_PLUGIN_CONFIG_DIR") {
         Some(dir) => PathBuf::from(dir),
-        None => base_config_dir().join("herdr/plugins/config/herdr-todoist"),
+        None => base_config_dir().join("herdr/plugins/config/herdr-damnit"),
     };
     dir.join("config.toml")
 }

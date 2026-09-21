@@ -104,12 +104,12 @@ mod tests {
 
     #[test]
     fn an_editor_that_cannot_be_started_is_reported_by_its_name() {
-        let argv = ["herdr-todoist-no-such-editor".to_string()];
+        let argv = ["herdr-damnit-no-such-editor".to_string()];
 
         let error = run(&argv).expect_err("refuses");
 
         assert!(
-            error.starts_with("herdr-todoist-no-such-editor: "),
+            error.starts_with("herdr-damnit-no-such-editor: "),
             "{error}"
         );
     }

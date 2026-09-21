@@ -51,8 +51,7 @@ fn a_numbered_action_s_request_outranks_the_configured_opening_view() {
          [[views]]\nname = \"work\"\nfilter = \"#Work\"\n",
     )
     .expect("parses");
-    let request =
-        std::env::temp_dir().join(format!("herdr-todoist-opening-{}", std::process::id()));
+    let request = std::env::temp_dir().join(format!("herdr-damnit-opening-{}", std::process::id()));
     let _ = std::fs::remove_file(&request);
 
     assert_eq!(

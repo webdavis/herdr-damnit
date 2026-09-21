@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 pub fn state_dir() -> PathBuf {
     match std::env::var_os("HERDR_PLUGIN_STATE_DIR") {
         Some(dir) => PathBuf::from(dir),
-        None => state_home().join("herdr/plugins/state/herdr-todoist"),
+        None => state_home().join("herdr/plugins/state/herdr-damnit"),
     }
 }
 
@@ -82,8 +82,7 @@ mod tests {
     use super::*;
 
     fn scratch(name: &str) -> PathBuf {
-        let path =
-            std::env::temp_dir().join(format!("herdr-todoist-{name}-{}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("herdr-damnit-{name}-{}", std::process::id()));
         let _ = std::fs::remove_file(&path);
         path
     }
