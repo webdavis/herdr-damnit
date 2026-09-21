@@ -2463,19 +2463,22 @@ fn a_conflict_value_that_spans_lines_still_draws_as_one_row() {
             oid: Oid::new("3d4e5f6"),
             remote: "todoist".to_string(),
             ours: "line\nbreak".to_string(),
-            theirs: "plain".to_string(),
+            theirs: "carriage\rreturn".to_string(),
         }],
         ..full()
     };
 
     assert!(
-        drawn(&stage).iter().all(|line| !line.contains('\n')),
+        drawn(&stage)
+            .iter()
+            .all(|line| !line.contains('\n') && !line.contains('\r')),
         "{:?}",
         drawn(&stage)
     );
     assert!(
-        drawn(&stage)
-            .contains(&"  3d4e5f6  todoist  ours: \"line break\"  theirs: \"plain\"".to_string()),
+        drawn(&stage).contains(
+            &"  3d4e5f6  todoist  ours: \"line break\"  theirs: \"carriage return\"".to_string()
+        ),
         "{:?}",
         drawn(&stage)
     );
