@@ -190,7 +190,7 @@ keys and the pane's hint line all share; raising it means adding entries in all 
 key = "prefix+ctrl+t"
 type = "plugin_action"
 command = "herdr-damnit.view:2"
-description = "todoist: show view 2"
+description = "damnit: show view 2"
 ```
 
 A number with no view behind it exits non-zero saying how many views the config has.
