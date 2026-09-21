@@ -55,6 +55,10 @@ fn harness() -> Harness {
 }
 
 impl Harness {
+    fn submit(&mut self, kind: JobKind, argv: Vec<String>) -> Submitted {
+        self.jobs.submit(kind, argv)
+    }
+
     /// Answer one spawned job. A send to a superseded job fails because dropping it from the table
     /// dropped its receiver, which is the mechanism by which its result never reaches the model, so
     /// the answer is offered rather than required.
@@ -76,15 +80,12 @@ impl Harness {
 fn a_second_push_is_refused_with_a_sentence_and_never_spawned() {
     let mut harness = harness();
     assert!(matches!(
-        harness
-            .jobs
-            .submit(JobKind::Exclusive(SyncKind::Push), crate::argv::push()),
+        harness.submit(JobKind::Exclusive(SyncKind::Push), crate::argv::push()),
         Submitted::Started(_)
     ));
 
-    let Submitted::Refused(message) = harness
-        .jobs
-        .submit(JobKind::Exclusive(SyncKind::Push), crate::argv::push())
+    let Submitted::Refused(message) =
+        harness.submit(JobKind::Exclusive(SyncKind::Push), crate::argv::push())
     else {
         panic!("expected a refusal");
     };
@@ -96,13 +97,10 @@ fn a_second_push_is_refused_with_a_sentence_and_never_spawned() {
 #[test]
 fn a_pull_is_refused_while_a_push_runs_and_names_the_one_that_is_running() {
     let mut harness = harness();
-    harness
-        .jobs
-        .submit(JobKind::Exclusive(SyncKind::Push), crate::argv::push());
+    harness.submit(JobKind::Exclusive(SyncKind::Push), crate::argv::push());
 
-    let Submitted::Refused(message) = harness
-        .jobs
-        .submit(JobKind::Exclusive(SyncKind::Pull), crate::argv::pull())
+    let Submitted::Refused(message) =
+        harness.submit(JobKind::Exclusive(SyncKind::Pull), crate::argv::pull())
     else {
         panic!("expected a refusal");
     };
@@ -112,13 +110,9 @@ fn a_pull_is_refused_while_a_push_runs_and_names_the_one_that_is_running() {
 #[test]
 fn a_write_runs_alongside_a_push_because_dam_serialises_them_at_the_store() {
     let mut harness = harness();
-    harness
-        .jobs
-        .submit(JobKind::Exclusive(SyncKind::Push), crate::argv::push());
+    harness.submit(JobKind::Exclusive(SyncKind::Push), crate::argv::push());
     assert!(matches!(
-        harness
-            .jobs
-            .submit(JobKind::Write, crate::argv::stage_all()),
+        harness.submit(JobKind::Write, crate::argv::stage_all()),
         Submitted::Started(_)
     ));
     assert_eq!(harness.jobs.in_flight(), 2);
@@ -127,12 +121,8 @@ fn a_write_runs_alongside_a_push_because_dam_serialises_them_at_the_store() {
 #[test]
 fn a_newer_read_of_a_kind_supersedes_the_older_one_and_its_result_is_dropped() {
     let mut harness = harness();
-    harness
-        .jobs
-        .submit(JobKind::ReadList, crate::argv::list("!done"));
-    harness
-        .jobs
-        .submit(JobKind::ReadList, crate::argv::list("done"));
+    harness.submit(JobKind::ReadList, crate::argv::list("!done"));
+    harness.submit(JobKind::ReadList, crate::argv::list("done"));
 
     harness.answer(0, ok(r#"{"objects":[]}"#));
     harness.answer(1, ok(r#"{"objects":[{"oid":"1"}]}"#));
@@ -148,12 +138,8 @@ fn a_newer_read_of_a_kind_supersedes_the_older_one_and_its_result_is_dropped() {
 #[test]
 fn two_writes_are_two_intentions_and_neither_supersedes_the_other() {
     let mut harness = harness();
-    harness
-        .jobs
-        .submit(JobKind::Write, crate::argv::stage_all());
-    harness
-        .jobs
-        .submit(JobKind::Write, crate::argv::unstage_all());
+    harness.submit(JobKind::Write, crate::argv::stage_all());
+    harness.submit(JobKind::Write, crate::argv::unstage_all());
 
     assert_eq!(harness.jobs.in_flight(), 2);
 }
@@ -161,9 +147,7 @@ fn two_writes_are_two_intentions_and_neither_supersedes_the_other() {
 #[test]
 fn a_write_asks_for_a_fresh_status_and_a_fresh_list_rather_than_patching_the_model() {
     let mut harness = harness();
-    harness
-        .jobs
-        .submit(JobKind::Write, crate::argv::stage_all());
+    harness.submit(JobKind::Write, crate::argv::stage_all());
     harness.answer(0, ok("{}"));
 
     let completions = harness.jobs.drain();
@@ -176,9 +160,7 @@ fn a_write_asks_for_a_fresh_status_and_a_fresh_list_rather_than_patching_the_mod
 #[test]
 fn a_finished_push_asks_for_the_same_two_reads_a_write_does() {
     let mut harness = harness();
-    harness
-        .jobs
-        .submit(JobKind::Exclusive(SyncKind::Push), crate::argv::push());
+    harness.submit(JobKind::Exclusive(SyncKind::Push), crate::argv::push());
     harness.answer(0, ok("{}"));
 
     assert_eq!(
@@ -190,9 +172,7 @@ fn a_finished_push_asks_for_the_same_two_reads_a_write_does() {
 #[test]
 fn a_read_asks_for_nothing_after_itself() {
     let mut harness = harness();
-    harness
-        .jobs
-        .submit(JobKind::ReadStatus, crate::argv::status());
+    harness.submit(JobKind::ReadStatus, crate::argv::status());
     harness.answer(0, ok("{}"));
 
     assert_eq!(harness.jobs.drain()[0].follow_up, Vec::new());
@@ -201,9 +181,7 @@ fn a_read_asks_for_nothing_after_itself() {
 #[test]
 fn draining_does_not_block_on_a_job_that_has_not_answered() {
     let mut harness = harness();
-    harness
-        .jobs
-        .submit(JobKind::ReadStatus, crate::argv::status());
+    harness.submit(JobKind::ReadStatus, crate::argv::status());
 
     assert!(harness.jobs.drain().is_empty());
     assert_eq!(harness.jobs.in_flight(), 1);
@@ -212,9 +190,7 @@ fn draining_does_not_block_on_a_job_that_has_not_answered() {
 #[test]
 fn a_finished_job_leaves_the_table() {
     let mut harness = harness();
-    harness
-        .jobs
-        .submit(JobKind::ReadStatus, crate::argv::status());
+    harness.submit(JobKind::ReadStatus, crate::argv::status());
     harness.answer(0, ok("{}"));
     harness.jobs.drain();
 
@@ -240,9 +216,7 @@ fn a_dam_that_is_not_there_is_reported_rather_than_started() {
 #[test]
 fn a_push_names_itself_while_it_runs_and_nothing_once_it_is_drained() {
     let mut harness = harness();
-    harness
-        .jobs
-        .submit(JobKind::Exclusive(SyncKind::Pull), crate::argv::pull());
+    harness.submit(JobKind::Exclusive(SyncKind::Pull), crate::argv::pull());
     assert_eq!(harness.jobs.exclusive(), Some(SyncKind::Pull));
 
     harness.answer(0, ok("{}"));
