@@ -48,8 +48,7 @@ title = "damnit: focus pane"
 contexts = ["pane", "workspace"]
 command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" focus"]
 
-# The staging model is the reason this plugin exists, so it gets a chord of its own rather than
-# two `<Tab>` presses.
+# The staging model is the reason this plugin exists, so it gets a chord of its own.
 [[actions]]
 id = "status"
 title = "damnit: open pane on the status screen"
