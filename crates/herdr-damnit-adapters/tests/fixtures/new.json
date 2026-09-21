@@ -1,0 +1,20 @@
+{
+  "oid": "eac590fb8d1b49f4af867d99450f6ca3affa585b",
+  "kind": "event",
+  "subject": "stand-up",
+  "body": "",
+  "path": "",
+  "labels": [],
+  "depends": [],
+  "reminders": [],
+  "event": {
+    "start": "2026-09-21T09:00:00+00:00[UTC]",
+    "end": "2026-09-21T09:15:00+00:00[UTC]",
+    "attendees": [],
+    "status": "confirmed",
+    "transparency": "busy",
+    "visibility": "default",
+    "event_type": "default",
+    "attachments": []
+  }
+}

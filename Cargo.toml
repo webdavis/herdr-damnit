@@ -1,6 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/todoist", "crates/herdr-damnit-domain", "crates/herdr-damnit-application", "crates/herdr-damnit"]
+members = [
+  "crates/todoist",
+  "crates/herdr-damnit-domain",
+  "crates/herdr-damnit-application",
+  "crates/herdr-damnit-adapters",
+  "crates/herdr-damnit",
+]
 default-members = ["crates/herdr-damnit"]
 
 [workspace.package]
@@ -10,6 +16,7 @@ license = "MIT"
 repository = "https://github.com/webdavis/herdr-damnit"
 
 [workspace.dependencies]
+herdr-damnit-adapters = { path = "crates/herdr-damnit-adapters" }
 herdr-damnit-application = { path = "crates/herdr-damnit-application" }
 herdr-damnit-domain = { path = "crates/herdr-damnit-domain" }
 jiff = "0.2"

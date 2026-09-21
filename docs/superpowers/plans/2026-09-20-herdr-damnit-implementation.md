@@ -5502,6 +5502,7 @@ documents into the domain types.
 - Create: `crates/herdr-damnit-adapters/Cargo.toml`
 - Create: `crates/herdr-damnit-adapters/src/lib.rs`
 - Create: `crates/herdr-damnit-adapters/src/bin/fake_dam.rs`
+- Create: `crates/herdr-damnit-adapters/tests/support/mod.rs`
 - Create: `crates/herdr-damnit-adapters/tests/fixtures/capture.sh`
 - Create: `crates/herdr-damnit-adapters/tests/fixtures/*.json` (the fifteen documents below)
 - Create: `crates/herdr-damnit-adapters/tests/fake_dam.rs`
@@ -5519,10 +5520,12 @@ documents into the domain types.
     for a refusal is the whole error document `dam` prints under `--json`), and `FAKE_DAM_SLEEP_MS`
     (a sleep before answering). It installs a `SIGINT` handler that appends a `{"signal":"SIGINT"}`
     line to the log and exits 3.
-  - Fifteen fixtures: `ls.json`, `ls-empty.json`, `ls-done.json`, `status-clean.json`,
-    `status-full.json`, `show-task.json`, `show-event.json`, `log.json`, `push-ok.json`,
-    `push-partial-failure.json`, `pull-ok.json`, `pull-conflict.json`, `commit.json`, `new.json`,
-    `version.txt`.
+  - Sixteen fixtures: `ls.json`, `ls-empty.json`, `ls-done.json`, `status-clean.json`,
+    `status-full.json`, `show-task.json`, `show-event.json`, `log.json`, `log-completion.json`,
+    `push-ok.json`, `push-partial-failure.json`, `pull-ok.json`, `pull-conflict.json`,
+    `commit.json`, `new.json`, `version.txt`. `log-completion.json` is the log of a store whose
+    task was completed and committed, which is the only fixture that carries the shape
+    `completions` walks.
 
 Fixtures are owned by this repository and are byte copies of documents the built `dam` actually
 produced. A `dam` change that moves the bytes fails a test here, which is the point: the pane pins
@@ -5545,10 +5548,22 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-git clone --quiet https://github.com/webdavis/damnit "$work/damnit"
-git -C "$work/damnit" checkout --quiet "$revision"
-(cd "$work/damnit" && cargo build --release --locked --quiet)
-dam="$work/damnit/target/release/dam"
+if [[ -n "${DAM_BIN:-}" ]]; then
+  dam="$DAM_BIN"
+else
+  git clone --quiet https://github.com/webdavis/damnit "$work/damnit"
+  git -C "$work/damnit" checkout --quiet "$revision"
+  (cd "$work/damnit" && cargo build --release --locked --quiet)
+  dam="$work/damnit/target/release/dam"
+fi
+
+# dam reads the store and the config from these when its flags name none, and it stamps an event
+# with the local zone, so the capture runs in UTC against a store nothing else can reach.
+export HOME="$work/home"
+export XDG_CONFIG_HOME="$work/home/.config"
+export XDG_DATA_HOME="$work/home/.local/share"
+export TZ=UTC
+mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
 
 export DAM_STORE="$work/store.sqlite"
 export DAM_CONFIG="$work/config.toml"
@@ -5559,23 +5574,35 @@ CONFIG
 
 "$dam" --version >"$here/version.txt"
 
+# A clean status is one with nothing staged, nothing working and no unpushed commit, which is the
+# empty store: the first commit below leaves one commit unpushed for the life of the capture.
+"$dam" status --json >"$here/status-clean.json"
+
 "$dam" new "ship the pin bump" --path "proj/dotfiles" -p 1 --due 2026-09-18 >/dev/null
 "$dam" new "refresh the roster row" --path "proj/dotfiles" --label slow >/dev/null
-"$dam" new "water the plants" --path "proj/home" --recurrence "every week" >/dev/null
+"$dam" new "water the plants" --path "proj/home" >/dev/null
+plants="$("$dam" ls "path:proj/home/" --json |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["objects"][0]["oid"])')"
+# Recurrence is an edit flag rather than a new flag, so the weekly task takes two calls.
+"$dam" edit "$plants" --recurrence "every week" >/dev/null
 "$dam" ls "!done" --json >"$here/ls.json"
 "$dam" ls "path:nowhere/" --json >"$here/ls-empty.json"
 "$dam" status --json >"$here/status-full.json"
 
 "$dam" add -A >/dev/null
 "$dam" commit -m "the first commit" --json >"$here/commit.json"
-"$dam" status --json >"$here/status-clean.json"
 "$dam" log --json >"$here/log.json"
 
-first="$("$dam" ls "!done" --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["objects"][0]["oid"])')"
+first="$("$dam" ls "!done" --json |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["objects"][0]["oid"])')"
 "$dam" show "$first" --json >"$here/show-task.json"
 "$dam" done "$first" >/dev/null
+"$dam" add -A >/dev/null
+"$dam" commit -m "the completion" --json >/dev/null
+"$dam" log --json >"$here/log-completion.json"
 "$dam" ls "done" --json >"$here/ls-done.json"
-"$dam" new "stand-up" --event --start 2026-09-21T09:00 --end 2026-09-21T09:15 --json >"$here/new.json"
+"$dam" new "stand-up" --event --start 2026-09-21T09:00 --end 2026-09-21T09:15 --json \
+  >"$here/new.json"
 event="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["oid"])' "$here/new.json")"
 "$dam" show "$event" --json >"$here/show-event.json"
 
@@ -5673,7 +5700,62 @@ chmod +x crates/herdr-damnit-adapters/tests/fixtures/capture.sh
 crates/herdr-damnit-adapters/tests/fixtures/capture.sh
 ```
 
-- [ ] **Step 3: Write the failing test for the fake**
+- [ ] **Step 3: Write the shared scratch fixture**
+
+Every temp path a test in this crate writes goes inside a directory that test owns, so a run leaves
+nothing behind in the system temp directory. A `<name>-<pid>` path per test does not: this lane's
+own runs left twenty-odd `herdr-damnit-*` files there before the fixture existed, because nothing
+ever removed one.
+
+`crates/herdr-damnit-adapters/tests/support/mod.rs`:
+
+```rust
+//! Fixtures the integration tests of this crate share.
+
+use std::path::{Path, PathBuf};
+
+/// A directory of one test's own, removed when the value drops. Every temp path a test writes goes
+/// inside it, so a run leaves nothing behind in the system temp directory, and a panicking test
+/// cleans up on the way out because `Drop` runs while the stack unwinds.
+pub struct Scratch {
+    dir: PathBuf,
+}
+
+impl Scratch {
+    /// `name` distinguishes the scratches of one test binary from each other; the process id
+    /// distinguishes concurrent binaries.
+    pub fn new(name: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("herdr-damnit-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a scratch directory");
+        Self { dir }
+    }
+
+    // Each test binary compiles its own copy of this module, so a method only one of them calls
+    // reads as dead code in the others.
+    #[allow(dead_code)]
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    /// A path inside this scratch. Nothing outside this test writes there.
+    pub fn file(&self, name: &str) -> PathBuf {
+        self.dir.join(name)
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+```
+
+Each integration test file reaches it with `mod support;` and `use support::Scratch;`. Cargo builds
+one copy per test binary, which is why `dir` carries a narrow `allow(dead_code)`: a method only one
+binary calls is dead code in the others.
+
+- [ ] **Step 4: Write the failing test for the fake**
 
 `crates/herdr-damnit-adapters/tests/fake_dam.rs`:
 
@@ -5816,12 +5898,12 @@ fn the_version_flag_answers_the_captured_line() {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they fail**
+- [ ] **Step 5: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-adapters --locked`
 Expected: FAIL, `couldn't read src/bin/fake_dam.rs`
 
-- [ ] **Step 5: Write the fake**
+- [ ] **Step 6: Write the fake**
 
 `crates/herdr-damnit-adapters/src/bin/fake_dam.rs`:
 
@@ -5897,24 +5979,33 @@ fn append(line: &str) {
 /// `dam` maps a cancelled run to exit 3 whatever the abandoned work reported, so the fake does the
 /// same and records the signal for the test to assert on.
 fn install_interrupt_handler() {
+    if std::env::var_os("FAKE_DAM_IGNORE_SIGINT").is_some() {
+        unsafe { libc::signal(libc::SIGINT, libc::SIG_IGN) };
+        return;
+    }
     unsafe extern "C" fn on_interrupt(_: libc::c_int) {
         append(r#"{"signal":"SIGINT"}"#);
         std::process::exit(3);
     }
     unsafe {
-        libc::signal(libc::SIGINT, on_interrupt as libc::sighandler_t);
+        libc::signal(libc::SIGINT, on_interrupt as *const () as libc::sighandler_t);
     }
 }
 ```
 
+The cast through `*const ()` is load-bearing: clippy's `function_casts_as_integer` refuses a
+function item cast straight to an integer type, and this crate builds under `-D warnings`. The
+fifth knob, `FAKE_DAM_IGNORE_SIGINT`, plays a `dam` that never notices the interrupt, which is what
+Task 22 drives the kill escalation with.
+
 The `fake-dam` binary needs `serde_json` and `libc`, which the crate already depends on.
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [ ] **Step 7: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-adapters --locked`
 Expected: PASS, six tests.
 
-- [ ] **Step 7: Prove the fixtures carry no personal data**
+- [ ] **Step 8: Prove the fixtures carry no personal data**
 
 ```bash
 ! grep -rniE 'stephen|webdavis|/Users/|todoist api|token' crates/herdr-damnit-adapters/tests/fixtures/*.json
@@ -5923,7 +6014,7 @@ Expected: PASS, six tests.
 Expected: no match. A fixture that matches was captured against a real store and must be recaptured
 by `capture.sh`.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add -A
@@ -6077,8 +6168,40 @@ fn the_configured_argv_leads_and_the_commands_arguments_follow_it() {
 ```
 
 Each test sets the fake's environment on the process it shares with every other test in the file, so
-run this file single-threaded: `cargo test -p herdr-damnit-adapters --locked --test dam_runner --
---test-threads=1`. Put that flag in the test command of every later step that names this file.
+every test in it opens by taking one file-local lock that also clears all five knobs:
+
+```rust
+/// The fake's knobs live in this process's environment, which every test in this file shares.
+/// A test holds this lock for its whole body and starts from a cleared environment.
+fn fake_env() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let guard = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    for knob in [
+        "FAKE_DAM_FIXTURE_DIR",
+        "FAKE_DAM_FIXTURE",
+        "FAKE_DAM_EXIT",
+        "FAKE_DAM_STDERR",
+        "FAKE_DAM_SLEEP_MS",
+        "FAKE_DAM_LOG",
+        "FAKE_DAM_IGNORE_SIGINT",
+    ] {
+        unsafe { std::env::remove_var(knob) };
+    }
+    guard
+}
+```
+
+The lock rather than `--test-threads=1`, because CI runs the plain
+`cargo test --workspace --locked` and nothing there passes that flag; the poison recovery is what
+keeps one failing test from cascading into the rest of the file. Clearing on entry rather than on
+exit is the other half: a test that panics mid-body never reaches its own cleanup, and under the
+plan's original per-test cleanup that leaked `FAKE_DAM_EXIT` into every later test in the file.
+
+Two more tests beyond the plan's five. The argv test above has to hand `ProcessDamRunner::new` a
+configured argv of **two** words, one of them a leading argument, or it cannot fail when `spawn`
+drops `.args(leading)`: with a one-word argv the assertion holds either way. And an argv with no
+word in it at all is its own arm, `split_first().ok_or(SpawnError::NotFound)`, which needs
+`an_empty_argv_is_a_not_found_rather_than_a_panic`.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
@@ -6238,112 +6361,364 @@ and kills its child before returning, and `main` maps a cancelled run to exit 3.
 `SIGTERM` handler, so a `SIGTERM` is death at an arbitrary point with no chance to reap the helper.
 The group matters because `dam push` spawns the remote helper, which is where the time actually goes.
 
+**Nothing in this file waits for a guessed interval.** The block below is the file as it shipped,
+so it is safe to copy verbatim. Five properties of it are deliberate and each was measured:
+
+1. **No elapsed budget is asserted.** `finished.elapsed < Duration::from_secs(2)` and its
+   one-second sibling are wall-clock upper bounds on a machine that runs many agents at once. What
+   they are for, proving the cancellation fired rather than the fake finishing on its own, is
+   carried instead by a fake that sleeps far past every deadline and grace under test
+   (`FAKE_DAM_SLEEP_MS` of 30000) against a `recv_timeout` of 20 seconds: a run that was not
+   cancelled times out and fails. That is both stricter and load-proof.
+1. **`sleep(150ms)` before cancelling becomes a blocking wait on the fake's own argv line.** The
+   fake logs its argv before it sleeps, so a line in the log proves the child is past its startup
+   and has its handler installed. Under the sleep a loaded machine can interrupt a child that has
+   not installed one yet, whose default action kills it: code `None` rather than `Some(3)`.
+1. **The kill half of this task's own interface gains a test.** `Finished::code` of `None` for a
+   `dam` that took the kill is stated above and pinned by nothing. It cannot be driven through
+   `spawn`, because the production grace is two seconds and no test here may take that long, so
+   `Cancel` takes its grace at construction: `Cancel::of(pid)` keeps the constant and
+   `Cancel::with_grace(pid, grace)` is what the test drives, with a 100 ms grace and the fake in
+   its `FAKE_DAM_IGNORE_SIGINT` mode.
+
+1. **Every fake gets a log of its own and no pipe at all.** A `Fake` owns its child, its log path
+   and a name, so a wait says which child is missing rather than reporting a total across both, and
+   a child that exited without logging is reported at once rather than waited out. Its standard
+   output and standard error are `Stdio::null()`, because nothing here reads them: a fake cannot
+   stall on a pipe buffer this file would never drain. This closes a flake observed once at 20.41 s
+   under a full-workspace build load, where the shared-log wait could only report `N of 2 lines`.
+1. **Every wait on a signalled fake is bounded** by `SIGNAL_PATIENCE`, five seconds, and the
+   timeout path kills the child. An unbounded `wait` on a fake that sleeps `FOREVER_MS` turns a
+   broken signal ladder into a suite that hangs for thirty seconds: measured 31.04 s with the
+   `SIGKILL` deleted, against 6.46 s and the message `the deaf dam was still running 5s after the
+   signal` once bounded. `PATIENCE` stays at twenty seconds for the waits that are load-sensitive
+   rather than ladder-sensitive.
+
+Four tests beyond the plan's three: the kill escalation above, a group that has already gone (the
+`alive` poll's early return, so an interrupted `dam` is never killed on top of the interrupt),
+`the_interrupt_reaches_the_group_rather_than_its_leader_alone` over a second fake joined to the
+first's group with `process_group(leader)`, which is the only thing that catches a `kill` sent to a
+positive pid, and a job with no deadline at all, which is what `spawn` hands down.
+
+Every test in the file runs in under a second, measured one at a time: 0.05 s to 0.52 s.
+
 - [ ] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-adapters/tests/cancel.rs`:
 
 ```rust
-use std::path::{Path, PathBuf};
-use std::time::Duration;
+//! Cancelling a `dam` run, both ways it happens: the pane asking, and a read outliving its
+//! deadline. Nothing here waits for a guessed interval: a test blocks on the fake's own argv line
+//! to know the child is running, and on the result channel to know it answered. A loaded machine
+//! makes these tests slower and never flakier.
 
-use herdr_damnit_adapters::ProcessDamRunner;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
+
+mod support;
+
+use herdr_damnit_adapters::{Cancel, ProcessDamRunner};
 use herdr_damnit_application::DamRunner;
+use std::os::unix::process::CommandExt;
+use support::Scratch;
+
+/// Longer than any fake in this file needs, so a machine under load waits rather than fails.
+const PATIENCE: Duration = Duration::from_secs(20);
+
+/// How long a fake meant to be cancelled pretends to work for. Well past every deadline and grace
+/// under test, so a passing test is proof the cancellation fired rather than that the fake
+/// happened to finish.
+const FOREVER_MS: &str = "30000";
 
 fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
-}
-
-fn scratch(name: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("herdr-damnit-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_file(&path);
-    path
 }
 
 fn runner() -> ProcessDamRunner {
     ProcessDamRunner::new(vec![env!("CARGO_BIN_EXE_fake-dam").to_string()])
 }
 
+fn words(argv: &[&str]) -> Vec<String> {
+    argv.iter().map(|word| word.to_string()).collect()
+}
+
+/// The fake's knobs live in this process's environment, which every test in this file shares.
+/// A test holds this lock for its whole body and starts from a cleared environment, so the file
+/// is correct under any thread count rather than only under `--test-threads=1`.
+fn fake_env() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let guard = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    for knob in [
+        "FAKE_DAM_FIXTURE_DIR",
+        "FAKE_DAM_FIXTURE",
+        "FAKE_DAM_EXIT",
+        "FAKE_DAM_STDERR",
+        "FAKE_DAM_SLEEP_MS",
+        "FAKE_DAM_LOG",
+        "FAKE_DAM_IGNORE_SIGINT",
+    ] {
+        unsafe { std::env::remove_var(knob) };
+    }
+    guard
+}
+
+fn set(knob: &str, value: impl AsRef<std::ffi::OsStr>) {
+    unsafe { std::env::set_var(knob, value) };
+}
+
+/// How long a signalled fake gets to actually exit. Short next to `PATIENCE` on purpose: past it
+/// the signal ladder is broken, and a broken ladder must read as a red rather than as a suite that
+/// hangs until the fake's own sleep runs out.
+const SIGNAL_PATIENCE: Duration = Duration::from_secs(5);
+
+/// The gap between two looks at an observable event. Nothing here sleeps in place of
+/// synchronization; this is only how often a wait re-reads what it is waiting on.
+const POLL: Duration = Duration::from_millis(5);
+
+/// One fake, the log it writes its own argv line to, and a name for the failure messages. Each
+/// fake gets a log of its own so a wait can say which child is missing rather than reporting a
+/// total across both.
+struct Fake {
+    name: &'static str,
+    child: Child,
+    log: PathBuf,
+}
+
+impl Fake {
+    /// Spawn a fake into the process group `group` names, `0` making it a leader of its own.
+    fn spawn(name: &'static str, scratch: &Scratch, group: i32) -> Self {
+        let log = scratch.file(&format!("{name}.jsonl"));
+        set("FAKE_DAM_LOG", &log);
+        let child = Command::new(env!("CARGO_BIN_EXE_fake-dam"))
+            .args(["push", "--json"])
+            .stdin(Stdio::null())
+            // Nothing here reads the child's output, so it is given no pipe: a fake cannot stall
+            // on a buffer this test would never drain.
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .process_group(group)
+            .spawn()
+            .expect("it spawned");
+        Self { name, child, log }
+    }
+
+    fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
+    /// Block until this fake has logged its argv line, which proves it is past its own startup and
+    /// has its interrupt handler installed. A fake that exited without logging is reported at once
+    /// rather than waited out, because there is nothing left to wait for.
+    fn await_start(&mut self) {
+        let deadline = Instant::now() + PATIENCE;
+        while Instant::now() < deadline {
+            if logged(&self.log) >= 1 {
+                return;
+            }
+            if let Some(status) = self.child.try_wait().expect("the child's state") {
+                panic!("{} exited {status} before logging its argv", self.name);
+            }
+            std::thread::sleep(POLL);
+        }
+        panic!("{} logged no argv within {PATIENCE:?}", self.name);
+    }
+
+    /// This fake's exit status, or a failure naming it once `SIGNAL_PATIENCE` runs out. The
+    /// timeout path kills the child so a failing run leaves nothing sleeping behind it.
+    fn await_exit(&mut self) -> std::process::ExitStatus {
+        let deadline = Instant::now() + SIGNAL_PATIENCE;
+        while Instant::now() < deadline {
+            if let Some(status) = self.child.try_wait().expect("the child's state") {
+                return status;
+            }
+            std::thread::sleep(POLL);
+        }
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        panic!(
+            "{} was still running {SIGNAL_PATIENCE:?} after the signal",
+            self.name
+        );
+    }
+
+    fn interrupts(&self) -> usize {
+        interrupts(&self.log)
+    }
+}
+
+/// Block until `log` holds one argv line, for a child this test did not spawn itself and so cannot
+/// ask about: `RunningJob` hands out a cancel and a receiver, never a pid.
+fn await_line(log: &Path, whose: &str) {
+    let deadline = Instant::now() + PATIENCE;
+    while Instant::now() < deadline {
+        if logged(log) >= 1 {
+            return;
+        }
+        std::thread::sleep(POLL);
+    }
+    panic!("{whose} logged no argv within {PATIENCE:?}");
+}
+
+fn logged(log: &Path) -> usize {
+    std::fs::read_to_string(log)
+        .map(|text| text.lines().filter(|line| !line.trim().is_empty()).count())
+        .unwrap_or(0)
+}
+
+fn interrupts(log: &Path) -> usize {
+    std::fs::read_to_string(log)
+        .expect("a log")
+        .matches("SIGINT")
+        .count()
+}
+
 #[test]
 fn cancelling_sends_sigint_and_dam_answers_with_its_cancelled_code() {
-    let log = scratch("cancel-log");
-    unsafe {
-        std::env::set_var("FAKE_DAM_LOG", &log);
-        std::env::set_var("FAKE_DAM_SLEEP_MS", "3000");
-        std::env::set_var("FAKE_DAM_FIXTURE_DIR", fixtures());
-        std::env::set_var("FAKE_DAM_FIXTURE", "push-ok");
-    }
+    let _env = fake_env();
+    let scratch = Scratch::new("cancel-log");
+    let log = scratch.file("argv.jsonl");
+    set("FAKE_DAM_LOG", &log);
+    set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
+    set("FAKE_DAM_FIXTURE_DIR", fixtures());
+    set("FAKE_DAM_FIXTURE", "push-ok");
 
     let job = runner()
-        .spawn(&["push".to_string(), "--json".to_string()])
+        .spawn(&words(&["push", "--json"]))
         .expect("it spawned");
-    std::thread::sleep(Duration::from_millis(150));
+    await_line(&log, "the push");
     (job.cancel)();
 
-    let finished = job
-        .results
-        .recv_timeout(Duration::from_secs(5))
-        .expect("one result");
+    let finished = job.results.recv_timeout(PATIENCE).expect("one result");
     assert_eq!(finished.code, Some(3));
-    assert!(
-        std::fs::read_to_string(&log)
-            .expect("a log")
-            .contains("SIGINT"),
-        "the fake recorded no interrupt"
-    );
-    assert!(finished.elapsed < Duration::from_secs(2), "{:?}", finished.elapsed);
-
-    unsafe {
-        std::env::remove_var("FAKE_DAM_LOG");
-        std::env::remove_var("FAKE_DAM_SLEEP_MS");
-    }
+    assert_eq!(interrupts(&log), 1, "the fake recorded no interrupt");
 }
 
 #[test]
 fn a_read_past_its_deadline_is_cancelled_without_the_pane_asking() {
-    unsafe {
-        std::env::set_var("FAKE_DAM_SLEEP_MS", "3000");
-        std::env::set_var("FAKE_DAM_FIXTURE_DIR", fixtures());
-        std::env::set_var("FAKE_DAM_FIXTURE", "ls");
-    }
+    let _env = fake_env();
+    set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
+    set("FAKE_DAM_FIXTURE_DIR", fixtures());
+    set("FAKE_DAM_FIXTURE", "ls");
 
     let job = runner()
         .spawn_with_deadline(
-            &["ls".to_string(), "!done".to_string(), "--json".to_string()],
+            &words(&["ls", "!done", "--json"]),
             Some(Duration::from_millis(200)),
         )
         .expect("it spawned");
 
-    let finished = job
-        .results
-        .recv_timeout(Duration::from_secs(5))
-        .expect("one result");
-    assert_eq!(finished.code, Some(3));
-    assert!(finished.elapsed < Duration::from_secs(1), "{:?}", finished.elapsed);
-
-    unsafe { std::env::remove_var("FAKE_DAM_SLEEP_MS") };
+    assert_eq!(
+        job.results.recv_timeout(PATIENCE).expect("one result").code,
+        Some(3)
+    );
 }
 
 #[test]
 fn a_job_inside_its_deadline_is_left_alone() {
-    unsafe {
-        std::env::set_var("FAKE_DAM_FIXTURE_DIR", fixtures());
-        std::env::set_var("FAKE_DAM_FIXTURE", "status-clean");
-        std::env::remove_var("FAKE_DAM_SLEEP_MS");
-    }
+    let _env = fake_env();
+    set("FAKE_DAM_FIXTURE_DIR", fixtures());
+    set("FAKE_DAM_FIXTURE", "status-clean");
 
     let job = runner()
-        .spawn_with_deadline(
-            &["status".to_string(), "--json".to_string()],
-            Some(Duration::from_secs(5)),
-        )
+        .spawn_with_deadline(&words(&["status", "--json"]), Some(PATIENCE))
+        .expect("it spawned");
+
+    let finished = job.results.recv_timeout(PATIENCE).expect("one result");
+    assert_eq!(finished.code, Some(0));
+    assert!(
+        finished.stdout.contains("\"staged\""),
+        "{}",
+        finished.stdout
+    );
+}
+
+/// A run with no deadline is never cancelled on its own, which is what an exclusive job gets:
+/// `dam`'s own per-remote deadline bounds it.
+#[test]
+fn a_job_with_no_deadline_answers_for_itself() {
+    let _env = fake_env();
+    set("FAKE_DAM_FIXTURE_DIR", fixtures());
+    set("FAKE_DAM_FIXTURE", "push-ok");
+
+    let job = runner()
+        .spawn_with_deadline(&words(&["push", "--json"]), None)
         .expect("it spawned");
 
     assert_eq!(
-        job.results
-            .recv_timeout(Duration::from_secs(5))
-            .expect("one result")
-            .code,
+        job.results.recv_timeout(PATIENCE).expect("one result").code,
         Some(0)
+    );
+}
+
+/// The signal reaches the whole process group, which is where `dam` puts the remote helper that
+/// is doing the waiting, so a second member of the group takes it too.
+#[test]
+fn the_interrupt_reaches_the_group_rather_than_its_leader_alone() {
+    let _env = fake_env();
+    let scratch = Scratch::new("group");
+    set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
+
+    let mut leader = Fake::spawn("the leader", &scratch, 0);
+    let group = i32::try_from(leader.pid()).expect("a pid");
+    let mut helper = Fake::spawn("the helper", &scratch, group);
+    leader.await_start();
+    helper.await_start();
+
+    Cancel::of(leader.pid()).interrupt();
+
+    assert_eq!(leader.await_exit().code(), Some(3));
+    assert_eq!(helper.await_exit().code(), Some(3));
+    assert_eq!(leader.interrupts(), 1, "the leader took no interrupt");
+    assert_eq!(helper.interrupts(), 1, "the helper was left running");
+}
+
+/// A `dam` deaf to `SIGINT` is killed once the grace runs out, and a killed child carries no exit
+/// code at all. Driven at `Cancel` with a grace of its own, because the production grace is two
+/// seconds and no test in this repository may take that long.
+#[test]
+fn a_dam_that_ignores_the_interrupt_is_killed_and_carries_no_code() {
+    let _env = fake_env();
+    let scratch = Scratch::new("kill");
+    set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
+    set("FAKE_DAM_IGNORE_SIGINT", "1");
+
+    let mut deaf = Fake::spawn("the deaf dam", &scratch, 0);
+    deaf.await_start();
+
+    let started = Instant::now();
+    Cancel::with_grace(deaf.pid(), Duration::from_millis(100)).interrupt();
+
+    assert_eq!(
+        deaf.await_exit().code(),
+        None,
+        "a killed child reports a signal rather than a code"
+    );
+    assert!(
+        started.elapsed() >= Duration::from_millis(100),
+        "the kill skipped the grace: {:?}",
+        started.elapsed()
+    );
+    assert_eq!(deaf.interrupts(), 0, "the fake was not deaf after all");
+}
+
+/// A group that has already gone is not waited out, which is what the grace loop polls for so an
+/// interrupted `dam` is never killed on top of the interrupt it already took.
+#[test]
+fn a_group_that_has_already_gone_is_not_waited_out() {
+    let _env = fake_env();
+    let scratch = Scratch::new("already-gone");
+    let mut gone = Fake::spawn("the finished dam", &scratch, 0);
+    let cancel = Cancel::with_grace(gone.pid(), Duration::from_secs(20));
+    gone.await_exit();
+
+    let started = Instant::now();
+    cancel.interrupt();
+
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "interrupt waited out a grace nobody needed: {:?}",
+        started.elapsed()
     );
 }
 ```
@@ -6376,17 +6751,27 @@ const TICK: Duration = Duration::from_millis(50);
 #[derive(Clone, Copy, Debug)]
 pub struct Cancel {
     group: i32,
+    grace: Duration,
 }
 
 impl Cancel {
     pub fn of(pid: u32) -> Self {
-        Self { group: pid as i32 }
+        Self::with_grace(pid, GRACE)
     }
 
-    /// `SIGINT` to the group, a two-second grace, then `SIGKILL` to the group.
+    /// The same signalling with a grace of the caller's choosing, which is how a test drives the
+    /// escalation without waiting out the production one.
+    pub fn with_grace(pid: u32, grace: Duration) -> Self {
+        Self {
+            group: pid as i32,
+            grace,
+        }
+    }
+
+    /// `SIGINT` to the group, the grace, then `SIGKILL` to the group.
     pub fn interrupt(self) {
         self.signal(libc::SIGINT);
-        let deadline = Instant::now() + GRACE;
+        let deadline = Instant::now() + self.grace;
         while Instant::now() < deadline {
             if !self.alive() {
                 return;
@@ -6510,9 +6895,16 @@ carries beyond its defaults, and a delete names none.
 
 `completions` is how the Done screen gets its dates, and it reads `dam log --json`, whose change
 documents carry no `before` and `after` either. The commit that completed a task is the one whose
-change names `done` among its `fields` and whose row carries `done` of true, and that commit's `at`
-is the date. A task completed in the working layer and not yet committed has no commit and therefore
-no date.
+change names `done` among its `fields` and whose row carries `done` of true. The date is that
+change's own `completed_at`, which `dam` 0.2.0 sets when `done` becomes true, and the commit's `at`
+for a `dam` that sends none. A task completed in the working layer and not yet committed has no
+commit and therefore no date.
+
+**Both halves of that gate are load-bearing and each needs its own test.** Dropping the `fields`
+check makes every later edit of an already-complete task a fresh completion, which re-dates it;
+dropping the `done` check makes a `dam edit --undone` a completion, because a reopen is a change
+that names `done` and leaves the task open (measured: `fields ["done"]`, `done false`,
+`completed_at null`). A mutation sweep found both survivors against the plan's own test set.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -6643,12 +7035,11 @@ fn a_removed_upstream_notice_reads_as_a_sentence_rather_than_a_kind() {
 fn a_log_names_the_day_each_completion_was_committed_on() {
     let document = r#"{"commits":[
       {"id":"c1","at":"2026-09-19T08:00:00Z","message":"first","changes":[
-        {"oid":"1","op":"create","before":null,
-         "after":{"oid":"1","kind":"task","subject":"a","task":{"done":false,"priority":4}}}]},
+        {"oid":"1","op":"create","fields":["subject"],"kind":"task","subject":"a",
+         "done":false,"completed_at":null,"priority":4}]},
       {"id":"c2","at":"2026-09-20T09:30:00Z","message":"second","changes":[
-        {"oid":"1","op":"update",
-         "before":{"oid":"1","kind":"task","subject":"a","task":{"done":false,"priority":4}},
-         "after":{"oid":"1","kind":"task","subject":"a","task":{"done":true,"priority":4}}}]}
+        {"oid":"1","op":"update","fields":["done"],"kind":"task","subject":"a",
+         "done":true,"completed_at":"2026-09-20T09:29:11Z","priority":4}]}
     ]}"#;
     let completed = completions(document).expect("it parsed");
 
@@ -6827,9 +7218,25 @@ fn read<T: serde::de::DeserializeOwned>(json: &str) -> Result<T, String> {
 mod tests;
 ```
 
+**The settled unpushed row.** `dam` publishes two keys on it: `oids`, the distinct objects the
+unpushed commits touch in order of first appearance walking newest first, and `commit_ids`, the
+commit ids themselves newest first, with `commits` equal to that list's length. This pane reads
+`oids` as object ids and reads neither of the other two beyond `commits`, so `WireUnpushed` declares
+no `deny_unknown_fields` and a 0.2.0 document carrying neither key still parses on the serde
+default. `an_unpushed_row_reads_the_objects_and_ignores_the_commit_ids_beside_them` pins both halves:
+a `deny_unknown_fields` on that struct, or a mapping that reached for the commit ids, fails it.
+
+`kind_changed` is the fifth kind and the plan first listed only four arms for it: a real one
+carries `ours` and `theirs` as kind words and no `why` at all, so the fallback drew
+`kind_changed: ` with nothing after the colon.
+
 The status, log and sync readers go in a sibling file to keep both inside the line cap:
 `crates/herdr-damnit-adapters/src/wire/reports.rs`, re-exported from `wire.rs` with
-`mod reports; pub use reports::{completions, pull_summary, push_summary, stage};`.
+`mod reports; pub use reports::{completions, pull_summary, push_summary, stage};`. The error
+document is a third sibling, `wire/failures.rs`, exporting `error_document`, which the Interfaces
+block names and the plan's code listing left out. Each of the three keeps its own
+`#[cfg(test)] mod tests;` beside it rather than one shared test file: the tests in one file reached
+404 lines, past the point the Rust standard asks for decomposition.
 
 ```rust
 //! `dam status --json`, `dam log --json` and the two sync reports.
@@ -6856,6 +7263,13 @@ struct WireChange {
     subject: String,
     #[serde(default)]
     fields: Vec<String>,
+    /// True on the object as the change leaves it, which is what marks a completion in a log.
+    #[serde(default)]
+    done: bool,
+    /// The instant the task was completed, since `dam` 0.2.0. A `dam` without it leaves the
+    /// commit's own day as the completion date.
+    #[serde(default)]
+    completed_at: Option<String>,
     /// Present only under `--full`, which this pane never asks for.
     #[serde(default)]
     after: Option<WireObject>,
@@ -6873,8 +7287,9 @@ struct WireConflict {
 struct WireUnpushed {
     remote: String,
     commits: u64,
-    /// Added in `dam` 0.2.x. A `dam` that does not send it leaves the set empty, which costs the
-    /// rows their unpushed mark and nothing else.
+    /// The distinct objects this remote's unpushed commits touch, newest commit first. A `dam`
+    /// that sends none leaves the set empty, which costs the rows their unpushed mark and nothing
+    /// else.
     #[serde(default)]
     oids: Vec<String>,
 }
@@ -6941,6 +7356,11 @@ fn into_notice(wire: &serde_json::Value) -> Notice {
         "event_cancelled" => format!("event cancelled: {subject:?}"),
         "push_failed" => format!("{remote}: push failed: {why}"),
         "pull_failed" => format!("{remote}: pull failed: {why}"),
+        "kind_changed" => format!(
+            "kind changed: a {} here and an {} upstream",
+            text("ours"),
+            text("theirs")
+        ),
         other => format!("{other}: {why}"),
     };
     Notice {
@@ -6970,21 +7390,16 @@ pub fn completions(json: &str) -> Result<HashMap<Oid, Date>, String> {
     let log: WireLog = read(json)?;
     let mut completed = HashMap::new();
     for commit in log.commits {
-        let Some(at) = herdr_damnit_domain::parse_date(&commit.at) else {
-            continue;
-        };
         for change in commit.changes {
-            let was_done = change
-                .before
-                .as_ref()
-                .and_then(|object| object.task.as_ref())
-                .is_some_and(|task| task.done);
-            let is_done = change
-                .after
-                .as_ref()
-                .and_then(|object| object.task.as_ref())
-                .is_some_and(|task| task.done);
-            if is_done && !was_done {
+            if !change.done || !change.fields.iter().any(|field| field == "done") {
+                continue;
+            }
+            let at = change
+                .completed_at
+                .as_deref()
+                .and_then(parse_date)
+                .or_else(|| parse_date(&commit.at));
+            if let Some(at) = at {
                 completed.insert(Oid::new(change.oid), at);
             }
         }
@@ -7072,10 +7487,10 @@ Expected: PASS, fourteen tests. If a fixture assertion fails on a subject or a p
 assertion to what `capture.sh` actually produced rather than editing the fixture: the fixture is the
 byte record and the test is what reads it.
 
-- [ ] **Step 5: Check both files are inside the cap**
+- [ ] **Step 5: Check every file is inside the cap**
 
-Run: `wc -l crates/herdr-damnit-adapters/src/wire.rs crates/herdr-damnit-adapters/src/wire/reports.rs crates/herdr-damnit-adapters/src/wire/tests.rs`
-Expected: all three under 400, none over 500.
+Run: `wc -l crates/herdr-damnit-adapters/src/wire.rs crates/herdr-damnit-adapters/src/wire/reports.rs crates/herdr-damnit-adapters/src/wire/failures.rs crates/herdr-damnit-adapters/src/wire/tests.rs crates/herdr-damnit-adapters/src/wire/reports/tests.rs crates/herdr-damnit-adapters/src/wire/failures/tests.rs`
+Expected: all six inside the 300 line ideal, none over 500.
 
 - [ ] **Step 6: Commit**
 
@@ -7107,23 +7522,37 @@ pub struct Config {
     pub default_view: Option<String>,
     pub auto_open: bool,
     pub theme: Option<String>,
-    pub icons: IconSet,
+    pub icons: Icons,
     pub refresh_seconds: Option<u64>,
     pub handoff_label: String,
-    pub views: Vec<View>,
+    pub views: Vec<ConfigView>,
 }
 
 pub enum Placement { Overlay, Split, Tab, Zoomed }
 pub enum Side { Right, Down }
+pub enum Icons { NerdFont, Ascii }
+pub struct ConfigView { pub name: String, pub query: String }
 
 impl Config {
     pub fn load() -> Result<Config, String>;
     pub fn parse(text: &str) -> Result<Config, String>;
     pub fn refresh_seconds(&self) -> u64;
+    pub fn views(&self) -> Vec<View>;
+    pub fn icons(&self) -> IconSet;
+    pub fn check_theme_against(&self, names: &[&str]) -> Result<(), String>;
 }
 
 pub const DEFAULT_REFRESH_SECONDS: u64 = 300;
 ```
+
+`icons` and `views` are the config's own serde types rather than the domain's, because
+`IconSet` and `View` carry no serde derive and the domain crate takes no serde dependency. The two
+reader methods, `Config::icons()` and `Config::views()`, are what the rest of the pane calls, so
+the tests for those keys assert on the reader rather than on the field.
+
+`Side` here is the pane's placement side, Right or Down. It shares a name with
+`herdr_damnit_application::Side`, which is the side a conflict resolves toward; nothing imports
+both into one scope.
 
 What changed from the Todoist config: `token_command` and `token_env` are gone, because the token is
 `dam`'s; `editor` is gone, because `dam edit -e` chooses the editor and falls back to `vi`; each
@@ -7393,8 +7822,8 @@ mod tests;
 
 `Placement` and `Side` carry over from `crates/herdr-damnit/src/placement.rs` and
 `crates/herdr-damnit/src/config.rs` unchanged, including `Side::split_direction` and
-`Placement::as_str`. `Config::parse` runs the same five checks the old one did, with `ALL` replaced
-by `OPEN` and `filter` replaced by `query`:
+`Placement::as_str`. `Config::parse` runs four checks, with `ALL` replaced by `OPEN` and `filter`
+replaced by `query`:
 
 ```rust
     pub fn parse(text: &str) -> Result<Self, String> {
@@ -7403,7 +7832,6 @@ by `OPEN` and `filter` replaced by `query`:
         config.check_view_names()?;
         config.check_width()?;
         config.check_default_view()?;
-        config.check_theme()?;
         Ok(config)
     }
 
@@ -7416,15 +7844,30 @@ by `OPEN` and `filter` replaced by `query`:
 ```
 
 `Config::views()` is what the rest of the pane reads, mapping each `ConfigView` onto the domain's
-`View`, and `Config::icons()` returns `IconSet`. The `check_theme` call keeps reading the binary
-crate's theme names, so it takes them as an argument: `parse` gains no dependency on ratatui, and the
-binary passes `herdr_damnit::theme::NAMES` into a `Config::check_theme_against(&self, names: &[&str])`
-that `load` calls after the parse.
+`View`, and `Config::icons()` returns `IconSet`.
+
+**The theme check is not one of the four.** Its vocabulary belongs to the crate that paints, so
+neither `parse` nor `load` can run it without taking a dependency on the binary crate, and `load`
+takes no arguments in the Interfaces block above. The composition root calls
+`config.check_theme_against(herdr_damnit::theme::NAMES)?` after `Config::load()`, which is where
+the palettes are. `parse` gains no dependency on ratatui either way.
+
+`check_dam` also refuses a first word that is only whitespace, not just an empty list:
+`Command::new("")` fails at the first read rather than at load time, which is the wrong place to
+learn it.
+
+`Placement`, `Side` and `Icons` live in `crates/herdr-damnit-adapters/src/config/kinds.rs`, not in
+`config.rs`: with all three inline the module reached 271 implementation lines, past the point the
+Rust standard asks for decomposition.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-adapters --locked config`
-Expected: PASS, fourteen tests.
+Expected: PASS, twenty-three tests. Nine beyond the plan's fourteen, each closing a behaviour the
+plan states in prose and pins with no test: a blank `dam` binary, a leading-argument `dam` argv,
+`open` as an opening view, every side's own direction, every placement's own word, `nerd-font` by
+name, a refresh interval of zero staying zero, the theme check against a handed-in vocabulary, and
+a config naming no theme at all.
 
 - [ ] **Step 5: Commit**
 
@@ -7458,6 +7901,15 @@ SKIP_AI_COMMIT=1 git commit -m "feat(adapters): read the pane's config with dam'
 Every `herdr` read checks the envelope under `result` rather than the exit code, because
 `herdr plugin list` returns exit 0 even when that envelope is an error. That behaviour is already in
 `herdr.rs` and moves with it.
+
+**Carried obligation from Task 24, for whoever reaches the composition root.**
+`Config::check_theme_against(&self, names: &[&str])` exists and has no production caller. The theme
+vocabulary is `herdr_damnit::theme::NAMES`, which lives in the binary crate, and the adapters crate
+cannot depend on the binary crate, so the parse cannot make this check and no adapters test can
+cover the wiring. Every `Config::load()` must be followed by
+`config.check_theme_against(theme::NAMES)?`, which Task 28 discharges in one place with its
+`load_config` helper. If it never lands, an unknown theme name is accepted in silence and the pane
+paints half of itself in the default colors.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -8555,6 +9007,11 @@ hint line; `screens::draw` checks `app.refusal` first and draws that instead of 
 
 - [ ] **Step 4: Rewrite main.rs**
 
+**The theme check lands here**, discharging the obligation Task 24 leaves and Task 25 carries.
+`Config::parse` runs four checks and not the theme one, because the theme names live in this crate
+rather than in the adapters crate (Task 24, Ruling 15). `load_config` below is the single funnel
+both entry points take, so the check cannot be wired at one of them and forgotten at the other.
+
 ```rust
 //! The plugin binary. With no arguments it is the pane; the subcommands are the plugin actions.
 
@@ -8608,8 +9065,17 @@ fn main() -> std::process::ExitCode {
     }
 }
 
+/// The configuration plus the one check the adapters crate cannot make for itself: the theme
+/// vocabulary is this crate's, so `Config::parse` never sees it and every load goes through here.
+/// Skip this and an unknown theme name is accepted in silence and the pane paints with defaults.
+fn load_config() -> Result<Config, String> {
+    let config = Config::load()?;
+    config.check_theme_against(theme::NAMES)?;
+    Ok(config)
+}
+
 fn run_pane() -> std::process::ExitCode {
-    let config = match Config::load() {
+    let config = match load_config() {
         Ok(config) => config,
         Err(error) => return fail(&error),
     };
@@ -8624,7 +9090,7 @@ fn run_pane() -> std::process::ExitCode {
 }
 
 fn with_config(run: impl FnOnce(&Config) -> Result<String, String>) -> std::process::ExitCode {
-    report(Config::load().and_then(|config| run(&config)))
+    report(load_config().and_then(|config| run(&config)))
 }
 
 fn report(outcome: Result<String, String>) -> std::process::ExitCode {
