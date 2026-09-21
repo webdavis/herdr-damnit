@@ -8882,6 +8882,23 @@ ellipsis. `crates/herdr-damnit/src/screens/list.rs` renders `app.list.rows()` as
 Run: `cargo test -p herdr-damnit --locked screens`
 Expected: PASS, five tests.
 
+**Ruling 27.** The golden above was regenerated at the width the test asks for and differs from the
+one sketched here. At 32 columns the counts sit at the right edge rather than nine columns in, the
+first object row is exactly 32 cells and needs no cut at all, and the hint line ends
+`<CR> <Sp` plus the ellipsis. Every line was checked against the spec's List mock before it was
+pasted: the path headings, the recurring, priority, overdue and upcoming marks, the counted labels,
+and the subject-last order that lets the subject be what gets cut.
+
+**Ruling 28.** `the_header_carries_the_spinner_and_the_elapsed_time_mid_push` asserts against all
+four frames of the plain spinner rather than the two written here. `loaded()` leaves two reads in
+flight for two ticks, so the frame on screen is the third one, and pinning a particular frame would
+pin how many ticks the reads before the push happened to take.
+
+**Ruling 29.** `spans` and `cut` are moved from `render.rs` rather than written fresh: the
+cut-the-line-and-end-in-an-ellipsis rule the spec asks for already exists there, measured in
+terminal cells rather than characters so a double-width subject is cut where the terminal would wrap
+it. `cut_to` is the same rule over a bare string, which the status line and the hint line both take.
+
 - [ ] **Step 5: Commit**
 
 ```bash

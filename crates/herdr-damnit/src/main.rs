@@ -23,6 +23,7 @@ mod queue;
 mod refresh;
 mod reload;
 mod render;
+mod screens;
 mod send;
 mod theme;
 mod tui;
