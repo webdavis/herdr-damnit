@@ -42,7 +42,9 @@ impl Cursor {
             .iter()
             .position(|index| *index >= self.selected)
             .unwrap_or(objects.len() - 1) as isize;
-        let target = (at + steps).clamp(0, objects.len() as isize - 1) as usize;
+        let target = at
+            .saturating_add(steps)
+            .clamp(0, objects.len() as isize - 1) as usize;
         let moved = objects[target] != self.selected;
         self.selected = objects[target];
         moved
@@ -152,6 +154,18 @@ mod tests {
         let mut cursor = Cursor::new(listing(&["a", "b"]));
         cursor.move_by(1);
         cursor.replace(listing(&["a"]));
+        assert_eq!(cursor.selected_oid(), Some(&Oid::new("a")));
+    }
+
+    /// Task 31 binds a jump to the top and the bottom, whose natural spelling is the largest step
+    /// the type holds.
+    #[test]
+    fn the_largest_step_lands_on_an_end_rather_than_overflowing() {
+        let mut cursor = Cursor::new(listing(&["a", "b", "c"]));
+        cursor.move_by(1);
+        assert!(cursor.move_by(isize::MAX));
+        assert_eq!(cursor.selected_oid(), Some(&Oid::new("c")));
+        assert!(cursor.move_by(isize::MIN));
         assert_eq!(cursor.selected_oid(), Some(&Oid::new("a")));
     }
 
