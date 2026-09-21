@@ -2149,6 +2149,11 @@ and working beats unpushed. `Stage::rows` draws the four sections the spec names
 order, leaving an empty section out; an entirely empty stage is one line reading
 `nothing staged, nothing changed`, which is `dam`'s own wording.
 
+`Stage::summary` counts the arrays it is handed, so over the `full()` fixture below, which holds
+two staged changes and one unstaged one, it reads `2 staged  1 changed  1 unpushed  1 notice`. The
+spec's Status screen mockup heads the same screen `3 staged  2 changed`; that header is stale
+against the two Staged rows and one Working row drawn under it, and the arrays win.
+
 `Change::fields` is the list of changed field names, which `dam` 0.2.0 carries on every change
 document as `fields` and Task 23 maps straight across. An update names the fields that moved, a
 create names the fields the new object carries beyond its defaults, and a delete names none, so a
@@ -2282,7 +2287,7 @@ fn every_row_naming_an_oid_is_a_cursor_target() {
 
 #[test]
 fn the_summary_counts_what_the_status_line_carries() {
-    assert_eq!(full().summary(), "3 staged  2 changed  1 unpushed  1 notice");
+    assert_eq!(full().summary(), "2 staged  1 changed  1 unpushed  1 notice");
 }
 
 #[test]
@@ -2660,10 +2665,10 @@ SKIP_AI_COMMIT=1 git commit -m "feat(domain): write the agent brief from a dam o
 ```rust
 pub struct DamVersion { pub major: u32, pub minor: u32, pub patch: u32 }
 
-pub const DAM_MINIMUM: DamVersion = DamVersion { major: 0, minor: 1, patch: 0 };
-pub const DAM_KNOWN: DamVersion = DamVersion { major: 0, minor: 1, patch: 0 };
-/// The version that adds `dam restore`, which is what the `!` key is gated on.
-pub const DAM_RESTORE: DamVersion = DamVersion { major: 0, minor: 2, patch: 0 };
+pub const DAM_MINIMUM: DamVersion = DamVersion { major: 0, minor: 2, patch: 0 };
+pub const DAM_KNOWN: DamVersion = DamVersion { major: 0, minor: 2, patch: 0 };
+/// The version assumed to add `dam restore`, which is what the `!` key is gated on.
+pub const DAM_RESTORE: DamVersion = DamVersion { major: 0, minor: 3, patch: 0 };
 
 pub fn parse_version(line: &str) -> Option<DamVersion>;
 
@@ -2672,9 +2677,15 @@ pub enum Verdict { Fine, Warn(String), Refuse(String) }
 pub fn verdict(found: DamVersion) -> Verdict;
 ```
 
-`DAM_MINIMUM` and `DAM_KNOWN` are both 0.1.0, the version `dam` prints today (`crates/dam-cli`
-declares `version = "0.1.0"`). Below 1.0 the minor is the breaking axis, so `verdict` refuses below
-the minimum, warns when the minor is above the known one, and says nothing in between.
+`DAM_MINIMUM` and `DAM_KNOWN` are both 0.2.0, the version `dam` prints today (`crates/dam-cli`
+declares `version = "0.2.0"` at `webdavis/damnit` `84937a3`). 0.2 is also the floor on its own
+merits: the JSON error document, exit 4 for every refusal, and a change document with no embedded
+object all arrived there, and Task 14 reads all three. `DAM_RESTORE` is 0.3.0 by **assumption**:
+`dam restore` is unshipped (see the spec's Needed from dam, item 2), and 0.3 is the minor this pane
+assumes it lands in, so the `!` key appears the day the operator updates `dam`. Move the constant
+when the verb actually ships in a different minor. Below 1.0 the minor is the breaking axis, so
+`verdict` refuses below the minimum, warns when the minor is above the known one, and says nothing
+in between.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2711,7 +2722,11 @@ mod tests {
         };
         assert_eq!(
             message,
-            "dam 0.0.9 is older than the 0.1 this pane needs; run cargo install damnit to update it."
+            "dam 0.0.9 is older than the 0.2 this pane needs; run cargo install damnit to update it."
+        );
+        assert!(
+            matches!(verdict(at(0, 1, 9)), Verdict::Refuse(_)),
+            "the error document and the exit codes this pane reads arrived in 0.2"
         );
     }
 
@@ -2728,15 +2743,15 @@ mod tests {
 
     #[test]
     fn a_newer_patch_of_a_known_minor_says_nothing() {
-        assert!(matches!(verdict(at(0, 1, 7)), Verdict::Fine));
+        assert!(matches!(verdict(at(0, 2, 7)), Verdict::Fine));
         assert!(matches!(verdict(DAM_KNOWN), Verdict::Fine));
     }
 
     #[test]
     fn the_restore_gate_is_the_minor_that_adds_the_verb() {
-        assert!(at(0, 2, 0) >= DAM_RESTORE);
-        assert!(at(0, 3, 1) >= DAM_RESTORE);
-        assert!(at(0, 1, 9) < DAM_RESTORE);
+        assert!(at(0, 3, 0) >= DAM_RESTORE);
+        assert!(at(0, 4, 1) >= DAM_RESTORE);
+        assert!(at(0, 2, 9) < DAM_RESTORE);
     }
 }
 ```
@@ -2754,24 +2769,26 @@ Expected: FAIL with `unresolved module or unlinked crate 'version'`
 //! The version of `dam` the pane was written against, and what to do about the one it found.
 //! Below 1.0 the minor is the breaking axis, so that is the number the two rules compare.
 
-/// The lowest version whose command surface this pane was written against.
+/// The lowest version whose command surface this pane was written against. 0.2 is where the error
+/// document, exit 4 for every refusal, and a change document with no embedded object arrived.
 pub const DAM_MINIMUM: DamVersion = DamVersion {
     major: 0,
-    minor: 1,
+    minor: 2,
     patch: 0,
 };
 
 /// The highest version this pane was tested against.
 pub const DAM_KNOWN: DamVersion = DamVersion {
     major: 0,
-    minor: 1,
+    minor: 2,
     patch: 0,
 };
 
-/// The version that adds `dam restore`, which is what the discard key is gated on.
+/// The version the discard key is gated on. `dam restore` is unshipped, and 0.3 is the minor this
+/// pane assumes it lands in, so the key appears when the operator updates `dam`.
 pub const DAM_RESTORE: DamVersion = DamVersion {
     major: 0,
-    minor: 2,
+    minor: 3,
     patch: 0,
 };
 
@@ -4351,10 +4368,10 @@ mod tests {
 
     #[test]
     fn a_dam_at_the_floor_with_the_five_keys_is_ready_and_quiet() {
-        let Handshake::Ready { version, warning } = handshake("dam 0.1.0\n", STATUS) else {
+        let Handshake::Ready { version, warning } = handshake("dam 0.2.0\n", STATUS) else {
             panic!("expected ready");
         };
-        assert_eq!(version.to_string(), "0.1.0");
+        assert_eq!(version.to_string(), "0.2.0");
         assert_eq!(warning, None);
     }
 
@@ -4374,7 +4391,7 @@ mod tests {
         let Handshake::Refuse(message) = handshake("dam 0.0.9", STATUS) else {
             panic!("expected a refusal");
         };
-        assert!(message.contains("is older than the 0.1 this pane needs"), "{message}");
+        assert!(message.contains("is older than the 0.2 this pane needs"), "{message}");
     }
 
     #[test]
@@ -4391,7 +4408,7 @@ mod tests {
     #[test]
     fn a_status_document_missing_a_key_fails_the_handshake_and_names_it() {
         let missing = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[]}"#;
-        let Handshake::Refuse(message) = handshake("dam 0.1.0", missing) else {
+        let Handshake::Refuse(message) = handshake("dam 0.2.0", missing) else {
             panic!("expected a refusal");
         };
         assert_eq!(
@@ -4402,7 +4419,7 @@ mod tests {
 
     #[test]
     fn a_status_document_that_is_not_json_fails_the_handshake() {
-        let Handshake::Refuse(message) = handshake("dam 0.1.0", "not json") else {
+        let Handshake::Refuse(message) = handshake("dam 0.2.0", "not json") else {
             panic!("expected a refusal");
         };
         assert_eq!(message, "dam answered with something this pane could not read.");
@@ -5304,7 +5321,7 @@ fn main() -> std::process::ExitCode {
     }
 
     if argv.first().map(String::as_str) == Some("--version") {
-        print!("{}", read("version.txt").unwrap_or_else(|| "dam 0.1.0\n".to_string()));
+        print!("{}", read("version.txt").unwrap_or_else(|| "dam 0.2.0\n".to_string()));
         return std::process::ExitCode::SUCCESS;
     }
 
@@ -7866,7 +7883,7 @@ mod tests {
     fn opening_asks_for_the_version_and_the_status_before_anything_else() {
         let mut harness = harness();
         start(&mut harness.app);
-        harness.answer(0, 0, "dam 0.1.0\n", "");
+        harness.answer(0, 0, "dam 0.2.0\n", "");
         harness.answer(1, 0, CLEAN, "");
 
         let lines = harness.lines();
@@ -7885,7 +7902,7 @@ mod tests {
         assert!(harness.app.refusal.is_some());
         assert!(
             crate::screens::render_to_text(&harness.app, 32, 6)
-                .contains("is older than the 0.1 this pane needs"),
+                .contains("is older than the 0.2 this pane needs"),
             "{}",
             crate::screens::render_to_text(&harness.app, 32, 6)
         );
@@ -7917,7 +7934,7 @@ mod tests {
     fn a_status_document_missing_a_key_refuses_to_draw() {
         let mut harness = harness();
         start(&mut harness.app);
-        harness.answer(0, 0, "dam 0.1.0\n", "");
+        harness.answer(0, 0, "dam 0.2.0\n", "");
         harness.answer(
             1,
             0,
@@ -10269,7 +10286,7 @@ fn with_working_change(version: &str) -> super::tests::Harness {
 
 #[test]
 fn the_discard_key_is_unbound_on_a_dam_that_has_no_restore() {
-    let mut harness = with_working_change("dam 0.1.0");
+    let mut harness = with_working_change("dam 0.2.0");
     let before = harness.lines().len();
     harness.press(KeyCode::Char('!'));
 
@@ -10280,7 +10297,7 @@ fn the_discard_key_is_unbound_on_a_dam_that_has_no_restore() {
 
 #[test]
 fn the_discard_key_asks_once_and_restores_on_the_second_press() {
-    let mut harness = with_working_change("dam 0.2.0");
+    let mut harness = with_working_change("dam 0.3.0");
     harness.press(KeyCode::Char('!'));
 
     let Some(Overlay::Confirm(confirm)) = harness.app.overlay.as_ref() else {
@@ -10294,7 +10311,7 @@ fn the_discard_key_asks_once_and_restores_on_the_second_press() {
 
 #[test]
 fn any_other_key_dismisses_the_discard_confirm_and_sends_nothing() {
-    let mut harness = with_working_change("dam 0.2.0");
+    let mut harness = with_working_change("dam 0.3.0");
     harness.press(KeyCode::Char('!'));
     let before = harness.lines().len();
     harness.press(KeyCode::Char('j'));
@@ -10305,7 +10322,7 @@ fn any_other_key_dismisses_the_discard_confirm_and_sends_nothing() {
 
 #[test]
 fn the_discard_key_does_nothing_on_a_row_with_no_working_change() {
-    let mut harness = with_working_change("dam 0.2.0");
+    let mut harness = with_working_change("dam 0.3.0");
     harness.app.select_oid(&herdr_damnit_domain::Oid::new("5d6e7f8"));
     let before = harness.lines().len();
     harness.press(KeyCode::Char('!'));
@@ -10384,8 +10401,8 @@ mod tests {
 
     #[test]
     fn a_dam_that_answers_reports_its_version_and_the_verdict() {
-        let report = report_from("dam 0.1.0\n", Some(CLEAN), "example\n");
-        assert!(report.contains("dam 0.1.0"), "{report}");
+        let report = report_from("dam 0.2.0\n", Some(CLEAN), "example\n");
+        assert!(report.contains("dam 0.2.0"), "{report}");
         assert!(report.contains("status: ok"), "{report}");
         assert!(report.contains("example"), "{report}");
     }
@@ -10393,13 +10410,13 @@ mod tests {
     #[test]
     fn a_dam_below_the_floor_is_reported_as_the_problem_it_is() {
         let report = report_from("dam 0.0.9\n", Some(CLEAN), "");
-        assert!(report.contains("is older than the 0.1 this pane needs"), "{report}");
+        assert!(report.contains("is older than the 0.2 this pane needs"), "{report}");
     }
 
     #[test]
     fn a_status_missing_a_key_is_reported_by_name() {
         let report = report_from(
-            "dam 0.1.0\n",
+            "dam 0.2.0\n",
             Some(r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[]}"#),
             "",
         );
@@ -10415,7 +10432,7 @@ mod tests {
 
     #[test]
     fn no_configured_remote_is_reported_rather_than_left_blank() {
-        let report = report_from("dam 0.1.0\n", Some(CLEAN), "");
+        let report = report_from("dam 0.2.0\n", Some(CLEAN), "");
         assert!(report.contains("no remotes configured"), "{report}");
     }
 }
