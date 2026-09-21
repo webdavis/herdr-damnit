@@ -1,24 +1,26 @@
 //! The version of `dam` the pane was written against, and what to do about the one it found.
 //! Below 1.0 the minor is the breaking axis, so that is the number the two rules compare.
 
-/// The lowest version whose command surface this pane was written against.
+/// The lowest version whose command surface this pane was written against. 0.2 is where the error
+/// document, exit 4 for every refusal, and a change document with no embedded object arrived.
 pub const DAM_MINIMUM: DamVersion = DamVersion {
     major: 0,
-    minor: 1,
+    minor: 2,
     patch: 0,
 };
 
 /// The highest version this pane was tested against.
 pub const DAM_KNOWN: DamVersion = DamVersion {
     major: 0,
-    minor: 1,
+    minor: 2,
     patch: 0,
 };
 
-/// The version that adds `dam restore`, which is what the discard key is gated on.
+/// The version the discard key is gated on. `dam restore` is unshipped, and 0.3 is the minor this
+/// pane assumes it lands in, so the key appears when the operator updates `dam`.
 pub const DAM_RESTORE: DamVersion = DamVersion {
     major: 0,
-    minor: 2,
+    minor: 3,
     patch: 0,
 };
 
@@ -106,7 +108,11 @@ mod tests {
         };
         assert_eq!(
             message,
-            "dam 0.0.9 is older than the 0.1 this pane needs; run cargo install damnit to update it."
+            "dam 0.0.9 is older than the 0.2 this pane needs; run cargo install damnit to update it."
+        );
+        assert!(
+            matches!(verdict(at(0, 1, 9)), Verdict::Refuse(_)),
+            "the error document and the exit codes this pane reads arrived in 0.2"
         );
     }
 
@@ -123,14 +129,14 @@ mod tests {
 
     #[test]
     fn a_newer_patch_of_a_known_minor_says_nothing() {
-        assert!(matches!(verdict(at(0, 1, 7)), Verdict::Fine));
+        assert!(matches!(verdict(at(0, 2, 7)), Verdict::Fine));
         assert!(matches!(verdict(DAM_KNOWN), Verdict::Fine));
     }
 
     #[test]
     fn the_restore_gate_is_the_minor_that_adds_the_verb() {
-        assert!(at(0, 2, 0) >= DAM_RESTORE);
-        assert!(at(0, 3, 1) >= DAM_RESTORE);
-        assert!(at(0, 1, 9) < DAM_RESTORE);
+        assert!(at(0, 3, 0) >= DAM_RESTORE);
+        assert!(at(0, 4, 1) >= DAM_RESTORE);
+        assert!(at(0, 2, 9) < DAM_RESTORE);
     }
 }
