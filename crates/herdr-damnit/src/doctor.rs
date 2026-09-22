@@ -30,11 +30,9 @@ fn ask(runner: &ProcessDamRunner, argv: &[String]) -> Result<String, String> {
 /// The report, or the refusal the handshake would have drawn. Both are `dam`'s own words about
 /// itself, so the check is the pane's own handshake rather than a second opinion about it.
 fn report_from(version_output: &str, status_output: &str) -> Result<String, String> {
-    let Handshake::Ready { version, warning } = check_version(version_output) else {
-        let Handshake::Refuse(said) = check_version(version_output) else {
-            unreachable!("check_version answers Ready or Refuse");
-        };
-        return Err(said);
+    let (version, warning) = match check_version(version_output) {
+        Handshake::Ready { version, warning } => (version, warning),
+        Handshake::Refuse(said) => return Err(said),
     };
     check_status(status_output)?;
     let mut report = format!("dam:    {version}\nstatus: ok, every key the pane reads is there");

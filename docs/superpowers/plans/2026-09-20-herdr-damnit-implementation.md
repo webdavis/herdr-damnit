@@ -9216,10 +9216,10 @@ Expected: no match, and `main.rs` under 150 lines.
 one. `a_dam_below_the_floor_draws_the_refusal_and_makes_no_further_call` requires
 `lines() == ["--version"]`, so a `dam` this pane refuses is never sent a status read, which is also
 the right behaviour: a command surface the pane does not know is not one to read from.
-`handshake(version, status)` could not give that ordering, so it is now composed of the two checks
-the flow needs, both in `handshake.rs`: `check_version(version_output) -> Handshake` and
-`check_status(status_output) -> Result<(), String>`. `handshake` itself is unchanged in behaviour and
-stays for a caller holding both documents, which is what `doctor` is.
+`handshake(version, status)` could not give that ordering, so it was replaced by the two checks the
+flow needs, both in `handshake.rs`: `check_version(version_output) -> Handshake` and
+`check_status(status_output) -> Result<(), String>`. The pane and `doctor` call those checks in
+order, and no production caller holds both documents for a combined helper.
 
 **Ruling 31.** `a_newer_dam_warns_once_rather_than_once_per_read` asserts the warning does not come
 back rather than that a later read replaced it. As written it cleared nothing and then required

@@ -57,17 +57,6 @@ pub fn check_status(status_output: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Both checks at once, for a caller that has already read both documents.
-pub fn handshake(version_output: &str, status_output: &str) -> Handshake {
-    match check_version(version_output) {
-        Handshake::Ready { version, warning } => match check_status(status_output) {
-            Ok(()) => Handshake::Ready { version, warning },
-            Err(refusal) => Handshake::Refuse(refusal),
-        },
-        refuse => refuse,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -76,16 +65,17 @@ mod tests {
 
     #[test]
     fn a_dam_at_the_floor_with_the_five_keys_is_ready_and_quiet() {
-        let Handshake::Ready { version, warning } = handshake("dam 0.2.0\n", STATUS) else {
+        let Handshake::Ready { version, warning } = check_version("dam 0.2.0\n") else {
             panic!("expected ready");
         };
+        assert_eq!(check_status(STATUS), Ok(()));
         assert_eq!(version.to_string(), "0.2.0");
         assert_eq!(warning, None);
     }
 
     #[test]
     fn a_newer_minor_is_ready_and_carries_one_warning() {
-        let Handshake::Ready { warning, .. } = handshake("dam 0.4.0", STATUS) else {
+        let Handshake::Ready { warning, .. } = check_version("dam 0.4.0") else {
             panic!("expected ready");
         };
         assert_eq!(
@@ -96,7 +86,7 @@ mod tests {
 
     #[test]
     fn a_dam_below_the_floor_refuses_to_draw() {
-        let Handshake::Refuse(message) = handshake("dam 0.0.9", STATUS) else {
+        let Handshake::Refuse(message) = check_version("dam 0.0.9") else {
             panic!("expected a refusal");
         };
         assert!(
@@ -107,7 +97,7 @@ mod tests {
 
     #[test]
     fn a_version_line_that_does_not_parse_refuses_rather_than_guessing() {
-        let Handshake::Refuse(message) = handshake("not a version", STATUS) else {
+        let Handshake::Refuse(message) = check_version("not a version") else {
             panic!("expected a refusal");
         };
         assert_eq!(
@@ -117,11 +107,9 @@ mod tests {
     }
 
     #[test]
-    fn a_status_document_missing_a_key_fails_the_handshake_and_names_it() {
+    fn a_status_document_missing_a_key_names_it() {
         let missing = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[]}"#;
-        let Handshake::Refuse(message) = handshake("dam 0.2.0", missing) else {
-            panic!("expected a refusal");
-        };
+        let message = check_status(missing).expect_err("expected a refusal");
         assert_eq!(
             message,
             "dam status answered without \"unpushed\"; this pane needs a dam built from upstream."
@@ -129,10 +117,8 @@ mod tests {
     }
 
     #[test]
-    fn a_status_document_that_is_not_json_fails_the_handshake() {
-        let Handshake::Refuse(message) = handshake("dam 0.2.0", "not json") else {
-            panic!("expected a refusal");
-        };
+    fn a_status_document_that_is_not_json_is_refused() {
+        let message = check_status("not json").expect_err("expected a refusal");
         assert_eq!(
             message,
             "dam answered with something this pane could not read."
