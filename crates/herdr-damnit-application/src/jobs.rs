@@ -33,6 +33,8 @@ pub enum JobKind {
     /// any screen is drawn from it.
     Handshake,
     ReadList,
+    /// `dam ls done --json`, the Done screen's own list.
+    ReadDone,
     ReadStatus,
     ReadShow(Oid),
     ReadLog,
@@ -46,7 +48,7 @@ impl JobKind {
     fn supersedes_its_own_kind(&self) -> bool {
         matches!(
             self,
-            Self::ReadList | Self::ReadStatus | Self::ReadShow(_) | Self::ReadLog
+            Self::ReadList | Self::ReadDone | Self::ReadStatus | Self::ReadShow(_) | Self::ReadLog
         )
     }
 

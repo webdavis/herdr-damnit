@@ -13,8 +13,10 @@ use unicode_width::UnicodeWidthStr;
 use crate::app::{App, Screen};
 use crate::theme::Palette;
 
+mod done;
 mod list;
 mod refusal;
+mod status;
 
 pub use list::cut_to;
 
@@ -40,6 +42,8 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     frame.render_widget(status_line(app, header.width, &palette), header);
     match app.screen {
         Screen::List => list::draw(frame, body, app, &palette),
+        Screen::Status => status::draw(frame, body, app, &palette),
+        Screen::Done => done::draw(frame, body, app, &palette),
     }
     frame.render_widget(hint_line(hints.width, &palette), hints);
 }
@@ -70,7 +74,7 @@ pub fn render_to_text(app: &App, width: u16, height: u16) -> String {
 /// half is cut first, because a spinner and a timer matter less than the counts they run beside.
 fn status_line(app: &App, width: u16, palette: &Palette) -> Paragraph<'static> {
     let width = width as usize;
-    let right = counts(app);
+    let right = cut_to(&counts(app), width);
     let room = width.saturating_sub(right.width());
     let left = cut_to(&app.header(Instant::now()), room);
     let gap = room.saturating_sub(left.width());
@@ -80,9 +84,26 @@ fn status_line(app: &App, width: u16, palette: &Palette) -> Paragraph<'static> {
     ))
 }
 
-/// What the pane is holding, in the order the spec's status line lists it. A count of nothing is
-/// left out, so a clean store reads as the object count alone.
+/// What the screen on show is holding. The List screen counts its own rows and marks what is
+/// waiting behind them; the Status screen reports the stage in `dam`'s own words; the Done screen
+/// counts what it lists.
 fn counts(app: &App) -> String {
+    match app.screen {
+        Screen::List => open_counts(app),
+        Screen::Status => app.stage.summary(),
+        Screen::Done => format!(
+            "{} done",
+            app.done_rows()
+                .iter()
+                .filter(|row| row.oid().is_some())
+                .count()
+        ),
+    }
+}
+
+/// The List screen's counts, in the order the spec's status line lists them. A count of nothing is
+/// left out, so a clean store reads as the object count alone.
+fn open_counts(app: &App) -> String {
     let mut counts = vec![format!("{} open", app.list.object_count())];
     if app.stage.staged_count() > 0 {
         counts.push(format!("+{} staged", app.stage.staged_count()));

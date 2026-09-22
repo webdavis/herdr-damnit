@@ -54,7 +54,7 @@ fn item(row: &Row, palette: &Palette, width: u16) -> ListItem<'static> {
 /// One row as coloured runs, stopping at `width` terminal cells. Width is counted in cells rather
 /// than characters, so a subject holding a double-width character is cut where the terminal would
 /// wrap it.
-fn spans(segments: &[Segment], palette: &Palette, width: usize) -> Vec<Span<'static>> {
+pub(super) fn spans(segments: &[Segment], palette: &Palette, width: usize) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
     let mut left = width;
     for segment in segments {

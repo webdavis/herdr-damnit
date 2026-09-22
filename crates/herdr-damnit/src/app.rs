@@ -1,16 +1,17 @@
 //! The pane's model and its keys. Nothing here touches a terminal, so every key is tested by the
 //! argv it produced and the sentence it left in the status line.
 
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use crossterm::event::KeyEvent;
+use crossterm::event::{KeyCode, KeyEvent};
 use herdr_damnit_adapters::{Config, wire};
 use herdr_damnit_application::{
     Completion, Handshake, JobKind, Jobs, Submitted, SyncKind, argv, check_status, check_version,
 };
 use herdr_damnit_domain::{
-    Cursor, DamVersion, Date, Failure, IconSet, Object, RowStyle, Stage, Views, classify, message,
-    rows,
+    Cursor, DONE_QUERY, DamVersion, Date, Failure, Object, Oid, RowStyle, Stage, Views, classify,
+    message, rows,
 };
 
 /// The poll window while a job is in flight, which is what makes the spinner animate.
@@ -18,14 +19,6 @@ const BUSY_WINDOW: Duration = Duration::from_millis(50);
 
 /// The poll window with nothing in flight, so an idle pane costs what it always did.
 const IDLE_WINDOW: Duration = Duration::from_millis(200);
-
-const BRAILLE: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
-const PLAIN: [&str; 4] = ["|", "/", "-", "\\"];
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Screen {
-    List,
-}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum After {
@@ -51,6 +44,14 @@ pub struct App {
     warned: bool,
     /// The objects of the showing view, which the list rows are rebuilt from.
     objects: Vec<Object>,
+    /// The completed objects the Done screen draws.
+    done_objects: Vec<Object>,
+    /// The day each completed object was completed on, from the commit that flipped it.
+    completed: HashMap<Oid, Date>,
+    /// Whether the Done screen's two reads have been made, so entering it a second time costs
+    /// nothing.
+    read_done: bool,
+    read_log: bool,
     jobs: Jobs,
 }
 
@@ -69,6 +70,10 @@ impl App {
             version: None,
             warned: false,
             objects: Vec::new(),
+            done_objects: Vec::new(),
+            completed: HashMap::new(),
+            read_done: false,
+            read_log: false,
             jobs,
         }
     }
@@ -100,7 +105,27 @@ impl App {
     }
 
     /// Handle one key. Never blocks and never spawns a thread of its own.
-    pub fn key(&mut self, _key: KeyEvent) -> After {
+    pub fn key(&mut self, key: KeyEvent) -> After {
+        match key.code {
+            KeyCode::Tab => self.show(self.screen.next()),
+            KeyCode::BackTab => self.show(self.screen.previous()),
+            _ => After::Stay,
+        }
+    }
+
+    /// Draw another screen, reading what it needs the first time it is entered.
+    fn show(&mut self, screen: Screen) -> After {
+        self.screen = screen;
+        if screen == Screen::Done {
+            if !self.read_done {
+                self.read_done = true;
+                self.submit(JobKind::ReadDone, argv::list(DONE_QUERY));
+            }
+            if !self.read_log {
+                self.read_log = true;
+                self.submit(JobKind::ReadLog, argv::log());
+            }
+        }
         After::Stay
     }
 
@@ -173,6 +198,14 @@ impl App {
                     wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
                 self.redraw_list();
             }
+            JobKind::ReadDone => {
+                self.done_objects =
+                    wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
+            }
+            JobKind::ReadLog => {
+                self.completed =
+                    wire::completions(&completion.finished.stdout).map_err(|_| unreadable())?;
+            }
             JobKind::Exclusive(SyncKind::Push) => {
                 self.message =
                     wire::push_summary(&completion.finished.stdout).map_err(|_| unreadable())?;
@@ -207,6 +240,7 @@ impl App {
     fn argv_of(&self, kind: &JobKind) -> Vec<String> {
         match kind {
             JobKind::ReadList => argv::list(&self.views.current().query),
+            JobKind::ReadDone => argv::list(DONE_QUERY),
             JobKind::ReadStatus => argv::status(),
             JobKind::ReadShow(oid) => argv::show(oid),
             JobKind::ReadLog => argv::log(),
@@ -216,32 +250,6 @@ impl App {
             JobKind::Exclusive(SyncKind::Commit) => argv::commit(""),
             JobKind::Exclusive(SyncKind::Push) => argv::push(),
             JobKind::Exclusive(SyncKind::Pull) => argv::pull(),
-        }
-    }
-
-    /// The header's left half. With an exclusive job running it is named; with only reads in
-    /// flight, they are counted.
-    pub fn header(&self, now: Instant) -> String {
-        let Some(elapsed) = self.jobs.elapsed_of_current(now) else {
-            return format!("dam  {}", self.views.current().name);
-        };
-        let reads = self.jobs.in_flight();
-        let what = match self.jobs.exclusive() {
-            Some(sync) => sync.verb().to_string(),
-            None => format!("{reads} read{}", if reads == 1 { "" } else { "s" }),
-        };
-        format!(
-            "dam  {}  {} {what} {}",
-            self.views.current().name,
-            self.frame(),
-            elapsed_text(elapsed)
-        )
-    }
-
-    fn frame(&self) -> &'static str {
-        match self.config.icons() {
-            IconSet::NerdFont => BRAILLE[self.spinner % BRAILLE.len()],
-            IconSet::Ascii => PLAIN[self.spinner % PLAIN.len()],
         }
     }
 }
@@ -258,14 +266,11 @@ fn empty_stage() -> Stage {
     }
 }
 
-/// Whole tenths up to ten seconds and whole seconds after that, so the number stops flickering
-/// once a job is genuinely slow.
-fn elapsed_text(elapsed: Duration) -> String {
-    match elapsed.as_secs() < 10 {
-        true => format!("{:.1}s", elapsed.as_secs_f32()),
-        false => format!("{}s", elapsed.as_secs()),
-    }
-}
+mod done;
+mod header;
+mod screen;
+
+pub use screen::Screen;
 
 #[cfg(test)]
 pub(crate) mod tests;

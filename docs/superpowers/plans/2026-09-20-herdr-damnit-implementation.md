@@ -9465,6 +9465,51 @@ under a `not committed` heading at the top, and draws `YYYY-MM-DD  <subject>` wi
 Run: `cargo test -p herdr-damnit --locked screens`
 Expected: PASS, eleven tests.
 
+**Ruling 39.** The log fixture above is rewritten to the shape `dam` 0.2.0 actually prints. It uses
+`before` and `after` objects per change, which the spec's own Done section describes, but Task 23
+measured the real document and landed a parser over `fields`, `done` and `completed_at`: a change is
+a completion when its `fields` names `done` and it leaves the object complete, and the day is its
+`completed_at` or the commit's own `at`. The captured
+`crates/herdr-damnit-adapters/tests/fixtures/log-completion.json` is the proof. Against the fixture
+as written, `completions` finds nothing and all three tasks sort under `not committed`.
+
+**Ruling 40.** `the_status_screen_draws_the_four_sections_in_dams_order` asserts
+`contains("example: pull failed")` rather than the whole sentence. `dam`'s notice reads
+`example: pull failed: unreachable` and the row carries its own two-space indent, which is 35 cells
+against a 32-column pane, so the last word is cut by width on any implementation. The notice's full
+text is already pinned by the wire tests in `wire/reports/tests.rs`.
+
+**Ruling 41.** `each_screen_keeps_its_own_cursor_across_the_cycle` moves the cursor with
+`app.list.move_by(1)` rather than by pressing `j`. Navigation keys are Task 31's produce, and with
+`j` unbound the test as written compared the first row with the first row and would have passed
+against any implementation, including one that reset the cursor on every Tab.
+
+**Ruling 42.** No `status: Cursor` or `done: Cursor` field lands here. Nothing in this task reads
+one, so both would be dead fields under `clippy -D warnings`, and Task 31 owns the navigation that
+moves them. The one cursor that exists, the List's, is what
+`each_screen_keeps_its_own_cursor_across_the_cycle` pins.
+
+**Ruling 43.** Two behaviours the spec specifies and this task's own tests did not reach were added
+with tests of their own. The status line names the screen on show, `dam  status` and `dam  done`
+against the spec's two mocks, and its counts are per screen: the List screen's own open, staged and
+unpushed marks, `Stage::summary()` on the Status screen, which is exactly the spec's
+`3 staged  2 changed  1 unpushed  1 notice`, and a count of rows on the Done screen. And
+`a_status_row_draws_its_own_mark_and_a_row_with_none_draws_none` pins this task's stated rule that
+no row's mark is inferred from the section above it: without it, marking every `StatusRow::Line`
+with a fabricated staged mark passed the whole suite, measured.
+
+**Ruling 44.** A marked Status row draws its mark inside the row's own two-space indent, which is
+where the spec's Status mock puts it (`  + new      1a2b3c4  ...`, `  ^ todoist  1 commit`). A row
+with no mark draws its text as the staging model wrote it, indent and all, which is also what keeps
+the clean line's 31-character sentence inside a 32-column pane.
+
+**Ruling 45.** `app.rs` reached 407 lines with the cycle, the done rows and the header in it, past
+the 250-implementation-line decomposition threshold, so three cohesive child modules were split out:
+`app/screen.rs` (the screens and the order Tab walks them), `app/done.rs` (the Done screen's rows,
+grouped by completion day) and `app/header.rs` (the status line's left half, the spinner and the
+timer). `app.rs` is 276 lines after the split. `screens/list.rs::spans` became `pub(super)`: three
+screens now draw coloured segment runs through it.
+
 - [ ] **Step 5: Commit**
 
 ```bash

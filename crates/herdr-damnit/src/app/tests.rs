@@ -2,6 +2,8 @@ use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crossterm::event::{KeyCode, KeyEvent};
+
 use herdr_damnit_application::{
     Clock, DamRunner, Finished, JobKind, Jobs, RunningJob, SpawnError, SyncKind,
 };
@@ -124,6 +126,10 @@ impl Harness {
             elapsed: Duration::from_millis(9),
         });
         self.app.tick(Instant::now());
+    }
+
+    pub(crate) fn press(&mut self, code: KeyCode) -> After {
+        self.app.key(KeyEvent::from(code))
     }
 
     pub(crate) fn lines(&self) -> Vec<String> {

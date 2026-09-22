@@ -1,6 +1,10 @@
+use std::time::Instant;
+
+use crossterm::event::KeyCode;
 use herdr_damnit_adapters::Config;
 
 use super::*;
+use crate::app::Screen;
 use crate::app::tests::harness_with;
 
 const LS: &str = r#"{"objects":[
@@ -150,4 +154,197 @@ fn a_mark_takes_its_own_colour_and_the_subject_stays_plain() {
         .expect("the row is on screen");
     let priority = &buffer.content()[row * 32 + 2];
     assert_eq!(priority.fg, palette.color(herdr_damnit_domain::Slot::Red));
+}
+
+const FULL_STATUS: &str = r#"{
+  "staged":[
+    {"oid":"1a2b3c4","op":"create","before":null,
+     "after":{"oid":"1a2b3c4","kind":"task","subject":"ship the pin bump"}}],
+  "unstaged":[
+    {"oid":"9a0b1c2","op":"update",
+     "before":{"oid":"9a0b1c2","kind":"task","subject":"water the plants"},
+     "after":{"oid":"9a0b1c2","kind":"task","subject":"water the plants"}}],
+  "unpushed":[{"remote":"example","commits":1}],
+  "conflicts":[{"oid":"3d4e5f6","remote":"example",
+    "ours":{"oid":"3d4e5f6","kind":"task","subject":"mine"},
+    "theirs":{"oid":"3d4e5f6","kind":"task","subject":"theirs"}}],
+  "notices":[{"kind":"pull_failed","remote":"example","why":"unreachable"}]}"#;
+
+fn on_status() -> crate::app::tests::Harness {
+    let mut harness = harness_with(ascii_config());
+    harness.app.submit(
+        herdr_damnit_application::JobKind::ReadStatus,
+        herdr_damnit_application::argv::status(),
+    );
+    harness.answer(0, 0, FULL_STATUS, "");
+    harness.app.screen = Screen::Status;
+    harness
+}
+
+#[test]
+fn tab_cycles_the_three_screens_forward_and_shift_tab_back() {
+    let mut harness = loaded();
+    assert_eq!(harness.app.screen, Screen::List);
+
+    harness.press(KeyCode::Tab);
+    assert_eq!(harness.app.screen, Screen::Status);
+    harness.press(KeyCode::Tab);
+    assert_eq!(harness.app.screen, Screen::Done);
+    harness.press(KeyCode::Tab);
+    assert_eq!(harness.app.screen, Screen::List);
+    harness.press(KeyCode::BackTab);
+    assert_eq!(harness.app.screen, Screen::Done);
+}
+
+#[test]
+fn each_screen_keeps_its_own_cursor_across_the_cycle() {
+    let mut harness = loaded();
+    assert!(harness.app.list.move_by(1), "the list has a second row");
+    let on_list = harness.app.list.selected_oid().cloned();
+
+    harness.press(KeyCode::Tab);
+    harness.press(KeyCode::Tab);
+    harness.press(KeyCode::Tab);
+
+    assert_eq!(harness.app.list.selected_oid().cloned(), on_list);
+}
+
+#[test]
+fn the_status_screen_draws_the_four_sections_in_dams_order() {
+    let harness = on_status();
+
+    let drawn = render_to_text(&harness.app, 32, 12);
+    let headings: Vec<&str> = drawn
+        .lines()
+        .filter(|line| ["Staged", "Working", "Unpushed", "Notices"].contains(line))
+        .collect();
+    assert_eq!(headings, vec!["Staged", "Working", "Unpushed", "Notices"]);
+    assert!(drawn.contains("example: pull failed"), "{drawn}");
+}
+
+/// The plan's rule for this screen: a row draws the mark its own change carries, and a row that
+/// carries none draws none. A mark taken from the section heading above it would say a remote's
+/// failed pull was staged.
+#[test]
+fn a_status_row_draws_its_own_mark_and_a_row_with_none_draws_none() {
+    let harness = on_status();
+
+    let drawn = render_to_text(&harness.app, 32, 12);
+    assert!(
+        drawn.lines().any(|line| line == "  ^ example  1 commit"),
+        "{drawn}"
+    );
+    assert!(
+        drawn
+            .lines()
+            .any(|line| line.starts_with("  example: pull failed")),
+        "{drawn}"
+    );
+    assert!(
+        drawn.lines().any(|line| line.starts_with("  + new")),
+        "{drawn}"
+    );
+}
+
+#[test]
+fn the_status_screen_names_itself_and_counts_the_stage_in_dams_own_words() {
+    let harness = on_status();
+
+    assert_eq!(harness.app.header(Instant::now()), "dam  status");
+    assert_eq!(
+        counts(&harness.app),
+        "1 staged  1 changed  1 unpushed  1 notice"
+    );
+}
+
+#[test]
+fn a_clean_status_screen_says_so_in_dams_own_words() {
+    let mut harness = harness_with(ascii_config());
+    harness.app.submit(
+        herdr_damnit_application::JobKind::ReadStatus,
+        herdr_damnit_application::argv::status(),
+    );
+    harness.answer(0, 0, CLEAN, "");
+    harness.app.screen = Screen::Status;
+
+    assert!(
+        render_to_text(&harness.app, 32, 6).contains("nothing staged, nothing changed"),
+        "{}",
+        render_to_text(&harness.app, 32, 6)
+    );
+}
+
+#[test]
+fn entering_the_done_screen_reads_the_done_list_and_the_log_once() {
+    let mut harness = loaded();
+    harness.press(KeyCode::Tab);
+    harness.press(KeyCode::Tab);
+
+    let lines = harness.lines();
+    assert!(lines.contains(&"ls done --json".to_string()), "{lines:?}");
+    assert!(lines.contains(&"log --json".to_string()), "{lines:?}");
+
+    let before = lines.len();
+    harness.press(KeyCode::Tab);
+    harness.press(KeyCode::Tab);
+    harness.press(KeyCode::Tab);
+    assert_eq!(
+        harness.lines().len(),
+        before,
+        "it re-read a screen it already had"
+    );
+}
+
+#[test]
+fn the_done_screen_draws_the_date_first_newest_first_with_the_uncommitted_ones_on_top() {
+    let mut harness = harness_with(ascii_config());
+    harness.app.screen = Screen::Done;
+    harness.app.submit(
+        herdr_damnit_application::JobKind::ReadDone,
+        herdr_damnit_application::argv::list("done"),
+    );
+    harness.answer(
+        0,
+        0,
+        r#"{"objects":[
+          {"oid":"aaa","kind":"task","subject":"older","task":{"done":true,"priority":4}},
+          {"oid":"bbb","kind":"task","subject":"newer","task":{"done":true,"priority":4}},
+          {"oid":"ccc","kind":"task","subject":"just now","task":{"done":true,"priority":4}}]}"#,
+        "",
+    );
+    harness.app.submit(
+        herdr_damnit_application::JobKind::ReadLog,
+        herdr_damnit_application::argv::log(),
+    );
+    harness.answer(
+        1,
+        0,
+        r#"{"commits":[
+          {"id":"c1","at":"2026-09-18T08:00:00Z","message":"one","changes":[
+            {"oid":"aaa","op":"update","fields":["done"],"kind":"task","subject":"older",
+             "done":true}]},
+          {"id":"c2","at":"2026-09-20T08:00:00Z","message":"two","changes":[
+            {"oid":"bbb","op":"update","fields":["done"],"kind":"task","subject":"newer",
+             "done":true}]}]}"#,
+        "",
+    );
+
+    let drawn = render_to_text(&harness.app, 32, 10);
+    assert!(
+        drawn
+            .lines()
+            .next()
+            .expect("a header")
+            .contains("dam  done"),
+        "{drawn}"
+    );
+    let body: Vec<&str> = drawn
+        .lines()
+        .skip(1)
+        .filter(|line| !line.is_empty())
+        .collect();
+    assert_eq!(body[0], "not committed");
+    assert_eq!(body[1], "  just now");
+    assert_eq!(body[2], "2026-09-20  newer");
+    assert_eq!(body[3], "2026-09-18  older");
 }
