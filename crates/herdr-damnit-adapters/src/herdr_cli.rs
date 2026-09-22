@@ -57,7 +57,7 @@ pub fn open_plugin_pane(
     pane_id_of_open(&output).ok_or_else(|| "herdr plugin pane open named no pane".to_string())
 }
 
-/// Resize the pane already in the tab to `target_ratio` of it, so the Todoist pane opened beside
+/// Resize the pane already in the tab to `target_ratio` of it, so this plugin's pane opened beside
 /// it ends up at the width the config asked for. `herdr plugin pane open` cannot take a ratio of
 /// its own, and a same-tab `herdr pane move` is a no-op, so a resize after the open is the only
 /// call that actually changes it. Reports whether herdr moved the split at all.

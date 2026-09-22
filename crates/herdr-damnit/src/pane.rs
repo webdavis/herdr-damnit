@@ -90,7 +90,7 @@ pub fn run(mode: Mode, config: &Config) -> Result<String, String> {
                 match recover(mode) {
                     Recovery::RetryOpen => open_and_remember(&workspace, config, focus_of(mode)),
                     Recovery::ReportGone => {
-                        Ok(format!("no todoist pane in {workspace}: {pane} is gone"))
+                        Ok(format!("no dam pane in {workspace}: {pane} is gone"))
                     }
                 }
             }
@@ -104,7 +104,7 @@ pub fn run(mode: Mode, config: &Config) -> Result<String, String> {
             }
         }
         Decision::LeaveOpen(pane) => Ok(format!("{pane} is already open")),
-        Decision::NothingToFocus => Ok(format!("no todoist pane in {workspace}")),
+        Decision::NothingToFocus => Ok(format!("no dam pane in {workspace}")),
         Decision::Open => open_and_remember(&workspace, config, focus_of(mode)),
     }
 }
