@@ -28,16 +28,10 @@ fn ascii_config() -> Config {
 
 fn loaded() -> crate::app::tests::Harness {
     let mut harness = harness_with(ascii_config());
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
-    harness.answer(0, 0, CLEAN, "");
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadList,
-        herdr_damnit_application::argv::list("!done"),
-    );
-    harness.answer(1, 0, LS, "");
+    crate::open::start(&mut harness.app);
+    harness.answer(0, 0, "dam 0.2.0\n", "");
+    harness.answer(1, 0, CLEAN, "");
+    harness.answer(2, 0, LS, "");
     harness
 }
 
@@ -152,7 +146,7 @@ fn a_mark_takes_its_own_colour_and_the_subject_stays_plain() {
                 .contains("ship the pin")
         })
         .expect("the row is on screen");
-    let priority = &buffer.content()[row * 32 + 2];
+    let priority = &buffer.content()[row * 32 + 4];
     assert_eq!(priority.fg, palette.color(herdr_damnit_domain::Slot::Red));
 }
 
