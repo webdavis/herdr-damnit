@@ -48,12 +48,12 @@ fn the_list_screen_draws_its_headings_marks_and_hint_line() {
         render_to_text(&harness.app, 32, 8),
         "\
 dam  open                 3 open
-proj/dotfiles
-  ~ refresh the roster row
-  ! < 09-18 ship the pin bump @2
-proj/home
-  > 10-02 water the plants
-
+proj
+  dotfiles
+    ~ refresh the roster row
+    ! < 09-18 ship the pin bump…
+  home
+    > 10-02 water the plants
 x X dd p s D l m a S e <CR> <Sp…"
     );
 }

@@ -63,8 +63,21 @@ pub fn rows(objects: &[Object], marks: &dyn StagingMarks, style: RowStyle) -> Ve
     paths.dedup();
 
     let mut rows = Vec::new();
+    let mut previous = Vec::new();
     for path in paths {
-        rows.push(Row::Heading(path.to_string()));
+        let segments = path_segments(path);
+        let shared = segments
+            .iter()
+            .zip(&previous)
+            .take_while(|(left, right)| left == right)
+            .count();
+        rows.extend(
+            segments
+                .iter()
+                .enumerate()
+                .skip(shared)
+                .map(|(depth, segment)| Row::Heading(format!("{}{}", "  ".repeat(depth), segment))),
+        );
         let mut under: Vec<&Object> = objects
             .iter()
             .filter(|object| heading(object) == path)
@@ -73,10 +86,20 @@ pub fn rows(objects: &[Object], marks: &dyn StagingMarks, style: RowStyle) -> Ve
         rows.extend(
             under
                 .into_iter()
-                .map(|object| object_row(object, marks, &style)),
+                .map(|object| object_row(object, marks, &style, segments.len())),
         );
+        previous = segments;
     }
     rows
+}
+
+fn path_segments(path: &str) -> Vec<&str> {
+    if path == NO_PATH {
+        return vec![NO_PATH];
+    }
+    path.split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect()
 }
 
 fn heading(object: &Object) -> &str {
@@ -86,9 +109,9 @@ fn heading(object: &Object) -> &str {
     }
 }
 
-fn object_row(object: &Object, marks: &dyn StagingMarks, style: &RowStyle) -> Row {
+fn object_row(object: &Object, marks: &dyn StagingMarks, style: &RowStyle, depth: usize) -> Row {
     let mut segments = vec![Segment {
-        text: "  ".to_string(),
+        text: "  ".repeat(depth),
         slot: Slot::Text,
     }];
     if let Some(mark) = marks.mark_of(&object.oid) {

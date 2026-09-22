@@ -8700,14 +8700,14 @@ fn the_list_screen_draws_its_headings_marks_and_hint_line() {
     assert_eq!(
         render_to_text(&harness.app, 32, 8),
         "\
-dam  open              3 open
-proj/dotfiles
-  ~ refresh the roster row
-  ! < 09-18 ship the pin b…@2
-proj/home
-  > 10-02 water the plants
-
-x X dd p s D l m a S e <CR>…"
+dam  open                 3 open
+proj
+  dotfiles
+    ~ refresh the roster row
+    ! < 09-18 ship the pin bump…
+  home
+    > 10-02 water the plants
+x X dd p s D l m a S e <CR> <Sp…"
     );
 }
 
@@ -8883,11 +8883,11 @@ Run: `cargo test -p herdr-damnit --locked screens`
 Expected: PASS, five tests.
 
 **Ruling 27.** The golden above was regenerated at the width the test asks for and differs from the
-one sketched here. At 32 columns the counts sit at the right edge rather than nine columns in, the
-first object row is exactly 32 cells and needs no cut at all, and the hint line ends
-`<CR> <Sp` plus the ellipsis. Every line was checked against the spec's List mock before it was
-pasted: the path headings, the recurring, priority, overdue and upcoming marks, the counted labels,
-and the subject-last order that lets the subject be what gets cut.
+one sketched here. At 32 columns the counts sit at the right edge rather than nine columns in, each
+path segment gets a heading with its children one level deeper, and the deeper priority row cuts the
+subject with an ellipsis. The hint line ends `<CR> <Sp` plus the ellipsis. Every line was checked
+against the spec's List rules before it was pasted: the path hierarchy, the recurring, priority,
+overdue and upcoming marks, and the subject-last order that lets the subject be what gets cut.
 
 **Ruling 28.** `the_header_carries_the_spinner_and_the_elapsed_time_mid_push` asserts against all
 four frames of the plain spinner rather than the two written here. `loaded()` leaves two reads in
