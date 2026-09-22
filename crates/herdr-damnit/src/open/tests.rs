@@ -1,3 +1,4 @@
+use crossterm::event::KeyCode;
 use herdr_damnit_application::{JobKind, argv};
 
 use super::*;
@@ -22,6 +23,30 @@ fn opening_asks_for_the_version_and_the_status_before_anything_else() {
     assert_eq!(lines[0], "--version");
     assert_eq!(lines[1], "status --json");
     assert_eq!(lines[2], "ls !done --json");
+}
+
+#[test]
+fn changing_screens_during_the_handshake_defers_their_reads_until_acceptance() {
+    let mut harness = harness();
+    start(&mut harness.app);
+    harness.press(KeyCode::Tab);
+    harness.press(KeyCode::Tab);
+
+    assert_eq!(harness.lines(), vec!["--version".to_string()]);
+
+    harness.answer(0, 0, "dam 0.2.0\n", "");
+    harness.answer(1, 0, CLEAN, "");
+
+    assert_eq!(
+        harness.lines(),
+        vec![
+            "--version",
+            "status --json",
+            "ls !done --json",
+            "ls done --json",
+            "log --json",
+        ]
+    );
 }
 
 #[test]

@@ -48,6 +48,8 @@ pub struct App {
     pub refusal: Option<String>,
     /// The version the handshake read, once it has.
     pub version: Option<DamVersion>,
+    /// Whether both handshake reads were accepted, so screen reads may start.
+    ready: bool,
     /// Whether the handshake's warning has already reached the status line, so a newer `dam` is
     /// named once at open rather than on every read.
     warned: bool,
@@ -77,6 +79,7 @@ impl App {
             today,
             refusal: None,
             version: None,
+            ready: false,
             warned: false,
             objects: Vec::new(),
             done_objects: Vec::new(),
@@ -125,7 +128,7 @@ impl App {
     /// Draw another screen, reading what it needs the first time it is entered.
     fn show(&mut self, screen: Screen) -> After {
         self.screen = screen;
-        if screen == Screen::Done {
+        if screen == Screen::Done && self.ready {
             if !self.read_done {
                 self.read_done = true;
                 self.submit(JobKind::ReadDone, argv::list(DONE_QUERY));
@@ -188,6 +191,8 @@ impl App {
                         }
                         let query = self.views.current().query.clone();
                         self.submit(JobKind::ReadList, argv::list(&query));
+                        self.ready = true;
+                        self.show(self.screen);
                     }
                 }
                 true
