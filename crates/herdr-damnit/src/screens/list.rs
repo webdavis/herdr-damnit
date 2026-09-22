@@ -77,7 +77,7 @@ pub(super) fn spans(segments: &[Segment], palette: &Palette, width: usize) -> Ve
 }
 
 /// `text` cut to `width` terminal cells, ending in an ellipsis when anything was dropped.
-pub fn cut_to(text: &str, width: usize) -> String {
+pub(super) fn cut_to(text: &str, width: usize) -> String {
     if text.width() <= width {
         return text.to_string();
     }

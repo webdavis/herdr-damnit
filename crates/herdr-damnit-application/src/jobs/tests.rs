@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use super::*;
 use crate::{Clock, Finished, SpawnError};
+
 /// A clock the job table reads a start from. The instant is real and the day is unused here.
 struct TestClock;
 

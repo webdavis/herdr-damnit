@@ -18,7 +18,7 @@ mod list;
 mod refusal;
 mod status;
 
-pub use list::cut_to;
+use list::cut_to;
 
 /// What a line cut off by the pane's width ends in, so a subject the pane cut says it was cut.
 pub const ELLIPSIS: &str = "\u{2026}";

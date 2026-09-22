@@ -1,6 +1,15 @@
 //! The pane's model and its keys. Nothing here touches a terminal, so every key is tested by the
 //! argv it produced and the sentence it left in the status line.
 
+mod done;
+mod header;
+mod screen;
+
+pub use screen::Screen;
+
+#[cfg(test)]
+pub(crate) mod tests;
+
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -61,7 +70,7 @@ impl App {
             screen: Screen::List,
             views: Views::new(&config.views()),
             list: Cursor::new(Vec::new()),
-            stage: empty_stage(),
+            stage: Stage::default(),
             message: String::new(),
             spinner: 0,
             config,
@@ -253,24 +262,3 @@ impl App {
         }
     }
 }
-
-/// The staging model of a pane that has not read `dam status` yet: nothing staged and nothing
-/// changed, so the first rows carry no staging marks.
-fn empty_stage() -> Stage {
-    Stage {
-        staged: Vec::new(),
-        unstaged: Vec::new(),
-        unpushed: Vec::new(),
-        conflicts: Vec::new(),
-        notices: Vec::new(),
-    }
-}
-
-mod done;
-mod header;
-mod screen;
-
-pub use screen::Screen;
-
-#[cfg(test)]
-pub(crate) mod tests;
