@@ -50,7 +50,7 @@ fn drawn(rows: &[Row]) -> Vec<String> {
 }
 
 #[test]
-fn every_path_gets_one_heading_and_its_objects_sit_under_it() {
+fn every_path_segment_gets_one_heading_and_its_children_sit_under_it() {
     let objects = vec![
         task("2", "proj/home", "water the plants"),
         task("1", "proj/dotfiles", "ship the pin bump"),
@@ -61,12 +61,13 @@ fn every_path_gets_one_heading_and_its_objects_sit_under_it() {
     assert_eq!(
         drawn(&rows(&objects, &NoMarks, style())),
         vec![
-            "proj/dotfiles".to_string(),
-            "  bump the roster pin".to_string(),
-            "  refresh the roster row".to_string(),
-            "  ship the pin bump".to_string(),
-            "proj/home".to_string(),
-            "  water the plants".to_string(),
+            "proj".to_string(),
+            "  dotfiles".to_string(),
+            "    bump the roster pin".to_string(),
+            "    refresh the roster row".to_string(),
+            "    ship the pin bump".to_string(),
+            "  home".to_string(),
+            "    water the plants".to_string(),
         ]
     );
 }

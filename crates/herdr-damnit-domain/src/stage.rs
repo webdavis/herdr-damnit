@@ -46,7 +46,7 @@ pub struct Notice {
 }
 
 /// The five arrays `dam status --json` answers with.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Stage {
     pub staged: Vec<Change>,
     pub unstaged: Vec<Change>,

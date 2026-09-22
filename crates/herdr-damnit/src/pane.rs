@@ -1,11 +1,9 @@
 //! The `open`, `toggle`, `focus` and `auto-open` actions. Each one resolves the plugin's pane in
 //! the current workspace, then drives the `herdr` CLI.
 
-use crate::config::{Config, Placement};
-use crate::herdr;
-use crate::placement;
-use crate::state;
-use crate::views::Views;
+use herdr_damnit_adapters::config::Placement;
+use herdr_damnit_adapters::{Config, herdr_cli as herdr, state};
+use herdr_damnit_domain::Views;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -92,7 +90,7 @@ pub fn run(mode: Mode, config: &Config) -> Result<String, String> {
                 match recover(mode) {
                     Recovery::RetryOpen => open_and_remember(&workspace, config, focus_of(mode)),
                     Recovery::ReportGone => {
-                        Ok(format!("no todoist pane in {workspace}: {pane} is gone"))
+                        Ok(format!("no dam pane in {workspace}: {pane} is gone"))
                     }
                 }
             }
@@ -106,7 +104,7 @@ pub fn run(mode: Mode, config: &Config) -> Result<String, String> {
             }
         }
         Decision::LeaveOpen(pane) => Ok(format!("{pane} is already open")),
-        Decision::NothingToFocus => Ok(format!("no todoist pane in {workspace}")),
+        Decision::NothingToFocus => Ok(format!("no dam pane in {workspace}")),
         Decision::Open => open_and_remember(&workspace, config, focus_of(mode)),
     }
 }
@@ -126,7 +124,7 @@ pub fn view(argument: &str, config: &Config) -> Result<String, String> {
     let number: usize = argument
         .parse()
         .map_err(|_| format!("'{argument}' is not a view number"))?;
-    let views = Views::new(&config.views);
+    let views = Views::new(&config.views());
     let name = views.name_of_number(number).ok_or_else(|| {
         format!(
             "no view {number}: this config has {} views, 1 being the unfiltered list",
@@ -166,6 +164,12 @@ fn open_and_remember(workspace: &str, config: &Config, focus: Focus) -> Result<S
     })
 }
 
+/// The calling pane's share of the tab once this pane has taken `width`: whatever is left.
+/// `herdr pane resize` moves the calling pane to this ratio to get there.
+fn leading_share(width: f32) -> f32 {
+    1.0 - width
+}
+
 /// Give the pane its configured width, which herdr's own open cannot do: it splits at an even
 /// ratio and takes no ratio of its own. This resizes the calling pane rather than the one just
 /// opened, since a same-tab `herdr pane move` is a no-op and a resize is the only call that
@@ -175,8 +179,7 @@ fn arrange_pane(neighbor: &str, config: &Config) -> Option<String> {
     if config.placement != Placement::Split || neighbor.is_empty() {
         return None;
     }
-    let width = config.width?;
-    let target_ratio = placement::leading_share(width);
+    let target_ratio = leading_share(config.width?);
     let direction = config.side.split_direction();
     match herdr::resize_leading_pane(neighbor, direction, target_ratio) {
         Ok(true) => None,
@@ -189,8 +192,18 @@ fn arrange_pane(neighbor: &str, config: &Config) -> Option<String> {
 mod tests {
     use super::*;
 
+    fn default_config() -> Config {
+        Config::parse("").expect("the default config")
+    }
+
     fn panes(ids: &[&str]) -> Vec<String> {
         ids.iter().map(|id| id.to_string()).collect()
+    }
+
+    #[test]
+    fn the_calling_panes_share_is_the_rest_of_the_tab() {
+        assert_eq!(leading_share(0.3), 0.7);
+        assert_eq!(leading_share(0.7), 0.3);
     }
 
     #[test]
@@ -250,7 +263,7 @@ mod tests {
 
     #[test]
     fn auto_open_does_nothing_at_all_when_the_config_has_not_asked_for_it() {
-        let outcome = auto_open(&Config::default()).expect("no herdr call at all");
+        let outcome = auto_open(&default_config()).expect("no herdr call at all");
 
         assert_eq!(outcome, "auto_open is off");
     }
@@ -285,7 +298,7 @@ mod tests {
 
     #[test]
     fn a_view_number_past_the_end_names_how_many_views_there_are() {
-        let error = view("4", &Config::default()).expect_err("refuses");
+        let error = view("4", &default_config()).expect_err("refuses");
 
         assert!(error.contains("no view 4"), "{error}");
         assert!(error.contains("1 views"), "{error}");
@@ -293,7 +306,7 @@ mod tests {
 
     #[test]
     fn a_view_argument_that_is_not_a_number_is_refused() {
-        let error = view("today", &Config::default()).expect_err("refuses");
+        let error = view("today", &default_config()).expect_err("refuses");
 
         assert!(error.contains("not a view number"), "{error}");
     }

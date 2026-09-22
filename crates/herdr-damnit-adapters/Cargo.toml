@@ -13,6 +13,7 @@ path = "src/bin/fake_dam.rs"
 [dependencies]
 herdr-damnit-application.workspace = true
 herdr-damnit-domain.workspace = true
+jiff.workspace = true
 libc = "0.2"
 serde.workspace = true
 serde_json.workspace = true

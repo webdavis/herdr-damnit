@@ -1,69 +1,39 @@
 //! The plugin binary. With no arguments it is the pane; the subcommands are the plugin actions.
 
-mod apply;
-mod cache;
-mod completed;
-mod config;
-mod connection;
-mod cursor;
-mod detail;
+mod app;
 mod doctor;
-mod draft;
-mod edit;
-mod editor;
-mod herdr;
-mod history;
-mod icons;
-mod list;
-mod markdown;
+mod loop_;
+mod open;
 mod pane;
-mod placement;
-mod prompt;
-mod queue;
-mod refresh;
-mod reload;
-mod render;
-mod send;
-mod state;
+mod screens;
 mod theme;
-mod tui;
-mod views;
 
-use config::Config;
+use herdr_damnit_adapters::{Config, ProcessDamRunner, SystemClock};
+use herdr_damnit_application::{Clock, Jobs};
 use pane::Mode;
 
 const USAGE: &str = "\
 usage: herdr-damnit [<command>]
 
-  (no command)   run the Todoist pane
+  (no command)   run the task pane
   open           open the pane in this workspace, or focus it when it is already open
   toggle         open the pane, or close it when it is already open
   focus          focus the pane in this workspace
   auto-open      open the pane when the config asks for it, the workspace-focus hook
   view <n>       show the nth configured view, opening the pane when it is closed
-  doctor         check that the token resolves and one API request succeeds
+  doctor         check that dam answers and its status carries every key the pane reads
 ";
 
-#[tokio::main]
-async fn main() -> std::process::ExitCode {
+fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.as_slice() {
-        [] => match Config::load() {
-            Ok(config) => match tui::run(&config, todoist::DEFAULT_BASE_URL).await {
-                Ok(()) => std::process::ExitCode::SUCCESS,
-                Err(error) => fail(&error),
-            },
-            Err(error) => fail(&error),
-        },
+        [] => run_pane(),
         [command] => match command.as_str() {
             "--help" | "-h" | "help" => {
                 print!("{USAGE}");
                 std::process::ExitCode::SUCCESS
             }
-            "doctor" => match Config::load() {
-                Ok(config) => report(doctor::run(&config, todoist::DEFAULT_BASE_URL).await),
-                Err(error) => fail(&error),
-            },
+            "doctor" => with_config(doctor::run),
             "open" => with_config(|config| pane::run(Mode::Open, config)),
             "toggle" => with_config(|config| pane::run(Mode::Toggle, config)),
             "focus" => with_config(|config| pane::run(Mode::Focus, config)),
@@ -77,10 +47,40 @@ async fn main() -> std::process::ExitCode {
     }
 }
 
-/// Load the config and run a synchronous action against it, so a bad config only breaks the
-/// commands that actually need one.
+/// The configuration plus the one check the adapters crate cannot make for itself: the theme
+/// vocabulary is this crate's, so `Config::parse` never sees it and every load goes through here.
+/// Skip this and an unknown theme name is accepted in silence and the pane paints with defaults.
+fn load_config() -> Result<Config, String> {
+    load_config_with(Config::load)
+}
+
+fn load_config_with(load: impl FnOnce() -> Result<Config, String>) -> Result<Config, String> {
+    let config = load()?;
+    config.check_theme_against(theme::NAMES)?;
+    Ok(config)
+}
+
+fn run_pane() -> std::process::ExitCode {
+    let config = match load_config() {
+        Ok(config) => config,
+        Err(error) => return fail(&error),
+    };
+    let clock = SystemClock;
+    let today = clock.today();
+    let jobs = Jobs::new(
+        Box::new(ProcessDamRunner::new(config.dam.clone())),
+        Box::new(clock),
+    );
+    let mut app = app::App::new(config, jobs, today);
+    open::start(&mut app);
+    match loop_::run(&mut app) {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(error) => fail(&error),
+    }
+}
+
 fn with_config(run: impl FnOnce(&Config) -> Result<String, String>) -> std::process::ExitCode {
-    report(Config::load().and_then(|config| run(&config)))
+    report(load_config().and_then(|config| run(&config)))
 }
 
 fn report(outcome: Result<String, String>) -> std::process::ExitCode {
@@ -96,4 +96,17 @@ fn report(outcome: Result<String, String>) -> std::process::ExitCode {
 fn fail(error: &str) -> std::process::ExitCode {
     eprintln!("herdr-damnit: {error}");
     std::process::ExitCode::FAILURE
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_config_funnel_rejects_a_theme_the_pane_cannot_draw() {
+        let error = load_config_with(|| Config::parse("theme = 'unknown'"))
+            .expect_err("the theme is unknown");
+
+        assert!(error.contains("unknown theme 'unknown'"), "{error}");
+    }
 }

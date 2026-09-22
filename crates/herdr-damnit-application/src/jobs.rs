@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use herdr_damnit_domain::Oid;
 
-use crate::{DamRunner, Finished, RunningJob, SpawnError};
+use crate::{Clock, DamRunner, Finished, RunningJob, SpawnError};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SyncKind {
@@ -27,7 +27,14 @@ impl SyncKind {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JobKind {
+    /// `dam --version`, the first call the pane makes.
+    Version,
+    /// The one `dam status --json` the handshake reads, which is judged on its five keys before
+    /// any screen is drawn from it.
+    Handshake,
     ReadList,
+    /// `dam ls done --json`, the Done screen's own list.
+    ReadDone,
     ReadStatus,
     ReadShow(Oid),
     ReadLog,
@@ -41,7 +48,7 @@ impl JobKind {
     fn supersedes_its_own_kind(&self) -> bool {
         matches!(
             self,
-            Self::ReadList | Self::ReadStatus | Self::ReadShow(_) | Self::ReadLog
+            Self::ReadList | Self::ReadDone | Self::ReadStatus | Self::ReadShow(_) | Self::ReadLog
         )
     }
 
@@ -82,14 +89,18 @@ struct Running {
 
 pub struct Jobs {
     runner: Box<dyn DamRunner>,
+    /// What a job's start is read from, so the header's timer is driven by a literal instant in a
+    /// test rather than by whatever the machine was doing.
+    clock: Box<dyn Clock>,
     running: Vec<Running>,
     next: u64,
 }
 
 impl Jobs {
-    pub fn new(runner: Box<dyn DamRunner>) -> Self {
+    pub fn new(runner: Box<dyn DamRunner>, clock: Box<dyn Clock>) -> Self {
         Self {
             runner,
+            clock,
             running: Vec::new(),
             next: 0,
         }
@@ -115,7 +126,7 @@ impl Jobs {
         self.running.push(Running {
             id,
             kind,
-            started: Instant::now(),
+            started: self.clock.now(),
             job,
         });
         Submitted::Started(id)

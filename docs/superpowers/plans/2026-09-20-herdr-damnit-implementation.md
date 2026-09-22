@@ -8004,6 +8004,21 @@ Expected: PASS. The binary crate still compiles: it now reaches `state` and the 
 `herdr_damnit_adapters`, so replace its `mod state;` and `mod herdr;` declarations with
 `use herdr_damnit_adapters::{state, herdr_cli as herdr};` and fix the call sites the compiler names.
 
+**Ruling 19.** `herdr_cli` is declared `pub mod herdr_cli;` rather than `mod herdr_cli;`. `pane.rs`
+calls `open_plugin_pane`, `focus_plugin_pane`, `close_plugin_pane`, `resize_leading_pane` and
+`live_panes` by path, so the module itself has to be reachable and not only the `CliHerdr` re-export.
+
+**Ruling 20.** Step 4's "fix the call sites the compiler names" is larger than one import.
+`herdr_cli::open_plugin_pane` takes the adapters crate's own `Config`, so `pane.rs` moves onto
+`herdr_damnit_adapters::Config` and `herdr_damnit_domain::Views` in this task, and `main.rs` loads
+that config for the five pane actions while `tui::run` and `doctor::run` keep loading the Todoist-era
+`config::Config` until Task 28 deletes it. That re-aim orphaned three items, each deleted here with
+the one test that only exercised it, because `clippy -D warnings` fails on dead code and all three
+files leave the tree in Task 28: `Placement::as_str` in `crates/herdr-damnit/src/config.rs`,
+`Side::split_direction` in `placement.rs`, and `Views::name_of_number` in `views.rs`. `send.rs` calls
+the herdr client through the port (`herdr_damnit_application::Herdr::call(&CliHerdr, args)`) because
+the free `herdr::call` became that trait method.
+
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -8572,6 +8587,38 @@ Run: `wc -l crates/herdr-damnit/src/app.rs`
 Expected: under 300. If it is over, move `header`, `frame` and `elapsed_text` into
 `crates/herdr-damnit/src/app/header.rs`.
 
+**Ruling 21.** `loop_.rs` is written in Task 28 rather than here. Its body calls
+`crate::screens::draw`, which Task 27 writes, and nothing calls `loop_::run` until `main.rs` does at
+the cutover, so landing it here would either break the build or need two throwaway stub modules Task
+27 immediately replaces. Task 26 lands the model and its tests; the terminal half lands with the
+composition root that calls it.
+
+**Ruling 22.** `Jobs::new(runner, clock)` takes the `Clock` port and `submit` sets
+`started: self.clock.now()`, as this task's preamble requires, and the harness exposes
+`started()` so the two header tests read the instant the fake clock answers instead of calling
+`Instant::now()` themselves. Against a `started` recorded a moment later,
+`header(started + Duration::from_secs(42))` measures 42 seconds minus that moment, whose `as_secs()`
+is 41, so the test as first written failed on every run. The four existing `Jobs::new` call sites in
+`jobs/tests.rs` and `jobs/tests/unanswered.rs` take a `TestClock` declared beside them.
+
+**Ruling 23.** `Screen` and `After` declare only the variants a task constructs. Here that is
+`Screen::List` and `After::Stay`; Task 29 adds `Screen::Status` and `Screen::Done` with the Tab
+cycle, Task 30 adds `Screen::Detail` and the `detail: Option<Object>` field with the `<CR>` key, Task
+31 adds `overlay: Option<Overlay>` with the pickers, Task 37 adds `After::Editor(Vec<String>)` and
+Task 39 adds `After::Quit`. `clippy -D warnings` rejects a variant nothing constructs and a field
+nothing reads, and a suppression would be a lint that is right rather than wrong.
+
+**Ruling 24.** `classify` takes three arguments, not the two the `App::apply` sketch above passes:
+`classify(completion.finished.code, wire::error_document(&completion.finished.stderr),
+&completion.finished.stderr)`. Task 22 gave it the parsed error document and the raw stream as the
+fallback for a `dam` too old to print one.
+
+**Ruling 25.** `cargo clippy --workspace --all-targets -- -D warnings` is not green at Tasks 26 and
+27 and is not expected to be. Both tasks add a model and a renderer that nothing in `main.rs` reaches
+until Task 28 wires them, so the binary target carries the whole of `app.rs` and `screens.rs` as dead
+code until the cutover. The plan's gate order already says this: Task 28 Step 6 is the first step
+that runs clippy.
+
 - [ ] **Step 7: Commit**
 
 ```bash
@@ -8653,14 +8700,14 @@ fn the_list_screen_draws_its_headings_marks_and_hint_line() {
     assert_eq!(
         render_to_text(&harness.app, 32, 8),
         "\
-dam  open              3 open
-proj/dotfiles
-  ~ refresh the roster row
-  ! < 09-18 ship the pin b…@2
-proj/home
-  > 10-02 water the plants
-
-x X dd p s D l m a S e <CR>…"
+dam  open                 3 open
+proj
+  dotfiles
+    ~ refresh the roster row
+    ! < 09-18 ship the pin bump…
+  home
+    > 10-02 water the plants
+x X dd p s D l m a S e <CR> <Sp…"
     );
 }
 
@@ -8834,6 +8881,23 @@ ellipsis. `crates/herdr-damnit/src/screens/list.rs` renders `app.list.rows()` as
 
 Run: `cargo test -p herdr-damnit --locked screens`
 Expected: PASS, five tests.
+
+**Ruling 27.** The golden above was regenerated at the width the test asks for and differs from the
+one sketched here. At 32 columns the counts sit at the right edge rather than nine columns in, each
+path segment gets a heading with its children one level deeper, and the deeper priority row cuts the
+subject with an ellipsis. The hint line ends `<CR> <Sp` plus the ellipsis. Every line was checked
+against the spec's List rules before it was pasted: the path hierarchy, the recurring, priority,
+overdue and upcoming marks, and the subject-last order that lets the subject be what gets cut.
+
+**Ruling 28.** `the_header_carries_the_spinner_and_the_elapsed_time_mid_push` asserts against all
+four frames of the plain spinner rather than the two written here. `loaded()` leaves two reads in
+flight for two ticks, so the frame on screen is the third one, and pinning a particular frame would
+pin how many ticks the reads before the push happened to take.
+
+**Ruling 29.** `spans` and `cut` are moved from `render.rs` rather than written fresh: the
+cut-the-line-and-end-in-an-ellipsis rule the spec asks for already exists there, measured in
+terminal cells rather than characters so a double-width subject is cut where the terminal would wrap
+it. `cut_to` is the same rule over a bare string, which the status line and the hint line both take.
 
 - [ ] **Step 5: Commit**
 
@@ -9148,6 +9212,55 @@ wc -l crates/herdr-damnit/src/main.rs
 
 Expected: no match, and `main.rs` under 150 lines.
 
+**Ruling 30.** The version verdict is decided on the `Version` completion, not on the `Handshake`
+one. `a_dam_below_the_floor_draws_the_refusal_and_makes_no_further_call` requires
+`lines() == ["--version"]`, so a `dam` this pane refuses is never sent a status read, which is also
+the right behaviour: a command surface the pane does not know is not one to read from.
+`handshake(version, status)` could not give that ordering, so it was replaced by the two checks the
+flow needs, both in `handshake.rs`: `check_version(version_output) -> Handshake` and
+`check_status(status_output) -> Result<(), String>`. The pane and `doctor` call those checks in
+order, and no production caller holds both documents for a combined helper.
+
+**Ruling 31.** `a_newer_dam_warns_once_rather_than_once_per_read` asserts the warning does not come
+back rather than that a later read replaced it. As written it cleared nothing and then required
+`message` not to contain the warning after an unrelated `ReadStatus`, which no implementation
+satisfies: a successful read leaves the status line alone, and it has to, or the follow-up reads a
+push enqueues would wipe the push summary the operator just earned. The test now clears the message
+itself and asserts it stays clear, which is exactly the invariant `warned` exists for.
+
+**Ruling 32.** `a_dam_below_the_floor_draws_the_refusal` compares the drawn refusal with its line
+breaks taken back out. The sentence is 100 characters and the pane is 32 columns, so no layout keeps
+it on one line and `contains` over the raw render could never pass.
+
+**Ruling 33.** `doctor.rs` is rewritten here rather than kept. Keeping it was impossible: its whole
+body is `todoist::Client`, `config.token_source()` and two `#[tokio::test]`s, and this task deletes
+the crate, the config method and the runtime. It is rewritten to the half of Task 41's doctor that
+the handshake already provides, `dam`'s version and one `dam status --json` judged on its five keys,
+under four tests over a pure `report_from`. Task 41 adds the remote list and the `PATH` report and
+will find these four already green.
+
+**Ruling 34.** `main.rs` carries no `status` command and no `status` line in its usage text. The
+`status` arm above calls `pane::open_on_status`, which Task 41 produces; wiring a command here would
+mean either a compile error or landing Task 41's behaviour untested. Task 41 adds the arm, the usage
+line and the test together.
+
+**Ruling 35.** `placement.rs` is deleted, resolving this task's own contradiction: the Keep line
+names it and Step 5's `git rm` list also names it. Its `Side` was already dead after Task 25 moved
+`pane.rs` onto the adapters config, and its one remaining rule, `leading_share`, is four lines that
+only `pane::arrange_pane` calls, so it moves into `pane.rs` as a private function with its comment
+and its test.
+
+**Ruling 36.** `markdown.rs` stays in the tree and is NOT declared in `main.rs`. Nothing reaches it
+until Task 30 draws the Detail screen from it, and a declared `mod markdown;` whose only item
+nothing calls fails `clippy -D warnings` on dead code, which this task's Step 6 runs. Task 30 adds
+the `mod markdown;` line along with the screen that renders through it.
+
+**Ruling 37.** Three more items went with the cutover for the same dead-code reason:
+`theme::is_known`, which the Todoist-era config called and `check_theme_against(theme::NAMES)`
+replaces; `screens::render_to_text`, now `#[cfg(test)]` because it is the goldens' renderer and
+nothing in the binary draws through it; and `Harness::press` and `Harness::last` in `app/tests.rs`.
+Task 29 re-adds `press` with the Tab-cycle tests that call it.
+
 - [ ] **Step 8: Commit**
 
 ```bash
@@ -9352,6 +9465,51 @@ under a `not committed` heading at the top, and draws `YYYY-MM-DD  <subject>` wi
 Run: `cargo test -p herdr-damnit --locked screens`
 Expected: PASS, eleven tests.
 
+**Ruling 39.** The log fixture above is rewritten to the shape `dam` 0.2.0 actually prints. It uses
+`before` and `after` objects per change, which the spec's own Done section describes, but Task 23
+measured the real document and landed a parser over `fields`, `done` and `completed_at`: a change is
+a completion when its `fields` names `done` and it leaves the object complete, and the day is its
+`completed_at` or the commit's own `at`. The captured
+`crates/herdr-damnit-adapters/tests/fixtures/log-completion.json` is the proof. Against the fixture
+as written, `completions` finds nothing and all three tasks sort under `not committed`.
+
+**Ruling 40.** `the_status_screen_draws_the_four_sections_in_dams_order` asserts
+`contains("example: pull failed")` rather than the whole sentence. `dam`'s notice reads
+`example: pull failed: unreachable` and the row carries its own two-space indent, which is 35 cells
+against a 32-column pane, so the last word is cut by width on any implementation. The notice's full
+text is already pinned by the wire tests in `wire/reports/tests.rs`.
+
+**Ruling 41.** `each_screen_keeps_its_own_cursor_across_the_cycle` moves the cursor with
+`app.list.move_by(1)` rather than by pressing `j`. Navigation keys are Task 31's produce, and with
+`j` unbound the test as written compared the first row with the first row and would have passed
+against any implementation, including one that reset the cursor on every Tab.
+
+**Ruling 42.** No `status: Cursor` or `done: Cursor` field lands here. Nothing in this task reads
+one, so both would be dead fields under `clippy -D warnings`, and Task 31 owns the navigation that
+moves them. The one cursor that exists, the List's, is what
+`each_screen_keeps_its_own_cursor_across_the_cycle` pins.
+
+**Ruling 43.** Two behaviours the spec specifies and this task's own tests did not reach were added
+with tests of their own. The status line names the screen on show, `dam  status` and `dam  done`
+against the spec's two mocks, and its counts are per screen: the List screen's own open, staged and
+unpushed marks, `Stage::summary()` on the Status screen, which the fixture pins as
+`1 staged  1 changed  1 unpushed  1 notice`, and a count of rows on the Done screen. And
+`a_status_row_draws_its_own_mark_and_a_row_with_none_draws_none` pins this task's stated rule that
+no row's mark is inferred from the section above it: without it, marking every `StatusRow::Line`
+with a fabricated staged mark passed the whole suite, measured.
+
+**Ruling 44.** A marked Status row draws its mark inside the row's own two-space indent, which is
+where the spec's Status mock puts it (`  + new      1a2b3c4  ...`, `  ^ todoist  1 commit`). A row
+with no mark draws its text as the staging model wrote it, indent and all, which is also what keeps
+the clean line's 31-character sentence inside a 32-column pane.
+
+**Ruling 45.** `app.rs` reached 407 lines with the cycle, the done rows and the header in it, past
+the 250-implementation-line decomposition threshold, so three cohesive child modules were split out:
+`app/screen.rs` (the screens and the order Tab walks them), `app/done.rs` (the Done screen's rows,
+grouped by completion day) and `app/header.rs` (the status line's left half, the spinner and the
+timer). `app.rs` is 276 lines after the split. `screens/list.rs::spans` became `pub(super)`: three
+screens now draw coloured segment runs through it.
+
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -9362,6 +9520,11 @@ SKIP_AI_COMMIT=1 git commit -m "feat(pane): add the status and done screens to t
 ---
 
 ### Task 30: The Detail screen
+
+**Ruling 38 (carried in from Task 28).** `crates/herdr-damnit/src/markdown.rs` is in the tree but is
+not declared in `main.rs`: Task 28 left the declaration out because nothing called it and
+`clippy -D warnings` rejects a module whose only item is dead. This task adds `mod markdown;` to
+`main.rs` with the Detail screen that renders through it.
 
 **Files:**
 - Create: `crates/herdr-damnit/src/screens/detail.rs`
@@ -9549,6 +9712,13 @@ SKIP_AI_COMMIT=1 git commit -m "feat(pane): draw one object's detail from dam sh
 ---
 
 ### Task 31: Navigation, the view picker, the number keys and the interval
+
+**Ruling 26 (carried in from Task 26).** `config.default_view` has no owner anywhere in this plan.
+`Config::check_default_view` proves the name is a view that exists and nothing ever selects it, so
+`default_view = "today"` in the operator's own config file opens the pane on the open list in
+silence. This task owns view selection, so it discharges it: `App::new` follows `Views::new` with
+`views.select_named(name)` for a configured `default_view`, under a test that asserts the showing
+view.
 
 **Files:**
 - Create: `crates/herdr-damnit/src/overlay.rs`

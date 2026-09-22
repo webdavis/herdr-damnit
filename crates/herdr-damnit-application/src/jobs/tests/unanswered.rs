@@ -8,11 +8,13 @@ use crate::argv;
 use crate::jobs::{JobKind, Jobs, SyncKind};
 use crate::{DamRunner, RunningJob, SpawnError};
 
+use super::TestClock;
+
 #[test]
 fn cancelling_reaches_the_exclusive_job_before_any_read_that_started_earlier() {
     let runner = Marking::new();
     let cancelled = Arc::clone(&runner.cancelled);
-    let mut jobs = Jobs::new(Box::new(runner));
+    let mut jobs = Jobs::new(Box::new(runner), Box::new(TestClock));
     jobs.submit(JobKind::ReadList, argv::list("!done"));
     jobs.submit(JobKind::Exclusive(SyncKind::Push), argv::push());
 
@@ -24,7 +26,7 @@ fn cancelling_reaches_the_exclusive_job_before_any_read_that_started_earlier() {
 /// next drain, so a wedged exclusive job cannot block every later one.
 #[test]
 fn a_job_whose_thread_died_without_answering_leaves_the_table() {
-    let mut jobs = Jobs::new(Box::new(Marking::new()));
+    let mut jobs = Jobs::new(Box::new(Marking::new()), Box::new(TestClock));
     jobs.submit(JobKind::Exclusive(SyncKind::Push), argv::push());
 
     assert!(jobs.drain().is_empty());
@@ -38,7 +40,7 @@ fn a_job_whose_thread_died_without_answering_leaves_the_table() {
 fn with_no_exclusive_job_the_cancel_reaches_the_oldest_read() {
     let runner = Marking::new();
     let cancelled = Arc::clone(&runner.cancelled);
-    let mut jobs = Jobs::new(Box::new(runner));
+    let mut jobs = Jobs::new(Box::new(runner), Box::new(TestClock));
     jobs.submit(JobKind::ReadList, argv::list("!done"));
     jobs.submit(JobKind::ReadStatus, argv::status());
 
@@ -48,7 +50,7 @@ fn with_no_exclusive_job_the_cancel_reaches_the_oldest_read() {
 
 #[test]
 fn cancelling_with_nothing_in_flight_says_so() {
-    let mut jobs = Jobs::new(Box::new(Marking::new()));
+    let mut jobs = Jobs::new(Box::new(Marking::new()), Box::new(TestClock));
     assert!(!jobs.cancel_current());
 }
 

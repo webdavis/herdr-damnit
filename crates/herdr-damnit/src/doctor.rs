@@ -1,99 +1,86 @@
-//! The `doctor` action: prove the token resolves and that one request succeeds, and say nothing
-//! about the token itself.
+//! The `doctor` action: prove `dam` answers at the configured argv and that one
+//! `dam status --json` carries every key the pane reads.
 
-use todoist::{Client, TokenSource};
+use std::time::Duration;
 
-use crate::config::Config;
+use herdr_damnit_adapters::{Config, ProcessDamRunner};
+use herdr_damnit_application::{Handshake, check_status, check_version};
+use herdr_damnit_domain::READ_DEADLINE_SECONDS;
 
-pub async fn run(config: &Config, base_url: &str) -> Result<String, String> {
-    let source = config.token_source()?;
-    let token = todoist::resolve(&source)
-        .await
-        .map_err(|error| error.to_string())?;
-    let client = Client::new(base_url, token).map_err(|error| error.to_string())?;
-    client.user().await.map_err(|error| error.to_string())?;
-    Ok(format!(
-        "token: resolved from {}\napi:   GET /user succeeded",
-        describe(&source)
-    ))
+pub fn run(config: &Config) -> Result<String, String> {
+    let runner = ProcessDamRunner::new(config.dam.clone());
+    let version = ask(&runner, &herdr_damnit_application::argv::version())?;
+    let status = ask(&runner, &herdr_damnit_application::argv::status())?;
+    report_from(&version, &status)
 }
 
-/// How the token was configured, never what it is. A command is named by its program alone, since
-/// its arguments are the user's to write.
-fn describe(source: &TokenSource) -> String {
-    match source {
-        TokenSource::Command(argv) => format!(
-            "token_command `{}`",
-            argv.first().map_or("<empty>", String::as_str)
-        ),
-        TokenSource::Env(name) => format!("token_env {name}"),
+/// One `dam` call, waited out. The pane never blocks on one; a one-shot command has nothing else
+/// to do while it runs, and the runner's own deadline is what bounds the wait.
+fn ask(runner: &ProcessDamRunner, argv: &[String]) -> Result<String, String> {
+    let job = runner
+        .spawn_with_deadline(argv, Some(Duration::from_secs(READ_DEADLINE_SECONDS)))
+        .map_err(|_| herdr_damnit_domain::message(&herdr_damnit_domain::Failure::NotInstalled))?;
+    let finished = job
+        .results
+        .recv()
+        .map_err(|_| "dam was killed before it answered.".to_string())?;
+    Ok(finished.stdout)
+}
+
+/// The report, or the refusal the handshake would have drawn. Both are `dam`'s own words about
+/// itself, so the check is the pane's own handshake rather than a second opinion about it.
+fn report_from(version_output: &str, status_output: &str) -> Result<String, String> {
+    let (version, warning) = match check_version(version_output) {
+        Handshake::Ready { version, warning } => (version, warning),
+        Handshake::Refuse(said) => return Err(said),
+    };
+    check_status(status_output)?;
+    let mut report = format!("dam:    {version}\nstatus: ok, every key the pane reads is there");
+    if let Some(warning) = warning {
+        report.push_str(&format!("\nnote:   {warning}"));
     }
+    Ok(report)
 }
 
 #[cfg(test)]
 mod tests {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::TcpListener;
-
     use super::*;
-    use crate::config::Config;
 
-    /// A loopback double serving one canned response, so `doctor::run` is proven end to end
-    /// without reaching Todoist.
-    async fn serve_once(status: &str, body: &'static str) -> String {
-        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
-        let base_url = format!("http://{}", listener.local_addr().expect("addr"));
-        let response = format!(
-            "HTTP/1.1 {status}\r\nContent-Length: {}\r\n\r\n{body}",
-            body.len()
+    const CLEAN: &str = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#;
+
+    #[test]
+    fn a_dam_that_answers_reports_its_version_and_that_its_status_reads() {
+        let report = report_from("dam 0.2.0\n", CLEAN).expect("it answered");
+
+        assert!(report.contains("dam:    0.2.0"), "{report}");
+        assert!(report.contains("status: ok"), "{report}");
+    }
+
+    #[test]
+    fn a_dam_below_the_floor_is_reported_as_the_problem_it_is() {
+        let error = report_from("dam 0.0.9\n", CLEAN).expect_err("it refuses");
+
+        assert!(
+            error.contains("is older than the 0.2 this pane needs"),
+            "{error}"
         );
-        tokio::spawn(async move {
-            let (mut socket, _) = listener.accept().await.expect("accept");
-            let mut buffer = [0u8; 1024];
-            let _ = socket.read(&mut buffer).await;
-            let _ = socket.write_all(response.as_bytes()).await;
-            let _ = socket.shutdown().await;
-        });
-        base_url
-    }
-
-    fn config_with_token_command() -> Config {
-        Config::parse(r#"token_command = ["sh", "-c", "printf test-token"]"#).expect("parses")
-    }
-
-    #[tokio::test]
-    async fn a_successful_check_names_the_token_source_and_the_request() {
-        let base_url = serve_once("200 OK", r#"{"id":"1","email":null,"full_name":null}"#).await;
-        let report = run(&config_with_token_command(), &base_url)
-            .await
-            .expect("succeeds");
-        assert!(report.contains("token_command `sh`"), "{report}");
-        assert!(report.contains("GET /user succeeded"), "{report}");
-    }
-
-    #[tokio::test]
-    async fn a_rejected_token_is_reported_as_the_client_error() {
-        let base_url = serve_once("401 Unauthorized", "{}").await;
-        let error = run(&config_with_token_command(), &base_url)
-            .await
-            .expect_err("fails");
-        assert_eq!(error, "unauthorized: the token was rejected");
     }
 
     #[test]
-    fn a_command_source_is_named_by_its_program_only() {
-        let source = TokenSource::Command(vec![
-            "keepassxc-cli".to_string(),
-            "a-passphrase-nobody-should-see".to_string(),
-        ]);
-        let described = describe(&source);
-        assert_eq!(described, "token_command `keepassxc-cli`");
-        assert!(!described.contains("passphrase"), "{described}");
+    fn a_status_missing_a_key_is_reported_by_name() {
+        let error = report_from(
+            "dam 0.2.0\n",
+            r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[]}"#,
+        )
+        .expect_err("it refuses");
+
+        assert!(error.contains("\"unpushed\""), "{error}");
     }
 
     #[test]
-    fn an_environment_source_is_named_by_its_variable() {
-        let described = describe(&TokenSource::Env("TODOIST_API_TOKEN".to_string()));
-        assert_eq!(described, "token_env TODOIST_API_TOKEN");
+    fn a_newer_dam_is_reported_with_the_note_the_handshake_would_have_shown() {
+        let report = report_from("dam 0.4.0\n", CLEAN).expect("it answered");
+
+        assert!(report.contains("newer than this pane knows"), "{report}");
     }
 }
