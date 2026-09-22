@@ -9492,8 +9492,8 @@ moves them. The one cursor that exists, the List's, is what
 **Ruling 43.** Two behaviours the spec specifies and this task's own tests did not reach were added
 with tests of their own. The status line names the screen on show, `dam  status` and `dam  done`
 against the spec's two mocks, and its counts are per screen: the List screen's own open, staged and
-unpushed marks, `Stage::summary()` on the Status screen, which is exactly the spec's
-`3 staged  2 changed  1 unpushed  1 notice`, and a count of rows on the Done screen. And
+unpushed marks, `Stage::summary()` on the Status screen, which the fixture pins as
+`1 staged  1 changed  1 unpushed  1 notice`, and a count of rows on the Done screen. And
 `a_status_row_draws_its_own_mark_and_a_row_with_none_draws_none` pins this task's stated rule that
 no row's mark is inferred from the section above it: without it, marking every `StatusRow::Line`
 with a fabricated staged mark passed the whole suite, measured.
