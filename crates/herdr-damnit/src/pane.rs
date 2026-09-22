@@ -5,8 +5,6 @@ use herdr_damnit_adapters::config::Placement;
 use herdr_damnit_adapters::{Config, herdr_cli as herdr, state};
 use herdr_damnit_domain::Views;
 
-use crate::placement;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
     Open,
@@ -166,6 +164,12 @@ fn open_and_remember(workspace: &str, config: &Config, focus: Focus) -> Result<S
     })
 }
 
+/// The calling pane's share of the tab once this pane has taken `width`: whatever is left.
+/// `herdr pane resize` moves the calling pane to this ratio to get there.
+fn leading_share(width: f32) -> f32 {
+    1.0 - width
+}
+
 /// Give the pane its configured width, which herdr's own open cannot do: it splits at an even
 /// ratio and takes no ratio of its own. This resizes the calling pane rather than the one just
 /// opened, since a same-tab `herdr pane move` is a no-op and a resize is the only call that
@@ -175,8 +179,7 @@ fn arrange_pane(neighbor: &str, config: &Config) -> Option<String> {
     if config.placement != Placement::Split || neighbor.is_empty() {
         return None;
     }
-    let width = config.width?;
-    let target_ratio = placement::leading_share(width);
+    let target_ratio = leading_share(config.width?);
     let direction = config.side.split_direction();
     match herdr::resize_leading_pane(neighbor, direction, target_ratio) {
         Ok(true) => None,
@@ -195,6 +198,12 @@ mod tests {
 
     fn panes(ids: &[&str]) -> Vec<String> {
         ids.iter().map(|id| id.to_string()).collect()
+    }
+
+    #[test]
+    fn the_calling_panes_share_is_the_rest_of_the_tab() {
+        assert_eq!(leading_share(0.3), 0.7);
+        assert_eq!(leading_share(0.7), 0.3);
     }
 
     #[test]

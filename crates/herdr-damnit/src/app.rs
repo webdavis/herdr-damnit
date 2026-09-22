@@ -5,9 +5,12 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::KeyEvent;
 use herdr_damnit_adapters::{Config, wire};
-use herdr_damnit_application::{Completion, JobKind, Jobs, Submitted, SyncKind, argv};
+use herdr_damnit_application::{
+    Completion, Handshake, JobKind, Jobs, Submitted, SyncKind, argv, check_status, check_version,
+};
 use herdr_damnit_domain::{
-    Cursor, Date, Failure, IconSet, Object, RowStyle, Stage, Views, classify, message, rows,
+    Cursor, DamVersion, Date, Failure, IconSet, Object, RowStyle, Stage, Views, classify, message,
+    rows,
 };
 
 /// The poll window while a job is in flight, which is what makes the spinner animate.
@@ -38,6 +41,14 @@ pub struct App {
     pub spinner: usize,
     pub config: Config,
     pub today: Date,
+    /// Why the pane will not draw rows at all. A refusal is the whole screen, because every screen
+    /// under it would be drawn from a `dam` this pane does not agree with.
+    pub refusal: Option<String>,
+    /// The version the handshake read, once it has.
+    pub version: Option<DamVersion>,
+    /// Whether the handshake's warning has already reached the status line, so a newer `dam` is
+    /// named once at open rather than on every read.
+    warned: bool,
     /// The objects of the showing view, which the list rows are rebuilt from.
     objects: Vec<Object>,
     jobs: Jobs,
@@ -54,6 +65,9 @@ impl App {
             spinner: 0,
             config,
             today,
+            refusal: None,
+            version: None,
+            warned: false,
             objects: Vec::new(),
             jobs,
         }
@@ -99,6 +113,9 @@ impl App {
             ));
             return;
         }
+        if self.handshook(&completion) {
+            return;
+        }
         if let Err(said) = self.read(&completion) {
             self.message = said;
             return;
@@ -109,15 +126,48 @@ impl App {
         }
     }
 
+    /// The handshake's own two completions, which decide whether the pane draws at all. Reports
+    /// whether this completion was one of them.
+    fn handshook(&mut self, completion: &Completion) -> bool {
+        match completion.kind {
+            JobKind::Version => {
+                match check_version(&completion.finished.stdout) {
+                    Handshake::Refuse(said) => self.refusal = Some(said),
+                    Handshake::Ready { version, warning } => {
+                        self.version = Some(version);
+                        if let (Some(warning), false) = (warning, self.warned) {
+                            self.message = warning;
+                            self.warned = true;
+                        }
+                        self.submit(JobKind::Handshake, argv::status());
+                    }
+                }
+                true
+            }
+            JobKind::Handshake => {
+                match check_status(&completion.finished.stdout) {
+                    Err(said) => self.refusal = Some(said),
+                    Ok(()) => {
+                        if let Err(said) = self.read_status(&completion.finished.stdout) {
+                            self.message = said;
+                            return true;
+                        }
+                        let query = self.views.current().query.clone();
+                        self.submit(JobKind::ReadList, argv::list(&query));
+                    }
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Put one successful document into the model. A document that will not parse is the pane's
     /// own failure rather than `dam`'s.
     fn read(&mut self, completion: &Completion) -> Result<(), String> {
         let unreadable = || message(&Failure::Unreadable);
         match &completion.kind {
-            JobKind::ReadStatus => {
-                self.stage = wire::stage(&completion.finished.stdout).map_err(|_| unreadable())?;
-                self.redraw_list();
-            }
+            JobKind::ReadStatus => self.read_status(&completion.finished.stdout)?,
             JobKind::ReadList => {
                 self.objects =
                     wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
@@ -133,6 +183,13 @@ impl App {
             }
             _ => {}
         }
+        Ok(())
+    }
+
+    /// Put one `dam status --json` into the model and rebuild the rows its marks belong to.
+    fn read_status(&mut self, stdout: &str) -> Result<(), String> {
+        self.stage = wire::stage(stdout).map_err(|_| message(&Failure::Unreadable))?;
+        self.redraw_list();
         Ok(())
     }
 
@@ -153,6 +210,8 @@ impl App {
             JobKind::ReadStatus => argv::status(),
             JobKind::ReadShow(oid) => argv::show(oid),
             JobKind::ReadLog => argv::log(),
+            JobKind::Version => argv::version(),
+            JobKind::Handshake => argv::status(),
             JobKind::Write => Vec::new(),
             JobKind::Exclusive(SyncKind::Commit) => argv::commit(""),
             JobKind::Exclusive(SyncKind::Push) => argv::push(),

@@ -11,16 +11,11 @@ name = "herdr-damnit"
 path = "src/main.rs"
 
 [dependencies]
-todoist = { path = "../todoist" }
 herdr-damnit-adapters.workspace = true
 herdr-damnit-application.workspace = true
 herdr-damnit-domain.workspace = true
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
 crossterm = "0.29"
 ratatui = "0.30"
 serde.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread"] }
-toml = "0.9"
 unicode-width = "0.2"

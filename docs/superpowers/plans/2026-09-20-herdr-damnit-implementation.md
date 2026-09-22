@@ -9212,6 +9212,55 @@ wc -l crates/herdr-damnit/src/main.rs
 
 Expected: no match, and `main.rs` under 150 lines.
 
+**Ruling 30.** The version verdict is decided on the `Version` completion, not on the `Handshake`
+one. `a_dam_below_the_floor_draws_the_refusal_and_makes_no_further_call` requires
+`lines() == ["--version"]`, so a `dam` this pane refuses is never sent a status read, which is also
+the right behaviour: a command surface the pane does not know is not one to read from.
+`handshake(version, status)` could not give that ordering, so it is now composed of the two checks
+the flow needs, both in `handshake.rs`: `check_version(version_output) -> Handshake` and
+`check_status(status_output) -> Result<(), String>`. `handshake` itself is unchanged in behaviour and
+stays for a caller holding both documents, which is what `doctor` is.
+
+**Ruling 31.** `a_newer_dam_warns_once_rather_than_once_per_read` asserts the warning does not come
+back rather than that a later read replaced it. As written it cleared nothing and then required
+`message` not to contain the warning after an unrelated `ReadStatus`, which no implementation
+satisfies: a successful read leaves the status line alone, and it has to, or the follow-up reads a
+push enqueues would wipe the push summary the operator just earned. The test now clears the message
+itself and asserts it stays clear, which is exactly the invariant `warned` exists for.
+
+**Ruling 32.** `a_dam_below_the_floor_draws_the_refusal` compares the drawn refusal with its line
+breaks taken back out. The sentence is 100 characters and the pane is 32 columns, so no layout keeps
+it on one line and `contains` over the raw render could never pass.
+
+**Ruling 33.** `doctor.rs` is rewritten here rather than kept. Keeping it was impossible: its whole
+body is `todoist::Client`, `config.token_source()` and two `#[tokio::test]`s, and this task deletes
+the crate, the config method and the runtime. It is rewritten to the half of Task 41's doctor that
+the handshake already provides, `dam`'s version and one `dam status --json` judged on its five keys,
+under four tests over a pure `report_from`. Task 41 adds the remote list and the `PATH` report and
+will find these four already green.
+
+**Ruling 34.** `main.rs` carries no `status` command and no `status` line in its usage text. The
+`status` arm above calls `pane::open_on_status`, which Task 41 produces; wiring a command here would
+mean either a compile error or landing Task 41's behaviour untested. Task 41 adds the arm, the usage
+line and the test together.
+
+**Ruling 35.** `placement.rs` is deleted, resolving this task's own contradiction: the Keep line
+names it and Step 5's `git rm` list also names it. Its `Side` was already dead after Task 25 moved
+`pane.rs` onto the adapters config, and its one remaining rule, `leading_share`, is four lines that
+only `pane::arrange_pane` calls, so it moves into `pane.rs` as a private function with its comment
+and its test.
+
+**Ruling 36.** `markdown.rs` stays in the tree and is NOT declared in `main.rs`. Nothing reaches it
+until Task 30 draws the Detail screen from it, and a declared `mod markdown;` whose only item
+nothing calls fails `clippy -D warnings` on dead code, which this task's Step 6 runs. Task 30 adds
+the `mod markdown;` line along with the screen that renders through it.
+
+**Ruling 37.** Three more items went with the cutover for the same dead-code reason:
+`theme::is_known`, which the Todoist-era config called and `check_theme_against(theme::NAMES)`
+replaces; `screens::render_to_text`, now `#[cfg(test)]` because it is the goldens' renderer and
+nothing in the binary draws through it; and `Harness::press` and `Harness::last` in `app/tests.rs`.
+Task 29 re-adds `press` with the Tab-cycle tests that call it.
+
 - [ ] **Step 8: Commit**
 
 ```bash
@@ -9426,6 +9475,11 @@ SKIP_AI_COMMIT=1 git commit -m "feat(pane): add the status and done screens to t
 ---
 
 ### Task 30: The Detail screen
+
+**Ruling 38 (carried in from Task 28).** `crates/herdr-damnit/src/markdown.rs` is in the tree but is
+not declared in `main.rs`: Task 28 left the declaration out because nothing called it and
+`clippy -D warnings` rejects a module whose only item is dead. This task adds `mod markdown;` to
+`main.rs` with the Detail screen that renders through it.
 
 **Files:**
 - Create: `crates/herdr-damnit/src/screens/detail.rs`

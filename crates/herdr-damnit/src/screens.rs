@@ -14,6 +14,7 @@ use crate::app::{App, Screen};
 use crate::theme::Palette;
 
 mod list;
+mod refusal;
 
 pub use list::cut_to;
 
@@ -25,6 +26,10 @@ const HINTS: &str = "x X dd p s D l m a S e <CR> <Space> c P L v Tab";
 
 pub fn draw(frame: &mut Frame<'_>, app: &App) {
     let palette = crate::theme::resolve(app.config.theme.as_deref());
+    if let Some(said) = &app.refusal {
+        refusal::draw(frame, frame.area(), said, &palette);
+        return;
+    }
     let [header, body, hints] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Min(1),
@@ -41,6 +46,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
 
 /// The whole pane as plain text, which is what a golden compares. Trailing blanks are trimmed per
 /// line so a golden is a picture of the screen rather than a block of padding.
+#[cfg(test)]
 pub fn render_to_text(app: &App, width: u16, height: u16) -> String {
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height))
         .expect("a test terminal");

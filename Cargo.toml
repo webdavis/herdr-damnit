@@ -1,7 +1,6 @@
 [workspace]
 resolver = "3"
 members = [
-  "crates/todoist",
   "crates/herdr-damnit-domain",
   "crates/herdr-damnit-application",
   "crates/herdr-damnit-adapters",
@@ -20,8 +19,6 @@ herdr-damnit-adapters = { path = "crates/herdr-damnit-adapters" }
 herdr-damnit-application = { path = "crates/herdr-damnit-application" }
 herdr-damnit-domain = { path = "crates/herdr-damnit-domain" }
 jiff = "0.2"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
-tokio = { version = "1", default-features = false, features = ["macros", "process", "rt", "io-util", "net", "time"] }

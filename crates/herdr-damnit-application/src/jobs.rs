@@ -27,6 +27,11 @@ impl SyncKind {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JobKind {
+    /// `dam --version`, the first call the pane makes.
+    Version,
+    /// The one `dam status --json` the handshake reads, which is judged on its five keys before
+    /// any screen is drawn from it.
+    Handshake,
     ReadList,
     ReadStatus,
     ReadShow(Oid),

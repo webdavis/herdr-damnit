@@ -16,7 +16,9 @@ pub enum Handshake {
     Refuse(String),
 }
 
-pub fn handshake(version_output: &str, status_output: &str) -> Handshake {
+/// What `dam --version` alone decides. The pane asks this first and stops there on a refusal,
+/// because a `dam` whose command surface this pane does not know is not one to send a read to.
+pub fn check_version(version_output: &str) -> Handshake {
     let Some(version) = parse_version(version_output) else {
         return Handshake::Refuse(
             "dam did not print a version this pane could read; run cargo install damnit to \
@@ -24,24 +26,46 @@ pub fn handshake(version_output: &str, status_output: &str) -> Handshake {
                 .to_string(),
         );
     };
-    let warning = match verdict(version) {
-        Verdict::Refuse(message) => return Handshake::Refuse(message),
-        Verdict::Warn(message) => Some(message),
-        Verdict::Fine => None,
-    };
+    match verdict(version) {
+        Verdict::Refuse(message) => Handshake::Refuse(message),
+        Verdict::Warn(message) => Handshake::Ready {
+            version,
+            warning: Some(message),
+        },
+        Verdict::Fine => Handshake::Ready {
+            version,
+            warning: None,
+        },
+    }
+}
+
+/// Whether one `dam status --json` carries the five keys every screen reads, and the refusal
+/// naming the first one it does not.
+pub fn check_status(status_output: &str) -> Result<(), String> {
     let Ok(document) = serde_json::from_str::<serde_json::Value>(status_output) else {
-        return Handshake::Refuse(herdr_damnit_domain::message(
+        return Err(herdr_damnit_domain::message(
             &herdr_damnit_domain::Failure::Unreadable,
         ));
     };
     for key in STATUS_KEYS {
         if document.get(key).is_none() {
-            return Handshake::Refuse(format!(
+            return Err(format!(
                 "dam status answered without {key:?}; this pane needs a dam built from upstream."
             ));
         }
     }
-    Handshake::Ready { version, warning }
+    Ok(())
+}
+
+/// Both checks at once, for a caller that has already read both documents.
+pub fn handshake(version_output: &str, status_output: &str) -> Handshake {
+    match check_version(version_output) {
+        Handshake::Ready { version, warning } => match check_status(status_output) {
+            Ok(()) => Handshake::Ready { version, warning },
+            Err(refusal) => Handshake::Refuse(refusal),
+        },
+        refuse => refuse,
+    }
 }
 
 #[cfg(test)]

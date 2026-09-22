@@ -2,7 +2,6 @@ use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crossterm::event::{KeyCode, KeyEvent};
 use herdr_damnit_application::{
     Clock, DamRunner, Finished, JobKind, Jobs, RunningJob, SpawnError, SyncKind,
 };
@@ -48,6 +47,15 @@ impl Clock for StoppedClock {
     }
 }
 
+/// A `dam` that is not on `PATH` at all, which every spawn reports rather than starting.
+struct MissingDam;
+
+impl DamRunner for MissingDam {
+    fn spawn(&self, _argv: &[String]) -> Result<RunningJob, SpawnError> {
+        Err(SpawnError::NotFound)
+    }
+}
+
 pub(crate) struct Harness {
     pub(crate) app: App,
     started: Instant,
@@ -57,6 +65,21 @@ pub(crate) struct Harness {
 
 pub(crate) fn harness() -> Harness {
     harness_with(Config::parse("").expect("the default config"))
+}
+
+pub(crate) fn harness_with_missing_dam() -> Harness {
+    let today = parse_date(TODAY).expect("a date");
+    let now = Instant::now();
+    Harness {
+        app: App::new(
+            Config::parse("").expect("the default config"),
+            Jobs::new(Box::new(MissingDam), Box::new(StoppedClock { today, now })),
+            today,
+        ),
+        started: now,
+        log: Arc::default(),
+        senders: Arc::default(),
+    }
 }
 
 pub(crate) fn harness_with(config: Config) -> Harness {
@@ -90,10 +113,6 @@ impl Harness {
         self.started
     }
 
-    pub(crate) fn press(&mut self, code: KeyCode) -> After {
-        self.app.key(KeyEvent::from(code))
-    }
-
     /// Answer one spawned job. A send to a superseded job fails because dropping it from the table
     /// dropped its receiver, which is the mechanism by which its result never reaches the model, so
     /// the answer is offered rather than required.
@@ -114,10 +133,6 @@ impl Harness {
             .iter()
             .map(|argv| argv.join(" "))
             .collect()
-    }
-
-    pub(crate) fn last(&self) -> String {
-        self.lines().last().cloned().unwrap_or_default()
     }
 }
 

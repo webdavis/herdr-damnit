@@ -67,11 +67,6 @@ pub fn resolve(name: Option<&str>) -> Palette {
     name.and_then(build).unwrap_or_else(catppuccin)
 }
 
-/// Whether `name` selects a palette this pane knows, which the config checks before the pane runs.
-pub fn is_known(name: &str) -> bool {
-    build(name).is_some()
-}
-
 /// Every name this pane answers to, in the order the config error lists them.
 pub const NAMES: &[&str] = &[
     "catppuccin",
