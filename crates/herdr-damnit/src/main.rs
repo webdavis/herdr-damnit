@@ -51,7 +51,11 @@ fn main() -> std::process::ExitCode {
 /// vocabulary is this crate's, so `Config::parse` never sees it and every load goes through here.
 /// Skip this and an unknown theme name is accepted in silence and the pane paints with defaults.
 fn load_config() -> Result<Config, String> {
-    let config = Config::load()?;
+    load_config_with(Config::load)
+}
+
+fn load_config_with(load: impl FnOnce() -> Result<Config, String>) -> Result<Config, String> {
+    let config = load()?;
     config.check_theme_against(theme::NAMES)?;
     Ok(config)
 }
@@ -92,4 +96,17 @@ fn report(outcome: Result<String, String>) -> std::process::ExitCode {
 fn fail(error: &str) -> std::process::ExitCode {
     eprintln!("herdr-damnit: {error}");
     std::process::ExitCode::FAILURE
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_config_funnel_rejects_a_theme_the_pane_cannot_draw() {
+        let error = load_config_with(|| Config::parse("theme = 'unknown'"))
+            .expect_err("the theme is unknown");
+
+        assert!(error.contains("unknown theme 'unknown'"), "{error}");
+    }
 }
