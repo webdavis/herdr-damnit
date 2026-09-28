@@ -1,5 +1,3 @@
-# Keep the SHA-pinned actions in .github/workflows and the Cargo dependencies fresh.
-# The cooldown below damps supply-chain risk by holding back releases younger than 7 days.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
