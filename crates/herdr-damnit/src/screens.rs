@@ -65,12 +65,12 @@ pub fn render_to_text(app: &App, width: u16, height: u16) -> String {
 
 fn status_line(app: &App, width: u16, palette: &Palette) -> Paragraph<'static> {
     let width = width as usize;
-    let right = cut_to(&counts(app), width);
-    let room = width.saturating_sub(right.width());
-    let left = cut_to(&app.header(Instant::now()), room);
-    let gap = room.saturating_sub(left.width());
+    let counts_kept_first = cut_to(&counts(app), width);
+    let room_left_for_the_header = width.saturating_sub(counts_kept_first.width());
+    let header_cut_first = cut_to(&app.header(Instant::now()), room_left_for_the_header);
+    let gap = room_left_for_the_header.saturating_sub(header_cut_first.width());
     Paragraph::new(Line::styled(
-        format!("{left}{}{right}", " ".repeat(gap)),
+        format!("{header_cut_first}{}{counts_kept_first}", " ".repeat(gap)),
         Style::new().fg(palette.text),
     ))
 }
