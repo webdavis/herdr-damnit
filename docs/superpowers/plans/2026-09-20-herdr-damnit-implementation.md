@@ -76,6 +76,8 @@ code still in place, so every step ends on a green `cargo test --workspace --loc
 
 ### Task 1: Rename the command crate and its binary
 
+**Done by PR #18.**
+
 **Files:**
 - Move: `crates/herdr-todoist/` to `crates/herdr-damnit/` (`git mv`)
 - Modify: `Cargo.toml`
@@ -92,18 +94,18 @@ code still in place, so every step ends on a green `cargo test --workspace --loc
 - Produces: the package `herdr-damnit` with `[[bin]] name = "herdr-damnit"`, built from
   `crates/herdr-damnit/src/main.rs`. Every later task's paths start `crates/herdr-damnit/`.
 
-- [ ] **Step 1: Move the crate directory**
+- [x] **Step 1: Move the crate directory**
 
 ```bash
 git mv crates/herdr-todoist crates/herdr-damnit
 ```
 
-- [ ] **Step 2: Run the build to verify it fails**
+- [x] **Step 2: Run the build to verify it fails**
 
 Run: `cargo build --workspace --locked`
 Expected: FAIL with `failed to load manifest for workspace member .../crates/herdr-todoist`
 
-- [ ] **Step 3: Rewrite the workspace manifest**
+- [x] **Step 3: Rewrite the workspace manifest**
 
 `Cargo.toml`:
 
@@ -127,7 +129,7 @@ thiserror = "2"
 tokio = { version = "1", default-features = false, features = ["macros", "process", "rt", "io-util", "net", "time"] }
 ```
 
-- [ ] **Step 4: Rewrite the package manifest**
+- [x] **Step 4: Rewrite the package manifest**
 
 `crates/herdr-damnit/Cargo.toml`, first eleven lines:
 
@@ -145,7 +147,7 @@ name = "herdr-damnit"
 path = "src/main.rs"
 ```
 
-- [ ] **Step 5: Rename the word in every source file**
+- [x] **Step 5: Rename the word in every source file**
 
 ```bash
 grep -rl 'herdr-todoist' crates/ --include='*.rs' | xargs sed -i '' 's/herdr-todoist/herdr-damnit/g'
@@ -158,7 +160,7 @@ editor name in `editor.rs`, and the comment naming this file in `theme.rs`. The 
 in `config.rs:194` and `state.rs:12` are rewritten by the same pass, which is what Task 3 then pins
 with a test.
 
-- [ ] **Step 6: Run the whole suite to verify it passes**
+- [x] **Step 6: Run the whole suite to verify it passes**
 
 Run: `cargo test --workspace --locked`
 Expected: PASS, every test, with no `herdr-todoist` left:
@@ -167,12 +169,12 @@ Expected: PASS, every test, with no `herdr-todoist` left:
 ! grep -rn 'herdr-todoist' crates/ Cargo.toml
 ```
 
-- [ ] **Step 7: Run the formatter and the linter**
+- [x] **Step 7: Run the formatter and the linter**
 
 Run: `cargo fmt --all --check && cargo clippy --workspace --all-targets --locked -- -D warnings`
 Expected: both clean.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A
@@ -182,6 +184,8 @@ git commit -m "refactor: rename the command crate and its binary to herdr-damnit
 ---
 
 ### Task 2: Rename the plugin manifest and add the `status` action
+
+**Done by PR #18.**
 
 **Files:**
 - Modify: `herdr-plugin.toml` (in full)
@@ -193,7 +197,7 @@ git commit -m "refactor: rename the command crate and its binary to herdr-damnit
   subcommand `status`, which Task 41 implements; until then it exits non-zero with the usage banner,
   which is what an unknown command already does.
 
-- [ ] **Step 1: Rewrite the manifest head**
+- [x] **Step 1: Rewrite the manifest head**
 
 `herdr-plugin.toml`, replacing everything above the first `[[actions]]`:
 
@@ -231,7 +235,7 @@ on = "workspace.focused"
 command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" auto-open"]
 ```
 
-- [ ] **Step 2: Rewrite every action**
+- [x] **Step 2: Rewrite every action**
 
 Each of the thirteen `[[actions]]` blocks takes the same shape. The three pane actions:
 
@@ -289,7 +293,7 @@ contexts = ["pane", "workspace"]
 command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" doctor"]
 ```
 
-- [ ] **Step 3: Verify the manifest parses and holds what it should**
+- [x] **Step 3: Verify the manifest parses and holds what it should**
 
 ```bash
 python3 -c "
@@ -306,7 +310,7 @@ print('manifest ok:', len(ids), 'actions')
 
 Expected: `manifest ok: 14 actions`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add herdr-plugin.toml
@@ -316,6 +320,8 @@ git commit -m "refactor(manifest): rename the plugin id and add the status actio
 ---
 
 ### Task 3: Rename the config and state directories the plugin reads
+
+**Done by PR #18.**
 
 **Files:**
 - Modify: `crates/herdr-damnit/src/config.rs:188-195`
@@ -333,7 +339,7 @@ Task 1's `sed` pass already rewrote both strings. This task is the test that pin
 directory name is the one rename an operator sees as a file on disk and the one a later refactor could
 silently undo.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `crates/herdr-damnit/src/config.rs`, inside `mod tests`, and make `config_path` and
 `base_config_dir` take the override explicitly so the test needs no environment mutation:
@@ -375,12 +381,12 @@ Add to `crates/herdr-damnit/src/state.rs`, inside `mod tests`:
     }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test --workspace --locked config_directory state_directory`
 Expected: FAIL with `cannot find function config_path_in` and `cannot find function state_dir_in`
 
-- [ ] **Step 3: Split the environment read off the path arithmetic**
+- [x] **Step 3: Split the environment read off the path arithmetic**
 
 In `crates/herdr-damnit/src/config.rs`, replace `config_path` and keep `base_config_dir` as it is:
 
@@ -421,12 +427,12 @@ fn state_dir_in(given: Option<&Path>, base: &Path) -> PathBuf {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test --workspace --locked`
 Expected: PASS, every test.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/herdr-damnit/src/config.rs crates/herdr-damnit/src/state.rs
@@ -446,6 +452,8 @@ and `src/markdown.rs`, which produces `ratatui::text::Line`. Only the `Slot` enu
 Task 4, and the binary's `theme.rs` imports it from there.
 
 ### Task 4: Create the domain crate with `Oid`, `Priority` and `Slot`
+
+**Done by PR #19.**
 
 **Files:**
 - Create: `crates/herdr-damnit-domain/Cargo.toml`
@@ -468,7 +476,7 @@ Task 4, and the binary's `theme.rs` imports it from there.
   - `herdr_damnit_domain::Slot`, the eight-variant colour-role enum moved out of the binary's
     `theme.rs` unchanged: `Text`, `Dim1`, `Red`, `Green`, `Yellow`, `Orange`, `Purple`, `Blue`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-domain/src/oid.rs`:
 
@@ -524,12 +532,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-domain --locked`
 Expected: FAIL with `error: package ID specification 'herdr-damnit-domain' did not match any packages`
 
-- [ ] **Step 3: Create the crate**
+- [x] **Step 3: Create the crate**
 
 `crates/herdr-damnit-domain/Cargo.toml`:
 
@@ -579,7 +587,7 @@ pub use priority::Priority;
 pub use slot::Slot;
 ```
 
-- [ ] **Step 4: Write the three modules**
+- [x] **Step 4: Write the three modules**
 
 `crates/herdr-damnit-domain/src/oid.rs`, above its test module:
 
@@ -677,7 +685,7 @@ pub enum Slot {
 }
 ```
 
-- [ ] **Step 5: Point the binary's theme at the domain slot**
+- [x] **Step 5: Point the binary's theme at the domain slot**
 
 In `crates/herdr-damnit/src/theme.rs`, delete the `pub enum Slot { ... }` declaration and add, under
 the existing `use ratatui::style::Color;`:
@@ -689,12 +697,12 @@ pub use herdr_damnit_domain::Slot;
 The `impl Palette { pub fn color(&self, slot: Slot) -> Color }` match below it is unchanged: it now
 matches on the domain enum, which has the same eight variants.
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `cargo test --workspace --locked`
 Expected: PASS, every test in both packages.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -704,6 +712,8 @@ git commit -m "feat(domain): add the domain crate with the oid, the priority and
 ---
 
 ### Task 5: The due state and the dates a row draws
+
+**Done by PR #19.**
 
 **Files:**
 - Create: `crates/herdr-damnit-domain/src/dates.rs`
@@ -721,7 +731,7 @@ git commit -m "feat(domain): add the domain crate with the oid, the priority and
   - `long(date: Date) -> String`, the `YYYY-MM-DD` the Detail screen draws.
   - `Date` is re-exported from `jiff::civil::Date` as `herdr_damnit_domain::Date`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-domain/src/dates.rs`:
 
@@ -777,12 +787,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-domain --locked dates`
 Expected: FAIL with `unresolved module or unlinked crate 'dates'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/herdr-damnit-domain/src/dates.rs`, above its test module:
 
@@ -838,12 +848,12 @@ mod dates;
 pub use dates::{Date, DueState, due_state, long, parse_date, short};
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-domain --locked`
 Expected: PASS, ten tests: the five from Task 4 and the five here.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -853,6 +863,8 @@ git commit -m "feat(domain): read a dam date and say where it sits against today
 ---
 
 ### Task 6: The mark set and the two icon sets
+
+**Done by PR #19.**
 
 **Files:**
 - Create: `crates/herdr-damnit-domain/src/marks.rs`
@@ -873,7 +885,7 @@ git commit -m "feat(domain): read a dam date and say where it sits against today
 The priority inversion the Todoist API forced is gone: `dam` numbers 1 as highest, so priority 1 takes
 the red flag, 2 the orange one and 3 the blue one, and 4 has no mark.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-domain/src/marks.rs`:
 
@@ -976,12 +988,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-domain --locked marks`
 Expected: FAIL with `unresolved module or unlinked crate 'marks'`
 
-- [ ] **Step 3: Add the cyan slot**
+- [x] **Step 3: Add the cyan slot**
 
 `Mark::Unpushed` is cyan and the palette has no cyan slot yet. In
 `crates/herdr-damnit-domain/src/slot.rs`, add one variant:
@@ -995,7 +1007,7 @@ and in `crates/herdr-damnit/src/theme.rs`, add a `pub cyan: Color` field to `Pal
 file. The value for each theme is its own blue lightened toward green; where a theme's own table
 already names a cyan, use that colour.
 
-- [ ] **Step 4: Write the module**
+- [x] **Step 4: Write the module**
 
 `crates/herdr-damnit-domain/src/marks.rs`, above its test module:
 
@@ -1116,12 +1128,12 @@ mod marks;
 pub use marks::{IconSet, Mark};
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cargo test --workspace --locked`
 Expected: PASS, every test.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -1131,6 +1143,8 @@ git commit -m "feat(domain): add the mark set with dam's own priority direction"
 ---
 
 ### Task 7: The object model
+
+**Done by PR #19.**
 
 **Files:**
 - Create: `crates/herdr-damnit-domain/src/object.rs`
@@ -1188,7 +1202,7 @@ The field names and the optionality come from `dam`'s own `WireObject`, `WireTas
 `status` and `transparency` inside an event. `WireTask::event` is the oid of the event a task is
 attached to and is called `attached` here, because `Object::event` already names the event fields.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-domain/src/object.rs`:
 
@@ -1250,12 +1264,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-domain --locked object`
 Expected: FAIL with `unresolved module or unlinked crate 'object'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/herdr-damnit-domain/src/object.rs`, above its test module, is the type block in the
 Interfaces section verbatim, with this header and these three methods:
@@ -1299,12 +1313,12 @@ mod object;
 pub use object::{Attendee, EventFields, Kind, Object, TaskFields};
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-domain --locked`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -1314,6 +1328,8 @@ git commit -m "feat(domain): model a dam object and the three questions every ro
 ---
 
 ### Task 8: The rows and the path grouping
+
+**Done by PR #19.**
 
 **Files:**
 - Create: `crates/herdr-damnit-domain/src/rows.rs`
@@ -1352,7 +1368,7 @@ marks lead the line in this order: the staging mark, the priority mark, the due 
 beside it for overdue and upcoming and nothing beside it for today, the recurrence mark, then the
 subject, then the label count at the end.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-domain/src/rows/tests.rs`:
 
@@ -1493,12 +1509,12 @@ fn a_heading_names_no_oid_and_an_object_row_does() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-domain --locked rows`
 Expected: FAIL with `unresolved module or unlinked crate 'rows'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/herdr-damnit-domain/src/rows.rs`:
 
@@ -1647,12 +1663,12 @@ mod rows;
 pub use rows::{ObjectRow, Row, RowStyle, Segment, StagingMarks, rows};
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-domain --locked`
 Expected: PASS, six new tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -1662,6 +1678,8 @@ git commit -m "feat(domain): group rows by dam's path and lead them with their m
 ---
 
 ### Task 9: The cursor, keyed by oid
+
+**Done by PR #19.**
 
 **Files:**
 - Create: `crates/herdr-damnit-domain/src/cursor.rs`
@@ -1691,7 +1709,7 @@ row; `move_by` steps over object rows only, skipping headings, and stops at eith
 whether it moved; `replace` keeps the cursor on the object it was on, and when that object is gone
 takes the nearest surviving object below it in the old order, or above it when it was the last.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-domain/src/cursor.rs`, inside `mod tests`:
 
@@ -1769,12 +1787,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-domain --locked cursor`
 Expected: FAIL with `unresolved module or unlinked crate 'cursor'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/herdr-damnit-domain/src/cursor.rs`, above its test module:
 
@@ -1882,12 +1900,12 @@ mod cursor;
 pub use cursor::Cursor;
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-domain --locked`
 Expected: PASS, six new tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -1897,6 +1915,8 @@ git commit -m "feat(domain): carry the cursor by oid across a re-read"
 ---
 
 ### Task 10: The views, as dam queries
+
+**Done by PR #20.**
 
 **Files:**
 - Create: `crates/herdr-damnit-domain/src/views.rs`
@@ -1932,7 +1952,7 @@ impl Views {
 View 1 is always present and is the query `!done`, because `dam ls` with no query returns every
 object, completed ones included. Its name is `open`, which is also the word the status line counts in.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-domain/src/views.rs`, inside `mod tests`:
 
@@ -1986,12 +2006,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-domain --locked views`
 Expected: FAIL with `unresolved module or unlinked crate 'views'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/herdr-damnit-domain/src/views.rs`, above its test module:
 
@@ -2091,12 +2111,12 @@ mod views;
 pub use views::{DONE_QUERY, MAX_NUMBERED_VIEW, OPEN, OPEN_QUERY, View, Views};
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-domain --locked`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -2106,6 +2126,8 @@ git commit -m "feat(domain): number the views over dam queries with the open lis
 ---
 
 ### Task 11: The staging model
+
+**Done by PR #20.**
 
 **Files:**
 - Create: `crates/herdr-damnit-domain/src/stage.rs`
@@ -2187,7 +2209,7 @@ document as `fields` and Task 23 maps straight across. An update names the field
 create names the fields the new object carries beyond its defaults, and a delete names none, so a
 deleted row draws with no parenthesis.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-domain/src/stage/tests.rs`:
 
@@ -2547,12 +2569,12 @@ fn one_commit_and_two_commits_are_both_spelled_correctly() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-domain --locked stage`
 Expected: FAIL with `unresolved module or unlinked crate 'stage'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/herdr-damnit-domain/src/stage.rs`, whose types are the block in the Interfaces section, each
 deriving `Clone`, `Debug`, `PartialEq` and `Eq`, plus:
@@ -2793,18 +2815,18 @@ mod stage;
 pub use stage::{Change, Conflict, Notice, Op, Stage, StatusRow, Unpushed};
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-domain --locked`
 Expected: PASS.
 
-- [ ] **Step 5: Check the file is inside the cap**
+- [x] **Step 5: Check the file is inside the cap**
 
 Run: `wc -l crates/herdr-damnit-domain/src/stage.rs crates/herdr-damnit-domain/src/stage/tests.rs`
 Expected: both under 300. If `stage.rs` is over 300, move the `rows` builder and `section` into
 `crates/herdr-damnit-domain/src/stage/screen.rs` and re-export.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -2814,6 +2836,8 @@ git commit -m "feat(domain): model dam's staging report and the status screen it
 ---
 
 ### Task 12: The agent brief
+
+**Done by PR #20.**
 
 **Files:**
 - Create: `crates/herdr-damnit-domain/src/brief.rs`
@@ -2828,7 +2852,7 @@ The brief is plain text because an agent pane is a shell. There is no URL, becau
 none: the oid takes its place, and it is what `dam show` and every other client accept. A field the
 object has nothing for is left out rather than written empty.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-domain/src/brief.rs`, inside `mod tests`:
 
@@ -2933,12 +2957,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-domain --locked brief`
 Expected: FAIL with `unresolved module or unlinked crate 'brief'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/herdr-damnit-domain/src/brief.rs`, above its test module:
 
@@ -2996,12 +3020,12 @@ mod brief;
 pub use brief::brief;
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-domain --locked && cargo clippy -p herdr-damnit-domain --all-targets --locked -- -D warnings`
 Expected: PASS and clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -3011,6 +3035,8 @@ git commit -m "feat(domain): write the agent brief from a dam object"
 ---
 
 ### Task 13: The dam version rules
+
+**Done by PR #20.**
 
 **Files:**
 - Create: `crates/herdr-damnit-domain/src/version.rs`
@@ -3047,7 +3073,7 @@ to rediscover that. Below 1.0 the minor is the breaking axis, so
 `verdict` refuses below the minimum, warns when the minor is above the known one, and says nothing
 in between.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-domain/src/version.rs`, inside `mod tests`:
 
@@ -3126,12 +3152,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-domain --locked version`
 Expected: FAIL with `unresolved module or unlinked crate 'version'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/herdr-damnit-domain/src/version.rs`, above its test module:
 
@@ -3220,12 +3246,12 @@ mod version;
 pub use version::{DAM_KNOWN, DAM_MINIMUM, DAM_RESTORE, DamVersion, Verdict, parse_version, verdict};
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-domain --locked`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -3235,6 +3261,8 @@ git commit -m "feat(domain): compare the dam this pane found against the one it 
 ---
 
 ### Task 14: The failure mapping
+
+**Done by PR #20.**
 
 **Files:**
 - Create: `crates/herdr-damnit-domain/src/failure.rs`
@@ -3294,7 +3322,7 @@ not there, and the message alone would attach the advice to a helper quoting SQL
 A failure with no document at all is judged on its line, which is what a `dam` too old to print one
 leaves behind.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-domain/src/failure/tests.rs`, which is a file of its own because the module
 and its tests together run past the 300 line ideal:
@@ -3512,12 +3540,12 @@ fn a_signal_death_with_no_code_is_reported_rather_than_swallowed() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-domain --locked failure`
 Expected: FAIL, the test module naming types that do not exist yet.
 
-- [ ] **Step 3: Write the kind words**
+- [x] **Step 3: Write the kind words**
 
 `crates/herdr-damnit-domain/src/failure/kind.rs`:
 
@@ -3592,7 +3620,7 @@ mod tests {
 `Unknown` is what keeps a ninth reaching the status line with `dam`'s own sentence instead of being
 dropped, the way `Rule::Unknown` does for a rule word.
 
-- [ ] **Step 4: Write the rule words**
+- [x] **Step 4: Write the rule words**
 
 `crates/herdr-damnit-domain/src/failure/rule.rs`:
 
@@ -3651,7 +3679,7 @@ impl Rule {
 }
 ```
 
-- [ ] **Step 5: Write the module**
+- [x] **Step 5: Write the module**
 
 `crates/herdr-damnit-domain/src/failure.rs`, above its test module:
 
@@ -3788,12 +3816,12 @@ pub use failure::{
 };
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `cargo test --workspace --locked && cargo clippy --workspace --all-targets --locked -- -D warnings`
 Expected: PASS and clean.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -3809,6 +3837,8 @@ terminal: `ProcessDamRunner` in Phase D is what makes `DamRunner` real, and ever
 tested against a fake runner that records the argv it was handed and answers with a literal.
 
 ### Task 15: Create the application crate with its ports
+
+**Done by PR #21.**
 
 **Files:**
 - Create: `crates/herdr-damnit-application/Cargo.toml`
@@ -3860,7 +3890,7 @@ Both derives are load-bearing. `spawn(...).expect(...)` in this task's own test 
 `SpawnError: Debug`, and Task 17's `Completion` derives `Debug` while carrying a `Finished`.
 `RunningJob` derives nothing, because no caller asks it for anything.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `crates/herdr-damnit-application/src/ports.rs`, inside `mod tests`. It is a compile-level test: it
 proves a fake runner satisfies the port, which is the whole reason the port exists.
@@ -3913,12 +3943,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cargo test -p herdr-damnit-application --locked`
 Expected: FAIL with `package ID specification 'herdr-damnit-application' did not match any packages`
 
-- [ ] **Step 3: Create the crate**
+- [x] **Step 3: Create the crate**
 
 `crates/herdr-damnit-application/Cargo.toml`:
 
@@ -3951,7 +3981,7 @@ mod ports;
 pub use ports::{Clock, DamRunner, Finished, Herdr, RunningJob, SpawnError};
 ```
 
-- [ ] **Step 4: Write the ports**
+- [x] **Step 4: Write the ports**
 
 `crates/herdr-damnit-application/src/ports.rs`, above its test module, is the type block in the
 Interfaces section verbatim, with this header:
@@ -3961,12 +3991,12 @@ Interfaces section verbatim, with this header:
 //! a clock. Each has exactly one production implementation, in the adapters crate.
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `cargo test -p herdr-damnit-application --locked`
 Expected: PASS, one test.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -3976,6 +4006,8 @@ git commit -m "feat(application): add the application crate with the dam, herdr 
 ---
 
 ### Task 16: Every dam argv the pane spawns
+
+**Done by PR #21.**
 
 **Files:**
 - Create: `crates/herdr-damnit-application/src/argv.rs`
@@ -4035,7 +4067,7 @@ operation, a `fields` list and the state the change left behind, with no embedde
 what a pane polling `status` per render wants. `--full` adds `before` and `after` for a client that
 needs them and this pane does not.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-application/src/argv/tests.rs`:
 
@@ -4189,12 +4221,12 @@ fn discarding_a_working_change_is_dams_restore() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-application --locked argv`
 Expected: FAIL with `unresolved module or unlinked crate 'argv'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/herdr-damnit-application/src/argv.rs`:
 
@@ -4346,12 +4378,12 @@ pub mod argv;
 pub use argv::Side;
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-application --locked`
 Expected: PASS, fifteen tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -4361,6 +4393,8 @@ git commit -m "feat(application): spell every dam command the pane spawns"
 ---
 
 ### Task 17: The job table: generations, the exclusive rule, and the follow-up reads
+
+**Done by PR #21.**
 
 **Files:**
 - Create: `crates/herdr-damnit-application/src/jobs.rs`
@@ -4426,7 +4460,7 @@ Three rules, each a test:
 
 `drain` is non-blocking: it uses `try_recv` on every job in the table and returns whatever arrived.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-application/src/jobs/tests.rs`:
 
@@ -4619,12 +4653,12 @@ fn a_dam_that_is_not_there_is_reported_rather_than_started() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-application --locked jobs`
 Expected: FAIL with `unresolved module or unlinked crate 'jobs'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/herdr-damnit-application/src/jobs.rs`:
 
@@ -4819,17 +4853,17 @@ mod jobs;
 pub use jobs::{Completion, JobId, JobKind, Jobs, Submitted, SyncKind};
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-application --locked`
 Expected: PASS, nine new tests.
 
-- [ ] **Step 5: Check the file is inside the cap**
+- [x] **Step 5: Check the file is inside the cap**
 
 Run: `wc -l crates/herdr-damnit-application/src/jobs.rs`
 Expected: under 300.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -4839,6 +4873,8 @@ git commit -m "feat(application): run one exclusive dam job at a time and re-rea
 ---
 
 ### Task 18: The handshake
+
+**Done by PR #21.**
 
 **Files:**
 - Create: `crates/herdr-damnit-application/src/handshake.rs`
@@ -4862,7 +4898,7 @@ requires the five top-level keys `staged`, `unstaged`, `conflicts`, `notices` an
 document missing one of them fails the handshake with the same refusal screen, which catches a `dam`
 that answers `--version` but was built from a fork. The handshake is not repeated on a refresh.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-application/src/handshake.rs`, inside `mod tests`:
 
@@ -4934,12 +4970,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-application --locked handshake`
 Expected: FAIL with `unresolved module or unlinked crate 'handshake'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/herdr-damnit-application/src/handshake.rs`, above its test module:
 
@@ -4999,12 +5035,12 @@ mod handshake;
 pub use handshake::{Handshake, handshake};
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-application --locked`
 Expected: PASS, six new tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -5014,6 +5050,8 @@ git commit -m "feat(application): check dam's version and its status document be
 ---
 
 ### Task 19: The hand-off to the agent pane
+
+**Done by PR #21.**
 
 **Files:**
 - Create: `crates/herdr-damnit-application/src/handoff.rs`
@@ -5061,7 +5099,7 @@ The fake records through a `Mutex`, not a `RefCell`: `Herdr: Send + Sync` is the
 Task 15, and a fake holding a `RefCell` fails to compile with
 `error[E0277]: RefCell<...> cannot be shared between threads safely`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-application/src/handoff/tests.rs`:
 
@@ -5292,12 +5330,12 @@ fn a_pane_outside_herdr_says_so_rather_than_guessing_a_workspace() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-application --locked handoff`
 Expected: FAIL with `unresolved module or unlinked crate 'handoff'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 Add `serde = { workspace = true }` to `crates/herdr-damnit-application/Cargo.toml`, then
 `crates/herdr-damnit-application/src/handoff.rs`:
@@ -5455,17 +5493,17 @@ mod handoff;
 pub use handoff::{Agent, HandOff, Workspace, hand_off};
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test --workspace --locked`
 Expected: PASS, nine new tests.
 
-- [ ] **Step 5: Check the file is inside the cap**
+- [x] **Step 5: Check the file is inside the cap**
 
 Run: `wc -l crates/herdr-damnit-application/src/handoff.rs crates/herdr-damnit-application/src/handoff/tests.rs`
 Expected: both under 300.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -5481,6 +5519,8 @@ herdr CLI client, the config reader, the state directory, the clock and the mapp
 documents into the domain types.
 
 ### Task 20: The fake dam and the fixtures
+
+**Done by PR #22.**
 
 **Files:**
 - Create: `crates/herdr-damnit-adapters/Cargo.toml`
@@ -5515,7 +5555,7 @@ Fixtures are owned by this repository and are byte copies of documents the built
 produced. A `dam` change that moves the bytes fails a test here, which is the point: the pane pins
 the contract from its own side, the way `dam` pins it from the other.
 
-- [ ] **Step 1: Write the capture script**
+- [x] **Step 1: Write the capture script**
 
 `crates/herdr-damnit-adapters/tests/fixtures/capture.sh`, the reproducible record of where every
 fixture came from. It clones and builds `dam`, drives a scratch store with neutral subjects, and
@@ -5642,7 +5682,7 @@ The four sync documents (`push-ok.json`, `push-partial-failure.json`, `pull-ok.j
 
 `pull-conflict.json` is the same document with `"conflicts": 1`.
 
-- [ ] **Step 2: Create the crate and capture the fixtures**
+- [x] **Step 2: Create the crate and capture the fixtures**
 
 `crates/herdr-damnit-adapters/Cargo.toml`:
 
@@ -5684,7 +5724,7 @@ chmod +x crates/herdr-damnit-adapters/tests/fixtures/capture.sh
 crates/herdr-damnit-adapters/tests/fixtures/capture.sh
 ```
 
-- [ ] **Step 3: Write the shared scratch fixture**
+- [x] **Step 3: Write the shared scratch fixture**
 
 Every temp path a test in this crate writes goes inside a directory that test owns, so a run leaves
 nothing behind in the system temp directory. A `<name>-<pid>` path per test does not: this lane's
@@ -5739,7 +5779,7 @@ Each integration test file reaches it with `mod support;` and `use support::Scra
 one copy per test binary, which is why `dir` carries a narrow `allow(dead_code)`: a method only one
 binary calls is dead code in the others.
 
-- [ ] **Step 4: Write the failing test for the fake**
+- [x] **Step 4: Write the failing test for the fake**
 
 `crates/herdr-damnit-adapters/tests/fake_dam.rs`:
 
@@ -5882,12 +5922,12 @@ fn the_version_flag_answers_the_captured_line() {
 }
 ```
 
-- [ ] **Step 5: Run the tests to verify they fail**
+- [x] **Step 5: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-adapters --locked`
 Expected: FAIL, `couldn't read src/bin/fake_dam.rs`
 
-- [ ] **Step 6: Write the fake**
+- [x] **Step 6: Write the fake**
 
 `crates/herdr-damnit-adapters/src/bin/fake_dam.rs`:
 
@@ -5984,12 +6024,12 @@ Task 22 drives the kill escalation with.
 
 The `fake-dam` binary needs `serde_json` and `libc`, which the crate already depends on.
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [x] **Step 7: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-adapters --locked`
 Expected: PASS, six tests.
 
-- [ ] **Step 8: Prove the fixtures carry no personal data**
+- [x] **Step 8: Prove the fixtures carry no personal data**
 
 ```bash
 ! grep -rniE 'webdavis|/Users/|todoist api|token' crates/herdr-damnit-adapters/tests/fixtures/*.json
@@ -5998,7 +6038,7 @@ Expected: PASS, six tests.
 Expected: no match. A fixture that matches was captured against a real store and must be recaptured
 by `capture.sh`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add -A
@@ -6008,6 +6048,8 @@ git commit -m "test(adapters): add the fake dam and the fixtures it replays"
 ---
 
 ### Task 21: ProcessDamRunner, the thread and the channel
+
+**Done by PR #22.**
 
 **Files:**
 - Create: `crates/herdr-damnit-adapters/src/dam_runner.rs`
@@ -6036,7 +6078,7 @@ becomes `SpawnError::NotFound`, which is what draws the install line.
 The pane makes no HTTP request, so `tokio` and `reqwest` are not in this crate's tree and never
 enter it.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-adapters/tests/dam_runner.rs`:
 
@@ -6187,12 +6229,12 @@ drops `.args(leading)`: with a one-word argv the assertion holds either way. And
 word in it at all is its own arm, `split_first().ok_or(SpawnError::NotFound)`, which needs
 `an_empty_argv_is_a_not_found_rather_than_a_panic`.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-adapters --locked --test dam_runner -- --test-threads=1`
 Expected: FAIL with `unresolved import 'herdr_damnit_adapters::ProcessDamRunner'`
 
-- [ ] **Step 3: Write the runner**
+- [x] **Step 3: Write the runner**
 
 `crates/herdr-damnit-adapters/src/dam_runner.rs`:
 
@@ -6300,12 +6342,12 @@ mod dam_runner;
 pub use dam_runner::{Cancel, ProcessDamRunner};
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-adapters --locked --test dam_runner -- --test-threads=1`
 Expected: PASS, five tests.
 
-- [ ] **Step 5: Prove no HTTP client entered this crate**
+- [x] **Step 5: Prove no HTTP client entered this crate**
 
 ```bash
 ! cargo tree -p herdr-damnit-adapters --locked --edges normal | grep -E 'reqwest|hyper|rustls|tokio'
@@ -6313,7 +6355,7 @@ Expected: PASS, five tests.
 
 Expected: no match.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -6323,6 +6365,8 @@ git commit -m "feat(adapters): spawn dam on a thread and answer the draw loop on
 ---
 
 ### Task 22: Cancellation and the read deadline
+
+**Done by PR #22.**
 
 **Files:**
 - Modify: `crates/herdr-damnit-adapters/src/dam_runner/cancel.rs`
@@ -6386,7 +6430,7 @@ positive pid, and a job with no deadline at all, which is what `spawn` hands dow
 
 Every test in the file runs in under a second, measured one at a time: 0.05 s to 0.52 s.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-adapters/tests/cancel.rs`:
 
@@ -6707,12 +6751,12 @@ fn a_group_that_has_already_gone_is_not_waited_out() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-adapters --locked --test cancel -- --test-threads=1`
 Expected: FAIL with `no method named 'spawn_with_deadline'`
 
-- [ ] **Step 3: Write the cancellation**
+- [x] **Step 3: Write the cancellation**
 
 `crates/herdr-damnit-adapters/src/dam_runner/cancel.rs`:
 
@@ -6777,7 +6821,7 @@ impl Cancel {
 }
 ```
 
-- [ ] **Step 4: Add the deadline to the runner**
+- [x] **Step 4: Add the deadline to the runner**
 
 In `crates/herdr-damnit-adapters/src/dam_runner.rs`, rename the body of `spawn` to
 `spawn_with_deadline` and give it the deadline thread:
@@ -6820,12 +6864,12 @@ impl DamRunner for ProcessDamRunner {
     }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-adapters --locked -- --test-threads=1`
 Expected: PASS, every test in the crate.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -6835,6 +6879,8 @@ git commit -m "feat(adapters): cancel a dam run with SIGINT to its group and a d
 ---
 
 ### Task 23: dam's wire documents, mapped into the domain
+
+**Done by PR #22.**
 
 **Files:**
 - Create: `crates/herdr-damnit-adapters/src/wire.rs`
@@ -6890,7 +6936,7 @@ dropping the `done` check makes a `dam edit --undone` a completion, because a re
 that names `done` and leaves the task open (measured: `fields ["done"]`, `done false`,
 `completed_at null`). A mutation sweep found both survivors against the plan's own test set.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-adapters/src/wire/tests.rs`:
 
@@ -7066,12 +7112,12 @@ fn something_that_is_not_json_is_an_error_rather_than_an_empty_model() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-adapters --locked wire`
 Expected: FAIL with `unresolved module or unlinked crate 'wire'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/herdr-damnit-adapters/src/wire.rs`. The serde structs mirror `dam`'s own; every optional
 field defaults, so a `dam` that adds one does not break the read.
@@ -7464,19 +7510,19 @@ Add to `crates/herdr-damnit-adapters/src/lib.rs`:
 pub mod wire;
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-adapters --locked wire`
 Expected: PASS, fourteen tests. If a fixture assertion fails on a subject or a path, correct the
 assertion to what `capture.sh` actually produced rather than editing the fixture: the fixture is the
 byte record and the test is what reads it.
 
-- [ ] **Step 5: Check every file is inside the cap**
+- [x] **Step 5: Check every file is inside the cap**
 
 Run: `wc -l crates/herdr-damnit-adapters/src/wire.rs crates/herdr-damnit-adapters/src/wire/reports.rs crates/herdr-damnit-adapters/src/wire/failures.rs crates/herdr-damnit-adapters/src/wire/tests.rs crates/herdr-damnit-adapters/src/wire/reports/tests.rs crates/herdr-damnit-adapters/src/wire/failures/tests.rs`
 Expected: all six inside the 300 line ideal, none over 500.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -7486,6 +7532,8 @@ git commit -m "feat(adapters): read dam's documents into the pane's own types"
 ---
 
 ### Task 24: The config reader
+
+**Done by PR #22.**
 
 **Files:**
 - Create: `crates/herdr-damnit-adapters/src/config.rs`
@@ -7552,7 +7600,7 @@ The reserved view name is now `open` rather than `all`, because that is the name
 `IconSet` and `Side` are domain types with no serde derive, so the config declares its own
 string-shaped enums and maps them, which is also what keeps the parse error naming the alternatives.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit-adapters/src/config/tests.rs`, which carries over the existing config tests that
 still apply and adds one per changed key:
@@ -7712,12 +7760,12 @@ fn the_marks_are_nerd_font_glyphs_until_the_plain_set_is_asked_for() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit-adapters --locked config`
 Expected: FAIL with `unresolved module or unlinked crate 'config'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `crates/herdr-damnit-adapters/src/config.rs` follows the structure of
 `crates/herdr-damnit/src/config.rs` with the keys above. The shape of the new parts:
@@ -7844,7 +7892,7 @@ learn it.
 `config.rs`: with all three inline the module reached 271 implementation lines, past the point the
 Rust standard asks for decomposition.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit-adapters --locked config`
 Expected: PASS, twenty-three tests. Nine beyond the plan's fourteen, each closing a behaviour the
@@ -7853,7 +7901,7 @@ plan states in prose and pins with no test: a blank `dam` binary, a leading-argu
 name, a refresh interval of zero staying zero, the theme check against a handed-in vocabulary, and
 a config naming no theme at all.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -7863,6 +7911,8 @@ git commit -m "feat(adapters): read the pane's config with dam's query grammar a
 ---
 
 ### Task 25: The state directory, the clock and the herdr CLI
+
+**Done by PR #23.**
 
 **Files:**
 - Create: `crates/herdr-damnit-adapters/src/state.rs`
@@ -7895,7 +7945,7 @@ cover the wiring. Every `Config::load()` must be followed by
 `load_config` helper. If it never lands, an unknown theme name is accepted in silence and the pane
 paints half of itself in the default colors.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `crates/herdr-damnit-adapters/src/clock.rs`, inside `mod tests`:
 
@@ -7914,12 +7964,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cargo test -p herdr-damnit-adapters --locked clock`
 Expected: FAIL with `unresolved module or unlinked crate 'clock'`
 
-- [ ] **Step 3: Move the three modules**
+- [x] **Step 3: Move the three modules**
 
 ```bash
 git mv crates/herdr-damnit/src/state.rs crates/herdr-damnit-adapters/src/state.rs
@@ -7981,7 +8031,7 @@ pub use config::Config;
 pub use herdr_cli::CliHerdr;
 ```
 
-- [ ] **Step 4: Run the whole suite to verify it passes**
+- [x] **Step 4: Run the whole suite to verify it passes**
 
 Run: `cargo test --workspace --locked -- --test-threads=1`
 Expected: PASS. The binary crate still compiles: it now reaches `state` and the herdr calls through
@@ -8003,7 +8053,7 @@ files leave the tree in Task 28: `Placement::as_str` in `crates/herdr-damnit/src
 the herdr client through the port (`herdr_damnit_application::Herdr::call(&CliHerdr, args)`) because
 the free `herdr::call` became that trait method.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -8026,6 +8076,8 @@ threshold scaled to the same 50 ms window. The assertion is unchanged: a loop th
 inline renders once and fails on the first clause.
 
 ### Task 26: The draw loop that renders while a job runs
+
+**Done by PR #23.**
 
 **Files:**
 - Create: `crates/herdr-damnit/src/app.rs`
@@ -8097,7 +8149,7 @@ start, which Task 37 fills in.
 `App::key` never blocks. A key that needs `dam` calls `submit` and returns; the job's result arrives
 on a later tick.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit/src/app/tests.rs`:
 
@@ -8318,12 +8370,12 @@ fn output_that_will_not_parse_is_reported_without_quoting_it() {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit --locked app`
 Expected: FAIL with `unresolved module or unlinked crate 'app'`
 
-- [ ] **Step 3: Write the app**
+- [x] **Step 3: Write the app**
 
 `crates/herdr-damnit/src/app.rs` holds `App`, `Screen`, `After` and `Overlay` (an empty enum for now,
 filled by Task 31 onward), `tick`, `submit`, `poll_window` and `header`. `key` starts as a match that
@@ -8511,7 +8563,7 @@ mod app;
 mod loop_;
 ```
 
-- [ ] **Step 4: Write the loop**
+- [x] **Step 4: Write the loop**
 
 `crates/herdr-damnit/src/loop_.rs`:
 
@@ -8560,12 +8612,12 @@ fn next_key(window: std::time::Duration) -> Result<Option<event::KeyEvent>, Stri
 `crate::screens::draw` and `crate::editor::round_trip` are written in Tasks 27 and 37; until then
 stub both with a function that draws an empty frame and one that does nothing, each one line.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit --locked app`
 Expected: PASS, eleven tests.
 
-- [ ] **Step 6: Check the file is inside the cap**
+- [x] **Step 6: Check the file is inside the cap**
 
 Run: `wc -l crates/herdr-damnit/src/app.rs`
 Expected: under 300. If it is over, move `header`, `frame` and `elapsed_text` into
@@ -8603,7 +8655,7 @@ until Task 28 wires them, so the binary target carries the whole of `app.rs` and
 code until the cutover. The plan's gate order already says this: Task 28 Step 6 is the first step
 that runs clippy.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -8613,6 +8665,8 @@ git commit -m "feat(pane): draw and read keys while a dam job runs"
 ---
 
 ### Task 27: The List screen and the header
+
+**Done by PR #23.**
 
 **Files:**
 - Create: `crates/herdr-damnit/src/screens.rs`
@@ -8639,7 +8693,7 @@ the marks are what carry colour.
 A golden is a text block in the test file rather than a separate file, so a diff in review shows the
 screen rather than a path.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `crates/herdr-damnit/src/screens/tests.rs`:
 
@@ -8788,12 +8842,12 @@ The golden in the first test is the exact screen. Write it by running the test o
 `assert_eq` failure output, and pasting the left-hand side in, **after** checking line by line that
 what it drew is what the spec's List mock describes. A golden pasted without that check pins a bug.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit --locked screens`
 Expected: FAIL with `unresolved module or unlinked crate 'screens'`
 
-- [ ] **Step 3: Write the screens module**
+- [x] **Step 3: Write the screens module**
 
 `crates/herdr-damnit/src/screens.rs`:
 
@@ -8861,7 +8915,7 @@ ellipsis. `crates/herdr-damnit/src/screens/list.rs` renders `app.list.rows()` as
 `palette.color(segment.slot)`, the selected row highlighted, and the empty case one dim line reading
 `nothing in this view`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit --locked screens`
 Expected: PASS, five tests.
@@ -8883,7 +8937,7 @@ cut-the-line-and-end-in-an-ellipsis rule the spec asks for already exists there,
 terminal cells rather than characters so a double-width subject is cut where the terminal would wrap
 it. `cut_to` is the same rule over a bare string, which the status line and the hint line both take.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -8893,6 +8947,8 @@ git commit -m "feat(pane): draw the list screen, the status line and the hints"
 ---
 
 ### Task 28: The cutover
+
+**Done by PR #23.**
 
 **Files:**
 - Rewrite: `crates/herdr-damnit/src/main.rs`
@@ -8919,7 +8975,7 @@ import `herdr_damnit_adapters::config::Side` instead if the compiler makes that 
 old config, so update their imports to `herdr_damnit_adapters::Config` in this task and leave their
 behaviour alone.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `crates/herdr-damnit/src/open.rs`, inside `mod tests`:
 
@@ -9012,12 +9068,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit --locked open`
 Expected: FAIL with `unresolved module or unlinked crate 'open'`
 
-- [ ] **Step 3: Write the opening sequence**
+- [x] **Step 3: Write the opening sequence**
 
 `crates/herdr-damnit/src/open.rs`:
 
@@ -9053,7 +9109,7 @@ three new arms:
 `crates/herdr-damnit/src/screens/refusal.rs` draws `app.refusal` as one centred paragraph and no
 hint line; `screens::draw` checks `app.refusal` first and draws that instead of any screen.
 
-- [ ] **Step 4: Rewrite main.rs**
+- [x] **Step 4: Rewrite main.rs**
 
 **The theme check lands here**, discharging the obligation Task 24 leaves and Task 25 carries.
 `Config::parse` runs four checks and not the theme one, because the theme names live in this crate
@@ -9157,7 +9213,7 @@ fn fail(error: &str) -> std::process::ExitCode {
 }
 ```
 
-- [ ] **Step 5: Delete the Todoist path**
+- [x] **Step 5: Delete the Todoist path**
 
 ```bash
 git rm -r crates/todoist
@@ -9182,12 +9238,12 @@ git rm -r crates/herdr-damnit/src/apply crates/herdr-damnit/src/detail \
 Then remove `crates/todoist` from the workspace `members`, and remove `todoist`, `reqwest`, `tokio`
 and `chrono` from every `[dependencies]` and from `[workspace.dependencies]`.
 
-- [ ] **Step 6: Run the whole suite to verify it passes**
+- [x] **Step 6: Run the whole suite to verify it passes**
 
 Run: `cargo test --workspace --locked -- --test-threads=1 && cargo clippy --workspace --all-targets --locked -- -D warnings`
 Expected: PASS and clean.
 
-- [ ] **Step 7: Prove the network left the tree**
+- [x] **Step 7: Prove the network left the tree**
 
 ```bash
 ! cargo tree --workspace --locked --edges normal | grep -E 'reqwest|hyper|rustls|tokio|native-tls'
@@ -9245,7 +9301,7 @@ replaces; `screens::render_to_text`, now `#[cfg(test)]` because it is the golden
 nothing in the binary draws through it; and `Harness::press` and `Harness::last` in `app/tests.rs`.
 Task 29 re-adds `press` with the Tab-cycle tests that call it.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A
@@ -9255,6 +9311,8 @@ git commit -m "feat(pane): open on dam and delete the Todoist client"
 ---
 
 ### Task 29: The Status and Done screens, and the Tab cycle
+
+**Done by PR #23.**
 
 **Files:**
 - Create: `crates/herdr-damnit/src/screens/status.rs`
@@ -9276,7 +9334,7 @@ Done rows are newest completion first, the date first so the dates line up down 
 completed in the working layer and not yet committed has no commit and therefore no date; it sorts to
 the top under the heading `not committed`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `crates/herdr-damnit/src/screens/tests.rs`:
 
@@ -9421,12 +9479,12 @@ fn the_done_screen_draws_the_date_first_newest_first_with_the_uncommitted_ones_o
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cargo test -p herdr-damnit --locked screens`
 Expected: FAIL with `no variant named 'ReadDone'`
 
-- [ ] **Step 3: Write the two screens and the cycle**
+- [x] **Step 3: Write the two screens and the cycle**
 
 `JobKind` gains `ReadDone`. `App` gains `done_objects: Vec<Object>`, `completed: HashMap<Oid, Date>`,
 `read_done: bool` and `read_log: bool`. `App::key` gains:
@@ -9444,7 +9502,7 @@ alone, and `App::show` submitting `ReadDone` and `ReadLog` on the first entry to
 `Heading` plain. No row's mark is inferred from the section it sits under. `screens/done.rs` groups by completion date, newest first, with the uncommitted ones
 under a `not committed` heading at the top, and draws `YYYY-MM-DD  <subject>` with the date first.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cargo test -p herdr-damnit --locked screens`
 Expected: PASS, eleven tests.
@@ -9494,7 +9552,7 @@ grouped by completion day) and `app/header.rs` (the status line's left half, the
 timer). `app.rs` is 276 lines after the split. `screens/list.rs::spans` became `pub(super)`: three
 screens now draw coloured segment runs through it.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
