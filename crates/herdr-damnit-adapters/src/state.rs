@@ -1,18 +1,12 @@
-//! The plugin's own files under `HERDR_PLUGIN_STATE_DIR`: the pane it last opened in a workspace,
-//! and the view a `view` action asked for. herdr runs every action as its own process, so these
-//! files are how one run tells the next, and the pane, what happened.
-
 use std::path::{Path, PathBuf};
 
-/// herdr hands the plugin its own state directory; the documented path is the fallback for a run
-/// outside herdr.
 pub fn state_dir() -> PathBuf {
     let given = std::env::var_os("HERDR_PLUGIN_STATE_DIR").map(PathBuf::from);
     state_dir_in(given.as_deref(), &state_home())
 }
 
-fn state_dir_in(given: Option<&Path>, base: &Path) -> PathBuf {
-    match given {
+fn state_dir_in(herdr_plugin_state_dir: Option<&Path>, base: &Path) -> PathBuf {
+    match herdr_plugin_state_dir {
         Some(dir) => dir.to_path_buf(),
         None => base.join("herdr/plugins/state/herdr-damnit"),
     }
@@ -25,14 +19,10 @@ fn state_home() -> PathBuf {
     }
 }
 
-/// The pane this plugin last opened in a workspace, one file per workspace so two workspaces never
-/// overwrite each other.
 fn pane_path(workspace: &str) -> PathBuf {
     state_dir().join("panes").join(workspace)
 }
 
-/// The view a `view` action asked for: one file for the plugin, which a pane about to start reads
-/// on its first draw and a pane already open reads on its next tick.
 pub fn view_request_path() -> PathBuf {
     state_dir().join("requested-view")
 }
@@ -57,8 +47,6 @@ pub fn clear_view_request(path: &Path) {
     let _ = std::fs::remove_file(path);
 }
 
-/// The requested view, which is consumed by the read so the pane does not pull itself back to it
-/// after the operator has moved on.
 pub fn take_requested_view(path: &Path) -> Option<String> {
     take(path)
 }

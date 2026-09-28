@@ -1,5 +1,3 @@
-//! The error document `dam` prints on standard error under `--json`.
-
 use super::*;
 
 #[test]
@@ -19,8 +17,6 @@ fn an_error_document_carries_its_kind_its_rule_and_the_objects_it_names() {
     );
 }
 
-/// A rule word this pane has not heard of still reaches the status line, because the message is
-/// `dam`'s own either way.
 #[test]
 fn a_rule_this_pane_has_not_heard_of_keeps_its_word() {
     let stderr =
@@ -33,7 +29,6 @@ fn a_rule_this_pane_has_not_heard_of_keeps_its_word() {
     );
 }
 
-/// Every kind but a refusal carries a null rule, which is `dam`'s own contract.
 #[test]
 fn a_failure_that_is_not_a_refusal_names_no_rule() {
     let stderr =
@@ -43,8 +38,6 @@ fn a_failure_that_is_not_a_refusal_names_no_rule() {
     assert_eq!(document.rule, None);
 }
 
-/// clap answers a bad command line before `dam` runs, so there is no document to read; Task 14's
-/// `classify` falls back to the first line of standard error in that case.
 #[test]
 fn standard_error_that_is_not_a_document_is_no_document_rather_than_an_error() {
     assert!(error_document("error: unexpected argument '--nope'").is_none());

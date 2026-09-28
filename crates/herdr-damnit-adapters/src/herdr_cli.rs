@@ -1,12 +1,8 @@
-//! The `herdr` command surface this plugin drives: the pane calls it makes and the envelopes it
-//! reads back. Every call goes through `HERDR_BIN_PATH`, the binary herdr names for its plugins.
-
 use std::ffi::OsStr;
 use std::process::Command;
 
 use crate::config::{Config, Placement};
 
-/// The production herdr client: the CLI herdr names for its plugins.
 pub struct CliHerdr;
 
 impl herdr_damnit_application::Herdr for CliHerdr {
@@ -23,7 +19,6 @@ pub fn close_plugin_pane(pane: &str) -> Result<String, String> {
     run(&["plugin", "pane", "close", pane])
 }
 
-/// Open the plugin's own pane, and report the pane id herdr gave it.
 pub fn open_plugin_pane(
     workspace: &str,
     neighbor: &str,
@@ -43,26 +38,24 @@ pub fn open_plugin_pane(
         config.placement.as_str(),
         focus,
     ];
-    // A split or zoomed pane attaches to a pane; a tab or overlay one belongs to the workspace.
-    match config.placement {
-        Placement::Split | Placement::Zoomed if !neighbor.is_empty() => {
-            args.extend_from_slice(&["--target-pane", neighbor]);
-            if config.placement == Placement::Split {
-                args.extend_from_slice(&["--direction", config.side.split_direction()]);
-            }
+    if config
+        .placement
+        .attaches_to_a_pane_rather_than_the_workspace()
+        && !neighbor.is_empty()
+    {
+        args.extend_from_slice(&["--target-pane", neighbor]);
+        if config.placement == Placement::Split {
+            args.extend_from_slice(&["--direction", config.side.split_direction()]);
         }
-        _ => args.extend_from_slice(&["--workspace", workspace]),
+    } else {
+        args.extend_from_slice(&["--workspace", workspace]);
     }
     let output = run(&args)?;
     pane_id_of_open(&output).ok_or_else(|| "herdr plugin pane open named no pane".to_string())
 }
 
-/// Resize the pane already in the tab to `target_ratio` of it, so this plugin's pane opened beside
-/// it ends up at the width the config asked for. `herdr plugin pane open` cannot take a ratio of
-/// its own, and a same-tab `herdr pane move` is a no-op, so a resize after the open is the only
-/// call that actually changes it. Reports whether herdr moved the split at all.
 pub fn resize_leading_pane(pane: &str, direction: &str, target_ratio: f32) -> Result<bool, String> {
-    let amount = target_ratio - current_ratio(pane)?;
+    let amount = target_ratio - measured_ratio_rather_than_an_assumed_half(pane)?;
     let output = run(&resize_args(pane, direction, amount))?;
     Ok(resize_changed(&output))
 }
@@ -83,9 +76,7 @@ fn resize_args(pane: &str, direction: &str, amount: f32) -> Vec<String> {
     .collect()
 }
 
-/// The leading pane's current share of the tab, read fresh because the open's own even split is
-/// not guaranteed to be exactly 0.5.
-fn current_ratio(pane: &str) -> Result<f32, String> {
+fn measured_ratio_rather_than_an_assumed_half(pane: &str) -> Result<f32, String> {
     let output = run(&["pane", "layout", "--pane", pane])?;
     ratio_of_layout(&output).ok_or_else(|| format!("herdr pane layout named no ratio for {pane}"))
 }
@@ -104,7 +95,6 @@ fn resize_changed(output: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Every pane id live in a workspace, which is what proves a remembered pane is still there.
 pub fn live_panes(workspace: &str) -> Result<Vec<String>, String> {
     let output = run(&["pane", "list", "--workspace", workspace])?;
     let json: serde_json::Value =

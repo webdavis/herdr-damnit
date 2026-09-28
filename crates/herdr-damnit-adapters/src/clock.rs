@@ -1,5 +1,3 @@
-//! The wall clock, behind a port so every date rule is tested against a literal day.
-
 use std::time::Instant;
 
 use herdr_damnit_application::Clock;

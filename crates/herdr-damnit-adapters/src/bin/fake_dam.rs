@@ -1,14 +1,12 @@
-//! A stand-in for `dam`, driven entirely by its environment. Every test that needs a `dam` points
-//! the pane's configured `dam` argv at this binary, so no test mangles `PATH` and no test needs a
-//! real store.
-
 use std::io::Write;
 use std::path::PathBuf;
+
+const DAMS_EXIT_WHEN_CANCELLED: i32 = 3;
 
 fn main() -> std::process::ExitCode {
     install_interrupt_handler();
     let argv: Vec<String> = std::env::args().skip(1).collect();
-    log(&argv);
+    append_argv_as_one_json_line(&argv);
 
     if let Ok(millis) = std::env::var("FAKE_DAM_SLEEP_MS") {
         let millis = millis.parse().unwrap_or(0);
@@ -50,8 +48,7 @@ fn read(name: &str) -> Option<String> {
     std::fs::read_to_string(fixture_dir()?.join(name)).ok()
 }
 
-/// One JSON line of full argv per call, appended so a test reads every call one run made.
-fn log(argv: &[String]) {
+fn append_argv_as_one_json_line(argv: &[String]) {
     append(&serde_json::to_string(argv).unwrap_or_default());
 }
 
@@ -69,31 +66,24 @@ fn append(line: &str) {
     let _ = writeln!(file, "{line}");
 }
 
-/// `dam` maps a cancelled run to exit 3 whatever the abandoned work reported, so the fake does the
-/// same and records the signal for the test to assert on.
 fn install_interrupt_handler() {
     if std::env::var_os("FAKE_DAM_IGNORE_SIGINT").is_some() {
-        // Safety: `SIG_IGN` on SIGINT has no memory effects. This stands in for a `dam` that
-        // never notices the interrupt, so the caller's grace runs out and the kill lands.
+        // SAFETY: this only tells the system to ignore interrupts for this test program. It hands
+        // over no code and no memory, so there is nothing for the call to break.
         unsafe { libc::signal(libc::SIGINT, libc::SIG_IGN) };
         return;
     }
 
-    /// # Safety
-    ///
-    /// The append and the exit are not async-signal-safe. This binary is a test double whose only
-    /// other thread is the sleep in `main`, so the handler cannot re-enter a lock its own process
-    /// holds, and the process ends in the handler either way.
-    unsafe extern "C" fn on_interrupt(_: libc::c_int) {
+    extern "C" fn record_the_interrupt_and_exit_cancelled(_: libc::c_int) {
         append(r#"{"signal":"SIGINT"}"#);
-        std::process::exit(3);
+        std::process::exit(DAMS_EXIT_WHEN_CANCELLED);
     }
-    // Safety: `signal` with a plain function pointer is defined for SIGINT on every platform this
-    // repository builds for.
+    // SAFETY: the handler writes one log line and ends the program. The tests interrupt this fake
+    // once it is asleep, so the handler never cuts into work that holds something it needs.
     unsafe {
         libc::signal(
             libc::SIGINT,
-            on_interrupt as *const () as libc::sighandler_t,
+            record_the_interrupt_and_exit_cancelled as *const () as libc::sighandler_t,
         );
     }
 }

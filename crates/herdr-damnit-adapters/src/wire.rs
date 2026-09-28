@@ -1,6 +1,3 @@
-//! `dam`'s documents, read into the pane's own types. The structs here mirror `dam`'s wire shape
-//! field for field; the fixtures beside them are byte copies of what the built `dam` produced.
-
 use herdr_damnit_domain::{
     Attendee, EventFields, Kind, Object, Oid, Priority, TaskFields, parse_date,
 };
@@ -70,13 +67,11 @@ struct Listing {
     objects: Vec<WireObject>,
 }
 
-/// `dam ls --json`.
 pub fn objects(json: &str) -> Result<Vec<Object>, String> {
     let listing: Listing = read(json)?;
     Ok(listing.objects.into_iter().map(into_object).collect())
 }
 
-/// `dam show <oid> --json`.
 pub fn object(json: &str) -> Result<Object, String> {
     read::<WireObject>(json).map(into_object)
 }

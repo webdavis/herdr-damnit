@@ -1,5 +1,3 @@
-//! `dam status --json`, `dam log --json` and the two sync reports.
-
 use std::collections::HashMap;
 
 use herdr_damnit_domain::{Change, Conflict, Date, Notice, Oid, Op, Stage, Unpushed, parse_date};
@@ -24,14 +22,10 @@ struct WireChange {
     subject: String,
     #[serde(default)]
     fields: Vec<String>,
-    /// True on the object as the change leaves it, which is what marks a completion in a log.
-    #[serde(default)]
-    done: bool,
-    /// The instant the task was completed, since `dam` 0.2.0. A `dam` without it leaves the
-    /// commit's own day as the completion date.
+    #[serde(default, rename = "done")]
+    leaves_the_object_done: bool,
     #[serde(default)]
     completed_at: Option<String>,
-    /// Present only under `--full`, which this pane never asks for.
     #[serde(default)]
     after: Option<WireObject>,
 }
@@ -48,9 +42,6 @@ struct WireConflict {
 struct WireUnpushed {
     remote: String,
     commits: u64,
-    /// The distinct objects this remote's unpushed commits touch, newest commit first. A `dam`
-    /// that sends none leaves the set empty, which costs the rows their unpushed mark and nothing
-    /// else.
     #[serde(default)]
     oids: Vec<String>,
 }
@@ -104,8 +95,6 @@ fn into_change(wire: WireChange) -> Change {
     }
 }
 
-/// One notice as a sentence. `dam` names five kinds and each carries its own keys, so the text is
-/// built per kind rather than printed as a kind and a blob.
 fn into_notice(wire: &serde_json::Value) -> Notice {
     let text = |key: &str| wire.get(key).and_then(|value| value.as_str()).unwrap_or("");
     let kind = text("kind").to_string();
@@ -146,16 +135,12 @@ struct WireCommit {
     changes: Vec<WireChange>,
 }
 
-/// The day each task was completed on: the commit whose change names `done` among its fields and
-/// leaves the object complete. The day is the change's own completion instant where `dam` sends
-/// one, and the commit's day otherwise. A task completed in the working layer sits in no commit
-/// and therefore has no date.
 pub fn completions(json: &str) -> Result<HashMap<Oid, Date>, String> {
     let log: WireLog = read(json)?;
     let mut completed = HashMap::new();
     for commit in log.commits {
         for change in commit.changes {
-            if !change.done || !change.fields.iter().any(|field| field == "done") {
+            if !completes_the_object(&change) {
                 continue;
             }
             let at = change
@@ -169,6 +154,10 @@ pub fn completions(json: &str) -> Result<HashMap<Oid, Date>, String> {
         }
     }
     Ok(completed)
+}
+
+fn completes_the_object(change: &WireChange) -> bool {
+    change.leaves_the_object_done && change.fields.iter().any(|field| field == "done")
 }
 
 #[derive(Deserialize)]

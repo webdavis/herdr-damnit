@@ -1,5 +1,3 @@
-//! The two object readers: a listing, and one object from `dam show`.
-
 use super::*;
 
 fn fixture(name: &str) -> String {
@@ -77,10 +75,8 @@ fn an_event_carries_its_start_end_status_and_transparency() {
     assert!(!event.transparency.is_empty());
 }
 
-/// A priority outside one to four is not a priority at all, so the row takes the default rather
-/// than refusing the whole listing over one object.
 #[test]
-fn a_priority_dam_never_sends_falls_back_to_the_default() {
+fn a_priority_outside_one_to_four_falls_back_to_the_default_rather_than_refusing_the_listing() {
     let document = r#"{"objects":[{"oid":"1","kind":"task","subject":"a",
       "task":{"done":false,"priority":9}}]}"#;
     let objects = objects(document).expect("it parsed");

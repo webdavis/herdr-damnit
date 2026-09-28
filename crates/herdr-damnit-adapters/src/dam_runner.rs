@@ -1,6 +1,3 @@
-//! The only place in this repository that names `dam` to `std::process::Command`. Every call runs
-//! on its own thread and answers on a channel, so the draw loop never waits on one.
-
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::channel;
@@ -12,18 +9,17 @@ mod cancel;
 
 pub use cancel::Cancel;
 
+const A_NEW_GROUP_THAT_DAMS_HELPER_JOINS_TOO: i32 = 0;
+
 pub struct ProcessDamRunner {
     dam: Vec<String>,
 }
 
 impl ProcessDamRunner {
-    /// The argv the config names, `["dam"]` by default, which a test points at its own fake.
     pub fn new(dam: Vec<String>) -> Self {
         Self { dam }
     }
 
-    /// A run that cancels itself once `deadline` passes. A read carries one; an exclusive job does
-    /// not, because `dam`'s own per-remote deadline bounds it.
     pub fn spawn_with_deadline(
         &self,
         argv: &[String],
@@ -37,8 +33,7 @@ impl ProcessDamRunner {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        // Its own process group, so a signal reaches the helper `dam` spawned as well as `dam`.
-        command.process_group(0);
+        command.process_group(A_NEW_GROUP_THAT_DAMS_HELPER_JOINS_TOO);
         let child = command.spawn().map_err(|error| match error.kind() {
             std::io::ErrorKind::NotFound => SpawnError::NotFound,
             _ => SpawnError::Io(error.to_string()),
@@ -56,29 +51,35 @@ impl ProcessDamRunner {
         let (sender, results) = channel();
         let started = Instant::now();
         std::thread::spawn(move || {
-            // `wait_with_output` reads both pipes to end of file, so a child writing more than a
-            // pipe buffer cannot deadlock against a parent that is not reading.
-            let finished = match child.wait_with_output() {
-                Ok(output) => Finished {
-                    code: output.status.code(),
-                    stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-                    stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-                    elapsed: started.elapsed(),
-                },
-                Err(error) => Finished {
-                    code: None,
-                    stdout: String::new(),
-                    stderr: error.to_string(),
-                    elapsed: started.elapsed(),
-                },
-            };
-            let _ = sender.send(finished);
+            let _ = sender.send(wait_draining_both_pipes_so_a_full_one_cannot_deadlock(
+                child, started,
+            ));
         });
 
         Ok(RunningJob {
             cancel: Box::new(move || cancel.interrupt()),
             results,
         })
+    }
+}
+
+fn wait_draining_both_pipes_so_a_full_one_cannot_deadlock(
+    child: std::process::Child,
+    started: Instant,
+) -> Finished {
+    match child.wait_with_output() {
+        Ok(output) => Finished {
+            code: output.status.code(),
+            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+            elapsed: started.elapsed(),
+        },
+        Err(error) => Finished {
+            code: None,
+            stdout: String::new(),
+            stderr: error.to_string(),
+            elapsed: started.elapsed(),
+        },
     }
 }
 

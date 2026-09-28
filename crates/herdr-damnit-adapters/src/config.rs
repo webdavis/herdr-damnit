@@ -1,6 +1,3 @@
-//! The plugin's configuration, read from `config.toml` in the herdr plugin config directory. A
-//! missing file is the default configuration. No key here names a credential: the token is `dam`'s.
-
 use std::path::{Path, PathBuf};
 
 use herdr_damnit_domain::{IconSet, OPEN, View};
@@ -10,52 +7,33 @@ mod kinds;
 
 pub use kinds::{Icons, Placement, Side};
 
-/// The interval read, which is two local reads rather than three network requests.
 pub const DEFAULT_REFRESH_SECONDS: u64 = 300;
 
-/// The label a successful hand-off writes, an empty one turning the record off.
 const DEFAULT_HANDOFF_LABEL: &str = "handed-off";
 
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// Argv of the `dam` the pane spawns, so a test points it at its own fake and no test mangles
-    /// `PATH`.
     #[serde(default = "default_dam")]
     pub dam: Vec<String>,
-    /// How the `open` and `toggle` actions place the pane.
     #[serde(default)]
     pub placement: Placement,
-    /// Which side of the calling pane a `split` placement takes.
     #[serde(default)]
     pub side: Side,
-    /// The share of the tab the pane takes, left to herdr's own even split when unset.
     pub width: Option<f32>,
-    /// The view the pane opens on, the open list when unset.
     pub default_view: Option<String>,
-    /// Whether focusing a workspace opens the pane there on its own.
     #[serde(default)]
     pub auto_open: bool,
-    /// The theme the pane paints with, by the name herdr knows it by, so the panes of one
-    /// workspace match. Checked by the crate that owns the palettes.
     pub theme: Option<String>,
-    /// Which set of marks a row carries: Nerd Font glyphs, or plain characters for a terminal
-    /// whose font has none.
     #[serde(default)]
     pub icons: Icons,
-    /// How often the pane reads `dam` on its own, in seconds. Zero turns the interval off,
-    /// leaving `R` and the read that follows every write.
     pub refresh_seconds: Option<u64>,
-    /// The label a successful hand-off writes on the object.
     #[serde(default = "default_handoff_label")]
     pub handoff_label: String,
-    /// Named views, in the order the pane numbers them after its own open list.
     #[serde(default)]
     pub views: Vec<ConfigView>,
 }
 
-/// One view: a name to pick it by and a query in `dam`'s own grammar, which `dam` resolves
-/// against its saved filters first and parses as a query otherwise.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigView {
@@ -64,7 +42,6 @@ pub struct ConfigView {
 }
 
 impl Config {
-    /// Read the configuration file, or the defaults when there is none.
     pub fn load() -> Result<Self, String> {
         let path = config_path();
         match std::fs::read_to_string(&path) {
@@ -83,7 +60,6 @@ impl Config {
         Ok(config)
     }
 
-    /// The views the rest of the pane reads, the open list excluded: `Views::new` puts that first.
     pub fn views(&self) -> Vec<View> {
         self.views
             .iter()
@@ -98,14 +74,10 @@ impl Config {
         self.icons.into()
     }
 
-    /// The interval the pane refreshes on, the default when the config names none.
     pub fn refresh_seconds(&self) -> u64 {
         self.refresh_seconds.unwrap_or(DEFAULT_REFRESH_SECONDS)
     }
 
-    /// A theme this pane has no palette for would draw half of it in the default colors, so an
-    /// unknown name is a config error listing the names that resolve. The vocabulary belongs to
-    /// the crate that paints, which hands it in.
     pub fn check_theme_against(&self, names: &[&str]) -> Result<(), String> {
         match &self.theme {
             Some(name) if !names.contains(&name.as_str()) => Err(format!(
@@ -116,8 +88,6 @@ impl Config {
         }
     }
 
-    /// An argv with no word in it, or whose first word is blank, could spawn nothing at all, and
-    /// the load is the place to learn that rather than the first read.
     fn check_dam(&self) -> Result<(), String> {
         match self.dam.first() {
             Some(word) if !word.trim().is_empty() => Ok(()),
@@ -125,9 +95,6 @@ impl Config {
         }
     }
 
-    /// Two views with one name would make a picker entry and a `view` action ambiguous, so the
-    /// second one is a config error naming the collision. The pane's own open list holds the first
-    /// name, so a view may not take it either.
     fn check_view_names(&self) -> Result<(), String> {
         let mut seen: Vec<&str> = Vec::new();
         for view in &self.views {
@@ -150,8 +117,6 @@ impl Config {
         Ok(())
     }
 
-    /// A width is a share of the tab, so only a fraction between the two ends of it is a width at
-    /// all: a zero, a whole tab or anything outside that says the operator meant something else.
     fn check_width(&self) -> Result<(), String> {
         match self.width {
             Some(width) if !(width > 0.0 && width < 1.0) => Err(format!(
@@ -161,8 +126,6 @@ impl Config {
         }
     }
 
-    /// The opening view has to be a view that exists, or the pane would open on nothing and say
-    /// nothing about why.
     fn check_default_view(&self) -> Result<(), String> {
         let Some(name) = &self.default_view else {
             return Ok(());
@@ -187,15 +150,13 @@ fn default_handoff_label() -> String {
     DEFAULT_HANDOFF_LABEL.to_string()
 }
 
-/// herdr hands the plugin its own config directory; the documented path is the fallback for a run
-/// outside herdr, such as `herdr-damnit doctor` from a shell.
 fn config_path() -> PathBuf {
     let given = std::env::var_os("HERDR_PLUGIN_CONFIG_DIR").map(PathBuf::from);
     config_path_in(given.as_deref(), &base_config_dir())
 }
 
-fn config_path_in(given: Option<&Path>, base: &Path) -> PathBuf {
-    let dir = match given {
+fn config_path_in(herdr_plugin_config_dir: Option<&Path>, base: &Path) -> PathBuf {
+    let dir = match herdr_plugin_config_dir {
         Some(dir) => dir.to_path_buf(),
         None => base.join("herdr/plugins/config/herdr-damnit"),
     };
