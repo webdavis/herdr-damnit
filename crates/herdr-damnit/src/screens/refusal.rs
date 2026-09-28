@@ -1,6 +1,3 @@
-//! The refusal screen: why the pane will not draw rows. It is the whole frame, with no hint line,
-//! because none of the keys a hint line offers would reach a `dam` this pane has refused.
-
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::Style;

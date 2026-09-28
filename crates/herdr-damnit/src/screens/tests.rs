@@ -18,8 +18,6 @@ const LS: &str = r#"{"objects":[
 
 const CLEAN: &str = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#;
 
-/// The frames the plain spinner steps through. Which one is on screen depends on how many ticks
-/// the reads before this one took, so the assertion is that one of them is drawn.
 const PLAIN_FRAMES: [&str; 4] = ["|", "/", "-", "\\"];
 
 fn ascii_config() -> Config {
@@ -216,9 +214,6 @@ fn the_status_screen_draws_the_four_sections_in_dams_order() {
     assert!(drawn.contains("example: pull failed"), "{drawn}");
 }
 
-/// The plan's rule for this screen: a row draws the mark its own change carries, and a row that
-/// carries none draws none. A mark taken from the section heading above it would say a remote's
-/// failed pull was staged.
 #[test]
 fn a_status_row_draws_its_own_mark_and_a_row_with_none_draws_none() {
     let harness = on_status();

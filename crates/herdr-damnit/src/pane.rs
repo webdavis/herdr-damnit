@@ -1,6 +1,3 @@
-//! The `open`, `toggle`, `focus` and `auto-open` actions. Each one resolves the plugin's pane in
-//! the current workspace, then drives the `herdr` CLI.
-
 use herdr_damnit_adapters::config::Placement;
 use herdr_damnit_adapters::{Config, herdr_cli as herdr, state};
 use herdr_damnit_domain::Views;
@@ -10,7 +7,6 @@ pub enum Mode {
     Open,
     Toggle,
     Focus,
-    /// A workspace gained focus: open the pane there when it is not open, and never take focus.
     AutoOpen,
 }
 
@@ -23,8 +19,6 @@ pub enum Decision {
     NothingToFocus,
 }
 
-/// Whether the opened pane takes the focus. An `auto-open` follows a workspace switch, so the pane
-/// the operator switched to keeps it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Focus {
     Take,
@@ -32,7 +26,6 @@ enum Focus {
 }
 
 impl Focus {
-    /// The flag `herdr plugin pane open` takes for it.
     fn as_flag(self) -> &'static str {
         match self {
             Self::Take => "--focus",
@@ -41,8 +34,6 @@ impl Focus {
     }
 }
 
-/// What an action does, given the pane this plugin last opened in the workspace and the panes the
-/// workspace has now. A remembered pane that is no longer live counts as no pane.
 pub fn decide(mode: Mode, remembered: Option<&str>, live: &[String]) -> Decision {
     let open_pane = remembered.filter(|pane| live.iter().any(|live| live == pane));
     match (mode, open_pane) {
@@ -54,15 +45,12 @@ pub fn decide(mode: Mode, remembered: Option<&str>, live: &[String]) -> Decision
     }
 }
 
-/// What to do when a remembered pane turns out not to be this plugin's: `herdr pane list` only
-/// proves a pane id is live in the workspace, not that it belongs to us, so `plugin pane
-/// focus`/`close` is herdr's own registry check and the one that can reject it.
 enum Recovery {
     RetryOpen,
     ReportGone,
 }
 
-fn recover(mode: Mode) -> Recovery {
+fn recovery_from_a_rejected_pane(mode: Mode) -> Recovery {
     match mode {
         Mode::Focus => Recovery::ReportGone,
         Mode::Open | Mode::Toggle | Mode::AutoOpen => Recovery::RetryOpen,
@@ -76,7 +64,6 @@ fn focus_of(mode: Mode) -> Focus {
     }
 }
 
-/// Run one action and report what it did.
 pub fn run(mode: Mode, config: &Config) -> Result<String, String> {
     let workspace = std::env::var("HERDR_WORKSPACE_ID")
         .map_err(|_| "no workspace context: run this action from inside herdr".to_string())?;
@@ -87,7 +74,7 @@ pub fn run(mode: Mode, config: &Config) -> Result<String, String> {
             Ok(_) => Ok(format!("focused {pane}")),
             Err(_) => {
                 state::forget_pane(&workspace);
-                match recover(mode) {
+                match recovery_from_a_rejected_pane(mode) {
                     Recovery::RetryOpen => open_and_remember(&workspace, config, focus_of(mode)),
                     Recovery::ReportGone => {
                         Ok(format!("no dam pane in {workspace}: {pane} is gone"))
@@ -109,8 +96,6 @@ pub fn run(mode: Mode, config: &Config) -> Result<String, String> {
     }
 }
 
-/// The `auto-open` event hook: a workspace gained focus, so open the pane there when the operator
-/// asked for that. It is off unless the config turns it on.
 pub fn auto_open(config: &Config) -> Result<String, String> {
     if !config.auto_open {
         return Ok("auto_open is off".to_string());
@@ -118,8 +103,6 @@ pub fn auto_open(config: &Config) -> Result<String, String> {
     run(Mode::AutoOpen, config)
 }
 
-/// The `view <n>` action: note which view was asked for, then make sure the pane is open, which
-/// is where that note is read.
 pub fn view(argument: &str, config: &Config) -> Result<String, String> {
     let number: usize = argument
         .parse()
@@ -136,8 +119,6 @@ pub fn view(argument: &str, config: &Config) -> Result<String, String> {
     })
 }
 
-/// Note the view the pane is to show, then open the pane. A failed open takes the note back, so a
-/// later unrelated `open` or `toggle` does not jump to a view nobody asked for.
 fn note_then_open(
     name: &str,
     request: &std::path::Path,
@@ -156,7 +137,7 @@ fn note_then_open(
 fn open_and_remember(workspace: &str, config: &Config, focus: Focus) -> Result<String, String> {
     let neighbor = std::env::var("HERDR_PANE_ID").unwrap_or_default();
     let pane = herdr::open_plugin_pane(workspace, &neighbor, focus.as_flag(), config)?;
-    let note = arrange_pane(&neighbor, config);
+    let note = resize_the_calling_pane_to_leave_the_configured_width(&neighbor, config);
     state::remember_pane(workspace, &pane);
     Ok(match note {
         Some(note) => format!("opened {pane}, {note}"),
@@ -164,22 +145,18 @@ fn open_and_remember(workspace: &str, config: &Config, focus: Focus) -> Result<S
     })
 }
 
-/// The calling pane's share of the tab once this pane has taken `width`: whatever is left.
-/// `herdr pane resize` moves the calling pane to this ratio to get there.
-fn leading_share(width: f32) -> f32 {
+fn calling_panes_share_after(width: f32) -> f32 {
     1.0 - width
 }
 
-/// Give the pane its configured width, which herdr's own open cannot do: it splits at an even
-/// ratio and takes no ratio of its own. This resizes the calling pane rather than the one just
-/// opened, since a same-tab `herdr pane move` is a no-op and a resize is the only call that
-/// actually changes the split. A refused resize leaves the pane at the even split and says so,
-/// because a pane at the wrong width still lists tasks.
-fn arrange_pane(neighbor: &str, config: &Config) -> Option<String> {
+fn resize_the_calling_pane_to_leave_the_configured_width(
+    neighbor: &str,
+    config: &Config,
+) -> Option<String> {
     if config.placement != Placement::Split || neighbor.is_empty() {
         return None;
     }
-    let target_ratio = leading_share(config.width?);
+    let target_ratio = calling_panes_share_after(config.width?);
     let direction = config.side.split_direction();
     match herdr::resize_leading_pane(neighbor, direction, target_ratio) {
         Ok(true) => None,
@@ -202,8 +179,8 @@ mod tests {
 
     #[test]
     fn the_calling_panes_share_is_the_rest_of_the_tab() {
-        assert_eq!(leading_share(0.3), 0.7);
-        assert_eq!(leading_share(0.7), 0.3);
+        assert_eq!(calling_panes_share_after(0.3), 0.7);
+        assert_eq!(calling_panes_share_after(0.7), 0.3);
     }
 
     #[test]
@@ -232,9 +209,7 @@ mod tests {
     }
 
     #[test]
-    fn a_pane_open_in_another_workspace_is_not_this_workspaces_pane() {
-        // The remembered pane is read per workspace, so a pane open elsewhere is simply absent
-        // here: toggle opens a second one rather than closing the far one or jumping to it.
+    fn a_pane_open_in_another_workspace_is_not_this_workspaces_pane_so_toggle_opens_a_second() {
         assert_eq!(
             decide(Mode::Toggle, None, &panes(&["w2:p1"])),
             Decision::Open
@@ -290,10 +265,22 @@ mod tests {
 
     #[test]
     fn a_failed_focus_or_close_retries_as_open_except_in_focus_mode() {
-        assert!(matches!(recover(Mode::Open), Recovery::RetryOpen));
-        assert!(matches!(recover(Mode::Toggle), Recovery::RetryOpen));
-        assert!(matches!(recover(Mode::AutoOpen), Recovery::RetryOpen));
-        assert!(matches!(recover(Mode::Focus), Recovery::ReportGone));
+        assert!(matches!(
+            recovery_from_a_rejected_pane(Mode::Open),
+            Recovery::RetryOpen
+        ));
+        assert!(matches!(
+            recovery_from_a_rejected_pane(Mode::Toggle),
+            Recovery::RetryOpen
+        ));
+        assert!(matches!(
+            recovery_from_a_rejected_pane(Mode::AutoOpen),
+            Recovery::RetryOpen
+        ));
+        assert!(matches!(
+            recovery_from_a_rejected_pane(Mode::Focus),
+            Recovery::ReportGone
+        ));
     }
 
     #[test]

@@ -1,6 +1,3 @@
-//! The draw loop: draw every tick, drain the job channel, poll for a key within the window the
-//! model asks for. Nothing here waits on `dam`.
-
 use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyEvent, KeyEventKind};

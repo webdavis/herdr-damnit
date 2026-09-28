@@ -1,18 +1,13 @@
-//! The status line's left half: what the pane is doing, the spinner while it does it, and how
-//! long it has been doing it for.
-
 use std::time::{Duration, Instant};
 
 use herdr_damnit_domain::IconSet;
 
 use super::App;
 
-const BRAILLE: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
-const PLAIN: [&str; 4] = ["|", "/", "-", "\\"];
+const BRAILLE_SPINNER: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
+const PLAIN_SPINNER: [&str; 4] = ["|", "/", "-", "\\"];
 
 impl App {
-    /// The header's left half. With an exclusive job running it is named; with only reads in
-    /// flight, they are counted.
     pub fn header(&self, now: Instant) -> String {
         let showing = self
             .screen
@@ -29,21 +24,19 @@ impl App {
         format!(
             "dam  {showing}  {} {what} {}",
             self.frame(),
-            elapsed_text(elapsed)
+            tenths_under_ten_seconds_then_whole_seconds(elapsed)
         )
     }
 
     fn frame(&self) -> &'static str {
         match self.config.icons() {
-            IconSet::NerdFont => BRAILLE[self.spinner % BRAILLE.len()],
-            IconSet::Ascii => PLAIN[self.spinner % PLAIN.len()],
+            IconSet::NerdFont => BRAILLE_SPINNER[self.spinner % BRAILLE_SPINNER.len()],
+            IconSet::Ascii => PLAIN_SPINNER[self.spinner % PLAIN_SPINNER.len()],
         }
     }
 }
 
-/// Whole tenths up to ten seconds and whole seconds after that, so the number stops flickering
-/// once a job is genuinely slow.
-fn elapsed_text(elapsed: Duration) -> String {
+fn tenths_under_ten_seconds_then_whole_seconds(elapsed: Duration) -> String {
     match elapsed.as_secs() < 10 {
         true => format!("{:.1}s", elapsed.as_secs_f32()),
         false => format!("{}s", elapsed.as_secs()),

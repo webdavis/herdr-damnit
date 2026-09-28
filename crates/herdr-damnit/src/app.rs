@@ -1,6 +1,3 @@
-//! The pane's model and its keys. Nothing here touches a terminal, so every key is tested by the
-//! argv it produced and the sentence it left in the status line.
-
 mod done;
 mod header;
 mod screen;
@@ -23,11 +20,9 @@ use herdr_damnit_domain::{
     message, rows,
 };
 
-/// The poll window while a job is in flight, which is what makes the spinner animate.
-const BUSY_WINDOW: Duration = Duration::from_millis(50);
+const BUSY_POLL_WINDOW: Duration = Duration::from_millis(50);
 
-/// The poll window with nothing in flight, so an idle pane costs what it always did.
-const IDLE_WINDOW: Duration = Duration::from_millis(200);
+const IDLE_POLL_WINDOW: Duration = Duration::from_millis(200);
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum After {
@@ -43,26 +38,15 @@ pub struct App {
     pub spinner: usize,
     pub config: Config,
     pub today: Date,
-    /// Why the pane will not draw rows at all. A refusal is the whole screen, because every screen
-    /// under it would be drawn from a `dam` this pane does not agree with.
     pub refusal: Option<String>,
-    /// The version the handshake read, once it has.
     pub version: Option<DamVersion>,
-    /// Whether both handshake reads were accepted, so screen reads may start.
-    ready: bool,
-    /// Whether the handshake's warning has already reached the status line, so a newer `dam` is
-    /// named once at open rather than on every read.
-    warned: bool,
-    /// The objects of the showing view, which the list rows are rebuilt from.
+    handshake_accepted: bool,
+    newer_dam_warning_shown: bool,
     objects: Vec<Object>,
-    /// The completed objects the Done screen draws.
     done_objects: Vec<Object>,
-    /// The day each completed object was completed on, from the commit that flipped it.
-    completed: HashMap<Oid, Date>,
-    /// Whether the Done screen's two reads have been made, so entering it a second time costs
-    /// nothing.
-    read_done: bool,
-    read_log: bool,
+    completion_days: HashMap<Oid, Date>,
+    done_list_requested: bool,
+    done_log_requested: bool,
     jobs: Jobs,
 }
 
@@ -79,22 +63,21 @@ impl App {
             today,
             refusal: None,
             version: None,
-            ready: false,
-            warned: false,
+            handshake_accepted: false,
+            newer_dam_warning_shown: false,
             objects: Vec::new(),
             done_objects: Vec::new(),
-            completed: HashMap::new(),
-            read_done: false,
-            read_log: false,
+            completion_days: HashMap::new(),
+            done_list_requested: false,
+            done_log_requested: false,
             jobs,
         }
     }
 
-    /// 50 ms while any job is in flight, 200 ms when none is.
     pub fn poll_window(&self) -> Duration {
         match self.jobs.in_flight() {
-            0 => IDLE_WINDOW,
-            _ => BUSY_WINDOW,
+            0 => IDLE_POLL_WINDOW,
+            _ => BUSY_POLL_WINDOW,
         }
     }
 
@@ -106,7 +89,6 @@ impl App {
         }
     }
 
-    /// Drain the job channel, apply every completion, step the spinner. Never blocks.
     pub fn tick(&mut self, _now: Instant) {
         if self.jobs.in_flight() > 0 {
             self.spinner = self.spinner.wrapping_add(1);
@@ -116,7 +98,6 @@ impl App {
         }
     }
 
-    /// Handle one key. Never blocks and never spawns a thread of its own.
     pub fn key(&mut self, key: KeyEvent) -> After {
         match key.code {
             KeyCode::Tab => self.show(self.screen.next()),
@@ -125,16 +106,15 @@ impl App {
         }
     }
 
-    /// Draw another screen, reading what it needs the first time it is entered.
     fn show(&mut self, screen: Screen) -> After {
         self.screen = screen;
-        if screen == Screen::Done && self.ready {
-            if !self.read_done {
-                self.read_done = true;
+        if screen == Screen::Done && self.handshake_accepted {
+            if !self.done_list_requested {
+                self.done_list_requested = true;
                 self.submit(JobKind::ReadDone, argv::list(DONE_QUERY));
             }
-            if !self.read_log {
-                self.read_log = true;
+            if !self.done_log_requested {
+                self.done_log_requested = true;
                 self.submit(JobKind::ReadLog, argv::log());
             }
         }
@@ -150,31 +130,29 @@ impl App {
             ));
             return;
         }
-        if self.handshook(&completion) {
+        if self.applied_as_handshake(&completion) {
             return;
         }
-        if let Err(said) = self.read(&completion) {
+        if let Err(said) = self.read_into_model(&completion) {
             self.message = said;
             return;
         }
         for kind in completion.follow_up {
-            let argv = self.argv_of(&kind);
+            let argv = self.follow_up_argv(&kind);
             self.submit(kind, argv);
         }
     }
 
-    /// The handshake's own two completions, which decide whether the pane draws at all. Reports
-    /// whether this completion was one of them.
-    fn handshook(&mut self, completion: &Completion) -> bool {
+    fn applied_as_handshake(&mut self, completion: &Completion) -> bool {
         match completion.kind {
             JobKind::Version => {
                 match check_version(&completion.finished.stdout) {
                     Handshake::Refuse(said) => self.refusal = Some(said),
                     Handshake::Ready { version, warning } => {
                         self.version = Some(version);
-                        if let (Some(warning), false) = (warning, self.warned) {
+                        if let (Some(warning), false) = (warning, self.newer_dam_warning_shown) {
                             self.message = warning;
-                            self.warned = true;
+                            self.newer_dam_warning_shown = true;
                         }
                         self.submit(JobKind::Handshake, argv::status());
                     }
@@ -191,7 +169,7 @@ impl App {
                         }
                         let query = self.views.current().query.clone();
                         self.submit(JobKind::ReadList, argv::list(&query));
-                        self.ready = true;
+                        self.handshake_accepted = true;
                         self.show(self.screen);
                     }
                 }
@@ -201,9 +179,7 @@ impl App {
         }
     }
 
-    /// Put one successful document into the model. A document that will not parse is the pane's
-    /// own failure rather than `dam`'s.
-    fn read(&mut self, completion: &Completion) -> Result<(), String> {
+    fn read_into_model(&mut self, completion: &Completion) -> Result<(), String> {
         let unreadable = || message(&Failure::Unreadable);
         match &completion.kind {
             JobKind::ReadStatus => self.read_status(&completion.finished.stdout)?,
@@ -217,7 +193,7 @@ impl App {
                     wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
             }
             JobKind::ReadLog => {
-                self.completed =
+                self.completion_days =
                     wire::completions(&completion.finished.stdout).map_err(|_| unreadable())?;
             }
             JobKind::Exclusive(SyncKind::Push) => {
@@ -233,15 +209,12 @@ impl App {
         Ok(())
     }
 
-    /// Put one `dam status --json` into the model and rebuild the rows its marks belong to.
     fn read_status(&mut self, stdout: &str) -> Result<(), String> {
         self.stage = wire::stage(stdout).map_err(|_| message(&Failure::Unreadable))?;
         self.redraw_list();
         Ok(())
     }
 
-    /// Rebuild the list rows from the objects and the staging marks, keeping the cursor on the
-    /// object it was on.
     fn redraw_list(&mut self) {
         let style = RowStyle {
             icons: self.config.icons(),
@@ -250,8 +223,7 @@ impl App {
         self.list.replace(rows(&self.objects, &self.stage, style));
     }
 
-    /// The argv of a read the job table asked for on its own, after a write or a sync.
-    fn argv_of(&self, kind: &JobKind) -> Vec<String> {
+    fn follow_up_argv(&self, kind: &JobKind) -> Vec<String> {
         match kind {
             JobKind::ReadList => argv::list(&self.views.current().query),
             JobKind::ReadDone => argv::list(DONE_QUERY),
