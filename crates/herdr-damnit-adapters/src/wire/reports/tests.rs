@@ -1,5 +1,3 @@
-//! The status document, the log walk and the two sync summaries.
-
 use super::*;
 use herdr_damnit_domain::{Oid, Op};
 
@@ -60,8 +58,6 @@ fn an_operation_word_becomes_its_own_variant() {
     assert_eq!(ops, vec![Op::Create, Op::Update, Op::Delete]);
 }
 
-/// Without `--full` a change names its own subject; with it the subject is on the embedded object
-/// instead, and the Status screen needs a line either way.
 #[test]
 fn a_change_from_a_full_status_takes_its_subject_off_the_object_it_embeds() {
     let document = r#"{"staged":[{"oid":"1","op":"create","before":null,
@@ -96,8 +92,6 @@ fn a_conflict_and_a_notice_carry_the_text_the_status_screen_draws() {
     );
 }
 
-/// A `dam` that publishes the objects behind its unpushed commits gives every one of them its
-/// unpushed mark.
 #[test]
 fn an_unpushed_remote_that_names_its_objects_carries_them() {
     let document = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],
@@ -107,9 +101,6 @@ fn an_unpushed_remote_that_names_its_objects_carries_them() {
     assert!(stage.is_unpushed(&herdr_damnit_domain::Oid::new("5d6e7f8")));
 }
 
-/// The unpushed row `dam` settled on carries `oids`, the distinct objects its unpushed commits
-/// touch, and `commit_ids`, the commits themselves. This pane reads the objects and ignores the
-/// commit ids, and reading the wrong one of the two would give every row the wrong mark.
 #[test]
 fn an_unpushed_row_reads_the_objects_and_ignores_the_commit_ids_beside_them() {
     let document = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],
@@ -141,8 +132,6 @@ fn a_removed_upstream_notice_reads_as_a_sentence_rather_than_a_kind() {
     );
 }
 
-/// Each of the five kinds `dam` 0.2.0 publishes reads as a sentence of its own, including the one
-/// that carries no `why` at all.
 #[test]
 fn every_notice_kind_dam_publishes_reads_as_a_sentence() {
     let document = r#"{"staged":[],"unstaged":[],"conflicts":[],"unpushed":[],"notices":[
@@ -171,7 +160,6 @@ fn every_notice_kind_dam_publishes_reads_as_a_sentence() {
     );
 }
 
-/// A notice kind `dam` adds later still reaches the screen, named rather than dropped.
 #[test]
 fn a_notice_kind_this_pane_has_not_heard_of_still_reaches_the_screen() {
     let document = r#"{"staged":[],"unstaged":[],"conflicts":[],"unpushed":[],
@@ -199,7 +187,6 @@ fn a_log_names_the_day_each_completion_was_committed_on() {
     );
 }
 
-/// A `dam` that names no completion instant leaves the commit's own day as the answer.
 #[test]
 fn a_completion_with_no_instant_of_its_own_takes_the_day_it_was_committed() {
     let document = r#"{"commits":[
@@ -212,8 +199,6 @@ fn a_completion_with_no_instant_of_its_own_takes_the_day_it_was_committed() {
     );
 }
 
-/// A change that touched something other than `done` is not a completion, even on a task that was
-/// already complete.
 #[test]
 fn a_later_edit_of_a_completed_task_is_not_a_second_completion() {
     let document = r#"{"commits":[
@@ -230,8 +215,6 @@ fn a_later_edit_of_a_completed_task_is_not_a_second_completion() {
     );
 }
 
-/// Only the commit that flipped `done` is the completion, so a later edit of a task that is
-/// already complete leaves the original day standing.
 #[test]
 fn an_edit_after_a_completion_does_not_move_the_completion_day() {
     let document = r#"{"commits":[
@@ -246,8 +229,6 @@ fn an_edit_after_a_completion_does_not_move_the_completion_day() {
     );
 }
 
-/// `dam edit --undone` commits a change that names `done` and leaves the task open, which is the
-/// opposite of a completion and must not date one.
 #[test]
 fn a_reopen_names_done_and_is_not_a_completion() {
     let document = r#"{"commits":[
@@ -270,10 +251,8 @@ fn a_task_that_was_never_completed_has_no_date() {
     );
 }
 
-/// The captured log of a real completion, which is the only proof the walk reads the shape `dam`
-/// 0.2.0 actually prints rather than one this pane invented.
 #[test]
-fn the_captured_log_of_a_completion_names_exactly_one_completed_object() {
+fn the_captured_log_of_a_real_completion_names_exactly_one_completed_object() {
     let completed = completions(&fixture("log-completion.json")).expect("it parsed");
     assert_eq!(completed.len(), 1, "{completed:?}");
 }
@@ -298,8 +277,6 @@ fn the_sync_summaries_are_rebuilt_from_json_rather_than_read_from_human_output()
     );
 }
 
-/// A push to every remote answers per remote, and the status line is one line, so the summaries
-/// are joined rather than stacked.
 #[test]
 fn two_remotes_are_two_summaries_on_one_line() {
     let document = r#"{"remotes":[

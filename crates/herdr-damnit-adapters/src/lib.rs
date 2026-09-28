@@ -1,5 +1,3 @@
-//! Everything the pane touches outside itself: `dam`, `herdr`, the config, the state and the clock.
-
 mod clock;
 pub mod config;
 mod dam_runner;

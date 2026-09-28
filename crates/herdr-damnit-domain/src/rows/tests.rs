@@ -32,7 +32,7 @@ fn task(oid: &str, path: &str, subject: &str) -> Object {
             priority: Priority::default(),
             due: None,
             deadline: None,
-            attached: None,
+            attached_event: None,
         }),
         event: None,
     }
@@ -102,10 +102,8 @@ fn the_marks_lead_the_line_in_one_order() {
     assert_eq!(rows[1].text(), "  + ! < 09-18 ~ pay the rent @2");
 }
 
-/// The spec's List mock draws an object whose commits have not reached the remote with the up
-/// arrow leading, which is the staging column `mark_of` fills.
 #[test]
-fn an_unpushed_object_draws_the_up_arrow_in_the_staging_column() {
+fn an_object_whose_commits_have_not_reached_the_remote_leads_with_the_up_arrow() {
     let object = task("1", "home", "refresh the roster row");
 
     let rows = rows(&[object], &OneMark(Oid::new("1"), Mark::Unpushed), style());

@@ -1,6 +1,3 @@
-//! The `doctor` action: prove `dam` answers at the configured argv and that one
-//! `dam status --json` carries every key the pane reads.
-
 use std::time::Duration;
 
 use herdr_damnit_adapters::{Config, ProcessDamRunner};
@@ -9,14 +6,17 @@ use herdr_damnit_domain::READ_DEADLINE_SECONDS;
 
 pub fn run(config: &Config) -> Result<String, String> {
     let runner = ProcessDamRunner::new(config.dam.clone());
-    let version = ask(&runner, &herdr_damnit_application::argv::version())?;
-    let status = ask(&runner, &herdr_damnit_application::argv::status())?;
+    let version =
+        ask_waiting_within_the_read_deadline(&runner, &herdr_damnit_application::argv::version())?;
+    let status =
+        ask_waiting_within_the_read_deadline(&runner, &herdr_damnit_application::argv::status())?;
     report_from(&version, &status)
 }
 
-/// One `dam` call, waited out. The pane never blocks on one; a one-shot command has nothing else
-/// to do while it runs, and the runner's own deadline is what bounds the wait.
-fn ask(runner: &ProcessDamRunner, argv: &[String]) -> Result<String, String> {
+fn ask_waiting_within_the_read_deadline(
+    runner: &ProcessDamRunner,
+    argv: &[String],
+) -> Result<String, String> {
     let job = runner
         .spawn_with_deadline(argv, Some(Duration::from_secs(READ_DEADLINE_SECONDS)))
         .map_err(|_| herdr_damnit_domain::message(&herdr_damnit_domain::Failure::NotInstalled))?;
@@ -27,8 +27,6 @@ fn ask(runner: &ProcessDamRunner, argv: &[String]) -> Result<String, String> {
     Ok(finished.stdout)
 }
 
-/// The report, or the refusal the handshake would have drawn. Both are `dam`'s own words about
-/// itself, so the check is the pane's own handshake rather than a second opinion about it.
 fn report_from(version_output: &str, status_output: &str) -> Result<String, String> {
     let (version, warning) = match check_version(version_output) {
         Handshake::Ready { version, warning } => (version, warning),

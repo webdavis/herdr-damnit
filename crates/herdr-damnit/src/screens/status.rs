@@ -1,7 +1,3 @@
-//! The Status screen: the four sections `dam status --json` reports, in the order `dam`'s own
-//! human output uses. Every row's mark is the one its change carries, never one inferred from the
-//! section it sits under.
-
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -13,8 +9,7 @@ use crate::screens::list::spans;
 use crate::theme::Palette;
 use herdr_damnit_domain::{Mark, Segment, Slot, StatusRow};
 
-/// The indent every marked row takes, with the mark drawn inside it.
-const INDENT: &str = "  ";
+const MARKED_ROW_INDENT: &str = "  ";
 
 pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, palette: &Palette) {
     frame.render_widget(
@@ -47,9 +42,6 @@ fn item(
     ListItem::new(Line::from(spans(&segments, palette, width as usize)))
 }
 
-/// One row as its mark and its text. A mark sits inside the row's own indent, which is where the
-/// spec's Status screen draws it. A row carrying no mark draws its text as the staging model wrote
-/// it, so the mark column is never filled in from the heading above it.
 fn marked(mark: Option<Mark>, text: &str, icons: herdr_damnit_domain::IconSet) -> Vec<Segment> {
     let Some(mark) = mark else {
         return vec![Segment {
@@ -59,7 +51,7 @@ fn marked(mark: Option<Mark>, text: &str, icons: herdr_damnit_domain::IconSet) -
     };
     vec![
         Segment {
-            text: INDENT.to_string(),
+            text: MARKED_ROW_INDENT.to_string(),
             slot: Slot::Text,
         },
         Segment {

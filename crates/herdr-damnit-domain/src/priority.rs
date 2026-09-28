@@ -1,6 +1,3 @@
-//! A task's priority the way `dam` numbers it: 1 is the most urgent and 4 is the default, which
-//! carries no mark at all.
-
 const HIGHEST: u8 = 1;
 const LOWEST: u8 = 4;
 
@@ -26,7 +23,6 @@ impl Priority {
         self.0 == LOWEST
     }
 
-    /// The next priority `p` cycles to: 4, 3, 2, 1 and back to 4.
     pub fn next(self) -> Self {
         match self.0 {
             HIGHEST => Self(LOWEST),

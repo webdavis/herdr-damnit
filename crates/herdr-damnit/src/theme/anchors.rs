@@ -1,13 +1,10 @@
-//! The colours each theme publishes, as the pane's eight anchors plus the cyan slot. Every value
-//! is the theme's own: taken from its published palette, under whichever of cyan, teal or aqua that
-//! theme calls it.
-
-// This file is a color table; 6-digit `0xRRGGBB` literals read better grouped as one value.
-#![allow(clippy::unreadable_literal)]
+#![allow(
+    clippy::unreadable_literal,
+    reason = "a color table, where a six-digit 0xRRGGBB literal reads better as one value"
+)]
 
 use ratatui::style::Color;
 
-/// The anchor colors a theme names; the dim step is computed from these.
 #[derive(Clone, Copy, Debug)]
 pub struct Anchors {
     pub base: Color,
@@ -73,7 +70,6 @@ pub const ROSE_PINE_DAWN: Anchors = anchors(
     0xfaf4ed, 0x575279, 0xb4637a, 0x56949f, 0xea9d34, 0xd7827e, 0x907aa9, 0x286983, 0x56949f,
 );
 
-/// Build `Anchors` from `0xRRGGBB` literals: base, text, then the seven accents.
 #[allow(clippy::too_many_arguments)]
 pub const fn anchors(
     base: u32,

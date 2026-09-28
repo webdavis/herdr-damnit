@@ -1,7 +1,3 @@
-//! What the pane needs from the world outside it: a way to run `dam`, a way to call `herdr`, and
-//! a clock. Each has exactly one production implementation, in the adapters crate.
-
-/// One finished `dam` run, as the adapter's thread reports it.
 #[derive(Debug)]
 pub struct Finished {
     pub code: Option<i32>,
@@ -16,7 +12,6 @@ pub enum SpawnError {
     Io(String),
 }
 
-/// A `dam` run in flight: the handle that signals it, and the one result it will send.
 pub struct RunningJob {
     pub cancel: Box<dyn Fn() + Send + Sync>,
     pub results: std::sync::mpsc::Receiver<Finished>,

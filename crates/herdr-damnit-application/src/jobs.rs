@@ -1,6 +1,3 @@
-//! The jobs in flight. One `dam` call per job, at most one exclusive job at a time, at most one
-//! read of each kind, and a completion that re-reads rather than patching the model.
-
 use std::sync::mpsc::TryRecvError;
 use std::time::{Duration, Instant};
 
@@ -27,13 +24,9 @@ impl SyncKind {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JobKind {
-    /// `dam --version`, the first call the pane makes.
     Version,
-    /// The one `dam status --json` the handshake reads, which is judged on its five keys before
-    /// any screen is drawn from it.
     Handshake,
     ReadList,
-    /// `dam ls done --json`, the Done screen's own list.
     ReadDone,
     ReadStatus,
     ReadShow(Oid),
@@ -43,8 +36,6 @@ pub enum JobKind {
 }
 
 impl JobKind {
-    /// Whether a newer job of this kind supersedes an older one. Two writes are two different
-    /// intentions and both run; two reads of one kind are the same question asked twice.
     fn supersedes_its_own_kind(&self) -> bool {
         matches!(
             self,
@@ -52,8 +43,6 @@ impl JobKind {
         )
     }
 
-    /// The reads a completion of this kind enqueues. The rows come from the store rather than from
-    /// a guess at what the write did.
     fn follow_up(&self) -> Vec<JobKind> {
         match self {
             Self::Write | Self::Exclusive(_) => vec![Self::ReadStatus, Self::ReadList],
@@ -89,8 +78,6 @@ struct Running {
 
 pub struct Jobs {
     runner: Box<dyn DamRunner>,
-    /// What a job's start is read from, so the header's timer is driven by a literal instant in a
-    /// test rather than by whatever the machine was doing.
     clock: Box<dyn Clock>,
     running: Vec<Running>,
     next: u64,
@@ -132,7 +119,6 @@ impl Jobs {
         Submitted::Started(id)
     }
 
-    /// Every job that has answered since the last call, without blocking on the ones that have not.
     pub fn drain(&mut self) -> Vec<Completion> {
         let mut completions = Vec::new();
         let mut finished = Vec::new();
@@ -165,9 +151,8 @@ impl Jobs {
         })
     }
 
-    /// Cancel the job the header names: the exclusive one when there is one, the oldest otherwise.
     pub fn cancel_current(&mut self) -> bool {
-        let Some(running) = self.current() else {
+        let Some(running) = self.exclusive_else_oldest() else {
             return false;
         };
         (running.job.cancel)();
@@ -175,11 +160,11 @@ impl Jobs {
     }
 
     pub fn elapsed_of_current(&self, now: Instant) -> Option<Duration> {
-        self.current()
+        self.exclusive_else_oldest()
             .map(|running| now.saturating_duration_since(running.started))
     }
 
-    fn current(&self) -> Option<&Running> {
+    fn exclusive_else_oldest(&self) -> Option<&Running> {
         self.running
             .iter()
             .find(|job| matches!(job.kind, JobKind::Exclusive(_)))

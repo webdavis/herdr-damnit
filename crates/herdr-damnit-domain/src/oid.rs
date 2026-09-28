@@ -1,7 +1,4 @@
-//! An object's identity as `dam` prints it. Rows, the cursor and every write argv name one.
-
-/// The number of characters `dam` itself shows a prefix in, which is what a row has room for.
-const SHORT: usize = 7;
+const DAM_SHORT_PREFIX_LENGTH: usize = 7;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Oid(String);
@@ -15,9 +12,8 @@ impl Oid {
         &self.0
     }
 
-    /// The prefix a row draws, or the whole oid when it is shorter than that.
     pub fn short(&self) -> &str {
-        match self.0.char_indices().nth(SHORT) {
+        match self.0.char_indices().nth(DAM_SHORT_PREFIX_LENGTH) {
             Some((at, _)) => &self.0[..at],
             None => &self.0,
         }

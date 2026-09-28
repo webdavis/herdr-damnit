@@ -1,12 +1,7 @@
-//! The rows the pane draws: every object of the showing view grouped by its path, with the marks
-//! leading so the subject is what gets cut when the pane is narrow.
-
 use crate::{Date, DueState, IconSet, Mark, Object, Oid, Slot, due_state, short};
 
-/// The heading an object with no path of its own is grouped under.
-const NO_PATH: &str = "(no path)";
+const NO_PATH_HEADING: &str = "(no path)";
 
-/// A run of a row drawn in one colour.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Segment {
     pub text: String,
@@ -16,8 +11,6 @@ pub struct Segment {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObjectRow {
     pub oid: Oid,
-    /// The object's own subject, without the indentation and the marks, which is what a brief
-    /// handed to an agent names it by.
     pub subject: String,
     pub segments: Vec<Segment>,
 }
@@ -36,8 +29,6 @@ impl Row {
         }
     }
 
-    /// The whole line as plain text, which is what a width is measured over and what a test
-    /// compares.
     pub fn text(&self) -> String {
         match self {
             Self::Heading(text) => text.clone(),
@@ -46,8 +37,6 @@ impl Row {
     }
 }
 
-/// The staging mark an oid carries. The Status model implements it, so a row builder needs no
-/// second read of `dam status`.
 pub trait StagingMarks {
     fn mark_of(&self, oid: &Oid) -> Option<Mark>;
 }
@@ -94,8 +83,8 @@ pub fn rows(objects: &[Object], marks: &dyn StagingMarks, style: RowStyle) -> Ve
 }
 
 fn path_segments(path: &str) -> Vec<&str> {
-    if path == NO_PATH {
-        return vec![NO_PATH];
+    if path == NO_PATH_HEADING {
+        return vec![NO_PATH_HEADING];
     }
     path.split('/')
         .filter(|segment| !segment.is_empty())
@@ -104,7 +93,7 @@ fn path_segments(path: &str) -> Vec<&str> {
 
 fn heading(object: &Object) -> &str {
     match object.path.trim_end_matches('/') {
-        "" => NO_PATH,
+        "" => NO_PATH_HEADING,
         path => path,
     }
 }
@@ -115,14 +104,14 @@ fn object_row(object: &Object, marks: &dyn StagingMarks, style: &RowStyle, depth
         slot: Slot::Text,
     }];
     if let Some(mark) = marks.mark_of(&object.oid) {
-        push(&mut segments, mark, style.icons);
+        push_mark_and_gap(&mut segments, mark, style.icons);
     }
     if let Some(mark) = Mark::of_priority(object.priority()) {
-        push(&mut segments, mark, style.icons);
+        push_mark_and_gap(&mut segments, mark, style.icons);
     }
     let state = due_state(object.due(), style.today);
     if let Some(mark) = Mark::of_due(state) {
-        push(&mut segments, mark, style.icons);
+        push_mark_and_gap(&mut segments, mark, style.icons);
         if let (Some(date), DueState::Overdue | DueState::Upcoming) = (object.due(), state) {
             segments.push(Segment {
                 text: format!("{} ", short(date)),
@@ -131,7 +120,7 @@ fn object_row(object: &Object, marks: &dyn StagingMarks, style: &RowStyle, depth
         }
     }
     if object.recurrence.is_some() {
-        push(&mut segments, Mark::Recurring, style.icons);
+        push_mark_and_gap(&mut segments, Mark::Recurring, style.icons);
     }
     segments.push(Segment {
         text: object.subject.clone(),
@@ -151,8 +140,7 @@ fn object_row(object: &Object, marks: &dyn StagingMarks, style: &RowStyle, depth
     })
 }
 
-/// A mark and the space that separates it from the next one.
-fn push(segments: &mut Vec<Segment>, mark: Mark, icons: IconSet) {
+fn push_mark_and_gap(segments: &mut Vec<Segment>, mark: Mark, icons: IconSet) {
     segments.push(Segment {
         text: format!("{} ", mark.glyph(icons)),
         slot: mark.slot(),

@@ -1,9 +1,5 @@
-//! Where a date sits against today, and the two shapes the pane draws one in. The day is handed
-//! in rather than read from the clock, which is what keeps a test from depending on when it runs.
-
 pub use jiff::civil::Date;
 
-/// Where a task's due date sits against today.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DueState {
     Overdue,
@@ -21,21 +17,16 @@ pub fn due_state(due: Option<Date>, today: Date) -> DueState {
     }
 }
 
-/// The length of the `YYYY-MM-DD` every `dam` date and timestamp leads with.
-const CIVIL_DATE: usize = 10;
+const LEADING_YYYY_MM_DD_WIDTH: usize = 10;
 
-/// A `dam` date or timestamp read down to the civil day it names. The day is the text's own
-/// leading `YYYY-MM-DD`, so a timestamp names the same day whatever offset it carries.
 pub fn parse_date(text: &str) -> Option<Date> {
-    text.get(..CIVIL_DATE)?.parse::<Date>().ok()
+    text.get(..LEADING_YYYY_MM_DD_WIDTH)?.parse::<Date>().ok()
 }
 
-/// The `MM-DD` a row draws beside a due mark.
 pub fn short(date: Date) -> String {
     format!("{:02}-{:02}", date.month(), date.day())
 }
 
-/// The `YYYY-MM-DD` the Detail screen and the Done screen draw.
 pub fn long(date: Date) -> String {
     format!("{:04}-{:02}-{:02}", date.year(), date.month(), date.day())
 }
@@ -82,9 +73,6 @@ mod tests {
         );
     }
 
-    /// `dam` writes a date as `YYYY-MM-DD` and a timestamp as that plus a time, so the leading ten
-    /// characters are the whole grammar. A date spelled any other width is no date here, whatever
-    /// else could read it.
     #[test]
     fn a_date_that_is_not_ten_characters_wide_is_no_date() {
         assert_eq!(parse_date("20260920"), None);

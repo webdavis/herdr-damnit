@@ -1,6 +1,3 @@
-//! The Done screen: completed objects, newest completion first, the date leading each row so the
-//! dates line up down the pane.
-
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -12,8 +9,6 @@ use crate::screens::list::spans;
 use crate::theme::Palette;
 use herdr_damnit_domain::Row;
 
-/// What an empty Done screen says, so a store with nothing completed in it is distinguishable
-/// from a read that has not answered yet.
 const EMPTY: &str = "nothing completed yet";
 
 pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, palette: &Palette) {

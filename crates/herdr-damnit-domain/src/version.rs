@@ -1,23 +1,15 @@
-//! The version of `dam` the pane was written against, and what to do about the one it found.
-//! Below 1.0 the minor is the breaking axis, so that is the number the two rules compare.
-
-/// The lowest version whose command surface this pane was written against. 0.2 is where the error
-/// document, exit 4 for every refusal, and a change document with no embedded object arrived.
 pub const DAM_MINIMUM: DamVersion = DamVersion {
     major: 0,
     minor: 2,
     patch: 0,
 };
 
-/// The highest version this pane was tested against.
-pub const DAM_KNOWN: DamVersion = DamVersion {
+pub const DAM_HIGHEST_TESTED: DamVersion = DamVersion {
     major: 0,
     minor: 2,
     patch: 0,
 };
 
-/// The version the discard key is gated on. `dam restore` ships in 0.2.0, the same release that
-/// sets the floor, so the gate is met by every `dam` the pane agrees to draw against.
 pub const DAM_RESTORE: DamVersion = DamVersion {
     major: 0,
     minor: 2,
@@ -44,7 +36,6 @@ pub enum Verdict {
     Refuse(String),
 }
 
-/// `dam --version` prints `dam <major>.<minor>.<patch>`, which is clap's standard line.
 pub fn parse_version(line: &str) -> Option<DamVersion> {
     let number = line.trim().strip_prefix("dam ")?.trim();
     let mut parts = number.split('.');
@@ -57,6 +48,10 @@ pub fn parse_version(line: &str) -> Option<DamVersion> {
     parts.next().is_none().then_some(version)
 }
 
+fn breaking_release(version: DamVersion) -> (u32, u32) {
+    (version.major, version.minor)
+}
+
 pub fn verdict(found: DamVersion) -> Verdict {
     if found < DAM_MINIMUM {
         return Verdict::Refuse(format!(
@@ -65,7 +60,7 @@ pub fn verdict(found: DamVersion) -> Verdict {
             DAM_MINIMUM.major, DAM_MINIMUM.minor
         ));
     }
-    if (found.major, found.minor) > (DAM_KNOWN.major, DAM_KNOWN.minor) {
+    if breaking_release(found) > breaking_release(DAM_HIGHEST_TESTED) {
         return Verdict::Warn(format!(
             "dam {found} is newer than this pane knows; some keys may be refused."
         ));
@@ -130,14 +125,11 @@ mod tests {
     #[test]
     fn a_newer_patch_of_a_known_minor_says_nothing() {
         assert!(matches!(verdict(at(0, 2, 7)), Verdict::Fine));
-        assert!(matches!(verdict(DAM_KNOWN), Verdict::Fine));
+        assert!(matches!(verdict(DAM_HIGHEST_TESTED), Verdict::Fine));
     }
 
-    /// `dam restore` ships in the same 0.2.0 that sets the floor, so every `dam` the pane agrees to
-    /// draw against clears the gate. The gate stays because the key it guards is destructive and
-    /// the day a floor moves is not the day to rediscover that.
     #[test]
-    fn every_dam_the_pane_accepts_clears_the_restore_gate() {
+    fn every_dam_the_pane_accepts_clears_the_restore_gate_the_destructive_discard_key_keeps() {
         assert!(DAM_MINIMUM >= DAM_RESTORE);
         assert!(at(0, 2, 0) >= DAM_RESTORE);
         assert!(at(0, 2, 9) >= DAM_RESTORE);

@@ -15,6 +15,9 @@ switch with a picker or a number key. The editing keys follow.
 herdr plugin install webdavis/herdr-damnit
 ```
 
+It needs herdr 0.7.5 or later: plugin panes and their registry arrived in 0.7.0, and `S` reads the
+`pane_id`, `workspace_id` and `agent` fields of `herdr agent list`, which herdr documents from 0.7.5.
+
 The install step builds the binary into `bin/herdr-damnit` with cargo, so a Rust toolchain is
 needed. A local checkout is linked instead, and builds itself:
 
@@ -25,24 +28,7 @@ herdr plugin link .
 
 ## The token
 
-The plugin never stores a token and never reads one from a file. Configure one of two
-indirections in `config.toml` in the plugin's config directory (`herdr plugin config-dir
-herdr-damnit` prints it):
-
-```toml
-# A command whose standard output is the token, for example a password manager CLI.
-token_command = ["my-vault-cli", "show", "--field", "token", "Todoist API Token"]
-
-# Or the name of an environment variable holding it.
-token_env = "TODOIST_API_TOKEN"
-```
-
-`token_command` wins when both are set. Neither key has a default, so with neither set the plugin
-refuses to run rather than guessing where a token lives. The token is held in a type with no
-`Display` and a redacted `Debug`, and no message the plugin prints carries its value, its length
-or any part of it: a failing `token_command` is reported by its program name alone.
-
-Get a token from Todoist under Settings, Integrations, Developer.
+The plugin holds no credential and its config has no key that names one: the token is `dam`'s.
 
 ## Actions
 
@@ -72,20 +58,22 @@ herdr plugin action invoke doctor --plugin herdr-damnit
 
 ## Configuration
 
+The config is `config.toml` in the plugin's config directory (`herdr plugin config-dir
+herdr-damnit` prints it). A missing file is the default configuration.
+
 | Key             | Default   | Allowed values                      | Meaning                                                 |
 | --------------- | --------- | ----------------------------------- | ------------------------------------------------------- |
-| `token_command` | none      | any command                         | argv of a command whose standard output is the token    |
-| `token_env`     | none      | any variable name                   | name of an environment variable holding the token       |
+| `dam`           | `["dam"]` | an argv whose first word is not blank | the command the pane runs as `dam`, each call's own arguments following it |
 | `placement`     | `"split"` | `overlay`, `split`, `tab`, `zoomed` | how `open` and `toggle` place the pane                  |
 | `side`          | `"right"` | `right`, `down`                     | which side of the calling pane a `split` takes          |
 | `width`         | none      | a fraction above 0 and below 1      | the share of the tab the pane takes                     |
 | `default_view`  | none      | a view name                         | the view the pane opens on                              |
 | `auto_open`     | `false`   | `true`, `false`                     | whether focusing a workspace opens the pane there       |
-| `editor`        | `nvim`    | argv, or `[]` for none              | the editor `e` enters on a task, in this pane           |
 | `theme`         | `"catppuccin"` | a herdr theme name             | the palette the pane paints with                        |
 | `icons`         | `"nerd-font"` | `nerd-font`, `ascii`            | which set of marks a task line carries                  |
-| `refresh_seconds` | `300`   | whole seconds, `0` to turn it off   | how often the pane reads the API on its own             |
-| `[[views]]`     | none      | `name` and `filter`                 | the named filter views, in the order they are written   |
+| `refresh_seconds` | `300`   | whole seconds, `0` to turn it off   | how often the pane reads `dam` on its own; `0` still leaves `R` and the read after every write |
+| `handoff_label` | `"handed-off"` | any label, `""` for none       | the label a successful hand-off to the agent writes on the object |
+| `[[views]]`     | none      | `name` and `query`                  | the named views, each a query in `dam`'s grammar, which `dam` resolves against its saved filters first; numbered after the open list in the order they are written |
 
 An unrecognized `placement` or `side` is a config parse error naming the values above, and so is a
 `width` that is not a share of the tab, a `default_view` no view answers to, or a `theme` name no
@@ -447,6 +435,11 @@ cargo test --workspace
 
 The tests never reach Todoist: the client is proven against a loopback HTTP double, one canned
 response per case.
+
+The `dam` documents the adapters read are fixtures in `crates/herdr-damnit-adapters/tests/fixtures`,
+captured from a real `dam`. `capture.sh [<dam revision>]` there regenerates them from `dam` built
+at that revision, `main` by default, and `DAM_BIN=/path/to/dam ./capture.sh` replays them against
+a `dam` already built. The four sync documents are captured by hand.
 
 ## License
 

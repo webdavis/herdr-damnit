@@ -1,3 +1,5 @@
+mod paste;
+
 use std::sync::Mutex;
 
 use herdr_damnit_domain::{Kind, Object, Oid, Priority, TaskFields};
@@ -10,7 +12,6 @@ const LISTING: &str = r#"{"result":{"agents":[
   {"pane_id":"w2:p9","workspace_id":"w2","agent":"codex"}
 ]}}"#;
 
-/// `Herdr` is `Send + Sync`, so the fake records through a `Mutex`.
 struct FakeHerdr {
     calls: Mutex<Vec<Vec<String>>>,
     listing: String,
@@ -85,7 +86,7 @@ fn object() -> Object {
             priority: Priority::default(),
             due: None,
             deadline: None,
-            attached: None,
+            attached_event: None,
         }),
         event: None,
     }
@@ -130,35 +131,6 @@ fn a_pane_herdr_lists_no_agent_for_is_passed_over_for_the_one_it_does() {
         panic!("expected a send");
     };
     assert_ne!(agent.pane, "w1:p1");
-}
-
-#[test]
-fn the_brief_is_one_bracketed_paste_and_carries_no_return() {
-    let herdr = FakeHerdr::new();
-    hand_off(&herdr, &here(), &object(), "start here", "");
-
-    let sent = herdr.sent_text();
-    assert!(sent.starts_with("\u{1b}[200~"), "{sent:?}");
-    assert!(sent.ends_with("\u{1b}[201~"), "{sent:?}");
-    assert!(sent.contains("dam task: file taxes"), "{sent:?}");
-    assert!(sent.contains("note: start here"), "{sent:?}");
-    assert!(
-        !sent.trim_end_matches("\u{1b}[201~").ends_with('\n'),
-        "{sent:?}"
-    );
-}
-
-#[test]
-fn a_paste_terminator_inside_the_brief_cannot_end_the_frame_early() {
-    let framed = pasted("before \u{1b}[201~ after");
-    assert_eq!(framed.matches("\u{1b}[201~").count(), 1, "{framed:?}");
-}
-
-/// A terminator spliced together by removing the one before it must not survive either.
-#[test]
-fn two_terminators_sharing_their_characters_are_both_removed() {
-    let framed = pasted("\u{1b}[20\u{1b}[201~1~");
-    assert_eq!(framed.matches("\u{1b}[201~").count(), 1, "{framed:?}");
 }
 
 #[test]
@@ -215,6 +187,35 @@ fn an_agent_pane_with_no_name_of_its_own_is_called_by_its_kind() {
 }
 
 #[test]
+fn the_agent_kind_outranks_the_auth_profile_herdr_lists_as_display_agent() {
+    let herdr = FakeHerdr {
+        listing: r#"{"result":{"agents":[{"pane_id":"w1:p7","workspace_id":"w1","agent":"codex","display_agent":"work"}]}}"#
+            .to_string(),
+        ..FakeHerdr::new()
+    };
+    let HandOff::Sent { agent, .. } = hand_off(&herdr, &here(), &object(), "", "") else {
+        panic!("expected a send");
+    };
+    assert_eq!(agent.name, "codex");
+}
+
+#[test]
+fn with_two_agent_panes_in_this_workspace_the_first_herdr_lists_wins() {
+    let herdr = FakeHerdr {
+        listing: r#"{"result":{"agents":[
+          {"pane_id":"w1:p3","workspace_id":"w1","agent":"codex"},
+          {"pane_id":"w1:p4","workspace_id":"w1","agent":"claude"}
+        ]}}"#
+            .to_string(),
+        ..FakeHerdr::new()
+    };
+    let HandOff::Sent { agent, .. } = hand_off(&herdr, &here(), &object(), "", "") else {
+        panic!("expected a send");
+    };
+    assert_eq!(agent.pane, "w1:p3");
+}
+
+#[test]
 fn an_agent_pane_that_names_nothing_at_all_is_called_the_agent() {
     let herdr = FakeHerdr {
         listing: r#"{"result":{"agents":[{"pane_id":"w1:p7","workspace_id":"w1","agent":""}]}}"#
@@ -228,7 +229,7 @@ fn an_agent_pane_that_names_nothing_at_all_is_called_the_agent() {
 }
 
 #[test]
-fn a_refused_send_is_a_refusal_and_a_refused_focus_is_not() {
+fn a_refused_send_is_a_refusal_and_a_refused_focus_is_not_because_the_brief_already_arrived() {
     let refused_send = FakeHerdr {
         refuse_send: true,
         ..FakeHerdr::new()
@@ -251,12 +252,13 @@ fn a_refused_send_is_a_refusal_and_a_refused_focus_is_not() {
 #[test]
 fn a_configured_label_comes_back_as_the_write_the_caller_submits() {
     let herdr = FakeHerdr::new();
-    let HandOff::Sent { label, .. } = hand_off(&herdr, &here(), &object(), "", "handed-off") else {
+    let HandOff::Sent { label_write, .. } = hand_off(&herdr, &here(), &object(), "", "handed-off")
+    else {
         panic!("expected a send");
     };
 
     assert_eq!(
-        label,
+        label_write,
         Some(vec![
             "edit".to_string(),
             "1a2b3c4".to_string(),
@@ -270,10 +272,10 @@ fn a_configured_label_comes_back_as_the_write_the_caller_submits() {
 #[test]
 fn an_empty_label_writes_nothing_and_the_status_line_is_the_whole_record() {
     let herdr = FakeHerdr::new();
-    let HandOff::Sent { label, .. } = hand_off(&herdr, &here(), &object(), "", "  ") else {
+    let HandOff::Sent { label_write, .. } = hand_off(&herdr, &here(), &object(), "", "  ") else {
         panic!("expected a send");
     };
-    assert_eq!(label, None);
+    assert_eq!(label_write, None);
 }
 
 #[test]

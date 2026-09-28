@@ -1,6 +1,3 @@
-//! The fake `dam` every other test drives. This file proves the double itself behaves, so a
-//! failure in a later test is a failure in the pane rather than in its double.
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -16,8 +13,6 @@ fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
 }
 
-/// Every temp path a test here writes lives in a directory the test owns, so a run leaves nothing
-/// behind in the system temp directory whether it passed, failed or panicked.
 #[test]
 fn a_scratch_directory_is_gone_once_its_owner_drops() {
     let path = {
@@ -68,8 +63,6 @@ fn the_fake_appends_one_json_line_of_argv_per_call() {
     assert_eq!(lines[1], vec!["ls", "!done", "--json"]);
 }
 
-/// A refusal is exit 4 and one error document on standard error, which is `dam` 0.2.0's contract
-/// under `--json`.
 #[test]
 fn the_fake_refuses_with_the_code_and_the_document_it_was_given() {
     let document = r#"{"error":{"kind":"refused","rule":"no_such_object","message":"no object matches \"zzzzzzz\"","oids":[]}}"#;
@@ -85,8 +78,6 @@ fn the_fake_refuses_with_the_code_and_the_document_it_was_given() {
     assert!(output.stdout.is_empty(), "a failing dam prints no report");
 }
 
-/// clap answers a bad command line before `dam` runs, so exit 2 carries usage text and no
-/// document. The pane has to read that shape too.
 #[test]
 fn the_fake_can_also_answer_the_way_clap_does() {
     let output = Command::new(fake())
@@ -145,8 +136,6 @@ fn the_version_flag_answers_the_captured_line() {
     );
 }
 
-/// Without `FAKE_DAM_FIXTURE` the subcommand is the fixture name, which is what lets a test that
-/// drives several reads point at one directory and get a different document per call.
 #[test]
 fn the_subcommand_alone_chooses_the_fixture_when_no_name_overrides_it() {
     let output = Command::new(fake())
@@ -164,8 +153,6 @@ fn the_subcommand_alone_chooses_the_fixture_when_no_name_overrides_it() {
     );
 }
 
-/// An interrupt reaches the fake while it sleeps, and it answers the way a cancelled `dam` does:
-/// exit 3, with the signal recorded for the cancellation tests to read.
 #[test]
 fn an_interrupt_is_recorded_and_answered_with_the_cancelled_code() {
     let scratch = Scratch::new("signal-log");
@@ -181,6 +168,8 @@ fn an_interrupt_is_recorded_and_answered_with_the_cancelled_code() {
 
     std::thread::sleep(std::time::Duration::from_millis(150));
     let pid = i32::try_from(child.id()).expect("a pid");
+    // SAFETY: the child has not been waited on yet, so its process id still belongs to it and the
+    // signal cannot reach any other program; `kill` itself touches none of this program's memory.
     assert_eq!(unsafe { libc::kill(pid, libc::SIGINT) }, 0);
 
     assert_eq!(child.wait().expect("it exited").code(), Some(3));

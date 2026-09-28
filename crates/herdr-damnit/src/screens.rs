@@ -1,6 +1,3 @@
-//! Drawing the pane. One module per screen; this file is the frame every screen shares and the
-//! text renderer the golden tests compare.
-
 use std::time::Instant;
 
 use ratatui::Frame;
@@ -20,10 +17,8 @@ mod status;
 
 use list::cut_to;
 
-/// What a line cut off by the pane's width ends in, so a subject the pane cut says it was cut.
 pub const ELLIPSIS: &str = "\u{2026}";
 
-/// The keys the hint line offers, cut to the pane's width.
 const HINTS: &str = "x X dd p s D l m a S e <CR> <Space> c P L v Tab";
 
 pub fn draw(frame: &mut Frame<'_>, app: &App) {
@@ -48,8 +43,6 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     frame.render_widget(hint_line(hints.width, &palette), hints);
 }
 
-/// The whole pane as plain text, which is what a golden compares. Trailing blanks are trimmed per
-/// line so a golden is a picture of the screen rather than a block of padding.
 #[cfg(test)]
 pub fn render_to_text(app: &App, width: u16, height: u16) -> String {
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height))
@@ -70,23 +63,18 @@ pub fn render_to_text(app: &App, width: u16, height: u16) -> String {
         .to_string()
 }
 
-/// The status line: what the pane is doing on the left, what it is holding on the right. The left
-/// half is cut first, because a spinner and a timer matter less than the counts they run beside.
 fn status_line(app: &App, width: u16, palette: &Palette) -> Paragraph<'static> {
     let width = width as usize;
-    let right = cut_to(&counts(app), width);
-    let room = width.saturating_sub(right.width());
-    let left = cut_to(&app.header(Instant::now()), room);
-    let gap = room.saturating_sub(left.width());
+    let counts_kept_first = cut_to(&counts(app), width);
+    let room_left_for_the_header = width.saturating_sub(counts_kept_first.width());
+    let header_cut_first = cut_to(&app.header(Instant::now()), room_left_for_the_header);
+    let gap = room_left_for_the_header.saturating_sub(header_cut_first.width());
     Paragraph::new(Line::styled(
-        format!("{left}{}{right}", " ".repeat(gap)),
+        format!("{header_cut_first}{}{counts_kept_first}", " ".repeat(gap)),
         Style::new().fg(palette.text),
     ))
 }
 
-/// What the screen on show is holding. The List screen counts its own rows and marks what is
-/// waiting behind them; the Status screen reports the stage in `dam`'s own words; the Done screen
-/// counts what it lists.
 fn counts(app: &App) -> String {
     match app.screen {
         Screen::List => open_counts(app),
@@ -101,8 +89,6 @@ fn counts(app: &App) -> String {
     }
 }
 
-/// The List screen's counts, in the order the spec's status line lists them. A count of nothing is
-/// left out, so a clean store reads as the object count alone.
 fn open_counts(app: &App) -> String {
     let mut counts = vec![format!("{} open", app.list.object_count())];
     if app.stage.staged_count() > 0 {

@@ -7,7 +7,6 @@ use std::time::{Duration, Instant};
 use super::*;
 use crate::{Clock, Finished, SpawnError};
 
-/// A clock the job table reads a start from. The instant is real and the day is unused here.
 struct TestClock;
 
 impl Clock for TestClock {
@@ -20,8 +19,6 @@ impl Clock for TestClock {
     }
 }
 
-/// A runner that records every argv and hands the test the sender for each job, so a test decides
-/// when a job answers and with what.
 #[derive(Default)]
 struct Recorder {
     log: Arc<Mutex<Vec<Vec<String>>>>,
@@ -79,9 +76,6 @@ impl Harness {
         self.jobs.submit(kind, argv)
     }
 
-    /// Answer one spawned job. A send to a superseded job fails because dropping it from the table
-    /// dropped its receiver, which is the mechanism by which its result never reaches the model, so
-    /// the answer is offered rather than required.
     fn answer(&self, which: usize, finished: Finished) {
         let _ = self.senders.lock().expect("the senders")[which].send(finished);
     }
@@ -164,8 +158,6 @@ fn two_writes_are_two_intentions_and_neither_supersedes_the_other() {
     assert_eq!(harness.jobs.in_flight(), 2);
 }
 
-/// Every job carries an id of its own, because `drain` clears the table by id: two jobs sharing
-/// one would both leave it the moment either answered.
 #[test]
 fn one_job_answering_never_clears_another_that_is_still_running() {
     let mut harness = harness();
@@ -240,7 +232,6 @@ fn each_sync_job_names_itself_in_the_refusal() {
     assert_eq!(SyncKind::Pull.verb(), "pull");
 }
 
-/// A `dam` that is on `PATH` and would not start is a different sentence from one that is absent.
 #[test]
 fn a_spawn_that_failed_for_some_other_reason_carries_dams_own_error() {
     let mut jobs = Jobs::new(
@@ -258,7 +249,6 @@ fn a_spawn_that_failed_for_some_other_reason_carries_dams_own_error() {
     assert_eq!(jobs.in_flight(), 0);
 }
 
-/// The header's timer, read at a moment the caller chooses rather than off an ambient clock.
 #[test]
 fn the_header_times_the_job_it_names_and_nothing_when_none_runs() {
     let mut harness = harness();

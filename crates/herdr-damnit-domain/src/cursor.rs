@@ -1,6 +1,3 @@
-//! The pane's selection. The cursor belongs to an object's identity rather than to a row number,
-//! so a re-read that inserts, removes or reorders rows leaves the highlight on the same object.
-
 use crate::{Oid, Row};
 
 pub struct Cursor {
@@ -31,8 +28,6 @@ impl Cursor {
         self.rows.iter().filter(|row| row.oid().is_some()).count()
     }
 
-    /// Move by `steps` object rows, skipping headings and stopping at either end. Reports whether
-    /// it moved.
     pub fn move_by(&mut self, steps: isize) -> bool {
         let objects = self.object_indices();
         if objects.is_empty() {
@@ -50,11 +45,8 @@ impl Cursor {
         moved
     }
 
-    /// Replace the rows, keeping the cursor on the object it was on. When that object is gone the
-    /// cursor takes the nearest surviving object below it in the old order, or above it when it
-    /// was the last.
     pub fn replace(&mut self, rows: Vec<Row>) {
-        let preferred: Vec<Oid> = self.preferences();
+        let preferred: Vec<Oid> = self.oids_in_fallback_order();
         self.rows = rows;
         let objects = self.object_indices();
         self.selected = preferred
@@ -68,9 +60,7 @@ impl Cursor {
             .unwrap_or_else(|| objects.first().copied().unwrap_or(0));
     }
 
-    /// The oid under the cursor, then every one below it in the old order, then every one above it
-    /// in reverse, which is the order the cursor falls back through.
-    fn preferences(&self) -> Vec<Oid> {
+    fn oids_in_fallback_order(&self) -> Vec<Oid> {
         let objects = self.object_indices();
         let at = objects.iter().position(|index| *index == self.selected);
         let Some(at) = at else {
@@ -157,8 +147,6 @@ mod tests {
         assert_eq!(cursor.selected_oid(), Some(&Oid::new("a")));
     }
 
-    /// Task 31 binds a jump to the top and the bottom, whose natural spelling is the largest step
-    /// the type holds.
     #[test]
     fn the_largest_step_lands_on_an_end_rather_than_overflowing() {
         let mut cursor = Cursor::new(listing(&["a", "b", "c"]));

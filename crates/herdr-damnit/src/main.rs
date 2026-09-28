@@ -1,5 +1,3 @@
-//! The plugin binary. With no arguments it is the pane; the subcommands are the plugin actions.
-
 mod app;
 mod doctor;
 mod loop_;
@@ -47,21 +45,18 @@ fn main() -> std::process::ExitCode {
     }
 }
 
-/// The configuration plus the one check the adapters crate cannot make for itself: the theme
-/// vocabulary is this crate's, so `Config::parse` never sees it and every load goes through here.
-/// Skip this and an unknown theme name is accepted in silence and the pane paints with defaults.
-fn load_config() -> Result<Config, String> {
-    load_config_with(Config::load)
+fn load_config_and_check_its_theme() -> Result<Config, String> {
+    load_with_theme_check(Config::load)
 }
 
-fn load_config_with(load: impl FnOnce() -> Result<Config, String>) -> Result<Config, String> {
+fn load_with_theme_check(load: impl FnOnce() -> Result<Config, String>) -> Result<Config, String> {
     let config = load()?;
     config.check_theme_against(theme::NAMES)?;
     Ok(config)
 }
 
 fn run_pane() -> std::process::ExitCode {
-    let config = match load_config() {
+    let config = match load_config_and_check_its_theme() {
         Ok(config) => config,
         Err(error) => return fail(&error),
     };
@@ -80,7 +75,7 @@ fn run_pane() -> std::process::ExitCode {
 }
 
 fn with_config(run: impl FnOnce(&Config) -> Result<String, String>) -> std::process::ExitCode {
-    report(load_config().and_then(|config| run(&config)))
+    report(load_config_and_check_its_theme().and_then(|config| run(&config)))
 }
 
 fn report(outcome: Result<String, String>) -> std::process::ExitCode {
@@ -104,7 +99,7 @@ mod tests {
 
     #[test]
     fn the_config_funnel_rejects_a_theme_the_pane_cannot_draw() {
-        let error = load_config_with(|| Config::parse("theme = 'unknown'"))
+        let error = load_with_theme_check(|| Config::parse("theme = 'unknown'"))
             .expect_err("the theme is unknown");
 
         assert!(error.contains("unknown theme 'unknown'"), "{error}");

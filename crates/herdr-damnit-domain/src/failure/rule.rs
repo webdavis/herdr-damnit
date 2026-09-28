@@ -1,7 +1,3 @@
-//! The rule `dam` names when it refuses. One stable snake_case word per rule, which is what lets a
-//! key branch on the reason rather than on the sentence.
-
-/// Every rule word `dam` 0.2.0 publishes, and the word itself for one it adds later.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Rule {
     Blocked,

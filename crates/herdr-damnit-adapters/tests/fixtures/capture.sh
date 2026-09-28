@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Regenerate every fixture in this directory from a built dam.
-# Usage: ./capture.sh [<dam revision>]
-#        DAM_BIN=/path/to/dam ./capture.sh      # replay against a dam already built
 set -euo pipefail
 
 revision="${1:-main}"
@@ -18,13 +15,15 @@ else
   dam="$work/damnit/target/release/dam"
 fi
 
-# dam reads the store and the config from these when its flags name none, and it stamps an event
-# with the local zone, so the capture runs in UTC against a store nothing else can reach.
-export HOME="$work/home"
-export XDG_CONFIG_HOME="$work/home/.config"
-export XDG_DATA_HOME="$work/home/.local/share"
-export TZ=UTC
-mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
+point_dams_default_store_and_config_into_the_scratch_home_and_stamp_events_in_utc() {
+  export HOME="$work/home"
+  export XDG_CONFIG_HOME="$work/home/.config"
+  export XDG_DATA_HOME="$work/home/.local/share"
+  export TZ=UTC
+  mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
+}
+
+point_dams_default_store_and_config_into_the_scratch_home_and_stamp_events_in_utc
 
 export DAM_STORE="$work/store.sqlite"
 export DAM_CONFIG="$work/config.toml"
@@ -35,17 +34,22 @@ CONFIG
 
 "$dam" --version >"$here/version.txt"
 
-# A clean status is one with nothing staged, nothing working and no unpushed commit, which is the
-# empty store: the first commit below leaves one commit unpushed for the life of the capture.
-"$dam" status --json >"$here/status-clean.json"
+capture_the_clean_status_before_the_first_commit_leaves_one_unpushed() {
+  "$dam" status --json >"$here/status-clean.json"
+}
+
+capture_the_clean_status_before_the_first_commit_leaves_one_unpushed
 
 "$dam" new "ship the pin bump" --path "proj/dotfiles" -p 1 --due 2026-09-18 >/dev/null
 "$dam" new "refresh the roster row" --path "proj/dotfiles" --label slow >/dev/null
 "$dam" new "water the plants" --path "proj/home" >/dev/null
 plants="$("$dam" ls "path:proj/home/" --json |
   python3 -c 'import json,sys; print(json.load(sys.stdin)["objects"][0]["oid"])')"
-# Recurrence is an edit flag rather than a new flag, so the weekly task takes two calls.
-"$dam" edit "$plants" --recurrence "every week" >/dev/null
+make_weekly_since_recurrence_is_an_edit_flag_and_not_a_new_one() {
+  "$dam" edit "$1" --recurrence "every week" >/dev/null
+}
+
+make_weekly_since_recurrence_is_an_edit_flag_and_not_a_new_one "$plants"
 "$dam" ls "!done" --json >"$here/ls.json"
 "$dam" ls "path:nowhere/" --json >"$here/ls-empty.json"
 "$dam" status --json >"$here/status-full.json"

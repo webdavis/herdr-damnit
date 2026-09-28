@@ -6,8 +6,6 @@ use crate::app::tests::{harness, harness_with_missing_dam};
 
 const CLEAN: &str = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#;
 
-/// A refusal is one sentence wrapped to the pane, so the sentence is compared with the line
-/// breaks the pane put in it taken back out.
 fn unwrapped(drawn: &str) -> String {
     drawn.split_whitespace().collect::<Vec<_>>().join(" ")
 }

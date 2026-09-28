@@ -37,8 +37,6 @@ fn an_empty_dam_argv_is_refused_because_nothing_could_be_spawned() {
     assert!(error.contains("dam"), "{error}");
 }
 
-/// A blank first word could spawn nothing either, and `Command::new("")` fails at action time
-/// rather than at load time, which is the wrong place to learn it.
 #[test]
 fn a_blank_dam_binary_is_refused_the_same_way_an_empty_argv_is() {
     let error = Config::parse(r#"dam = ["  "]"#).expect_err("refuses");
@@ -159,7 +157,6 @@ fn an_opening_view_no_view_carries_is_refused_and_names_the_views() {
     assert!(error.contains("open, today"), "{error}");
 }
 
-/// The open list is a view the config never declares, so opening on it is legal.
 #[test]
 fn the_panes_own_open_list_is_an_opening_view() {
     assert_eq!(
@@ -193,8 +190,22 @@ fn a_placement_and_a_side_are_taken_by_name_and_an_unknown_one_names_the_alterna
     assert!(error.contains("right") && error.contains("down"), "{error}");
 }
 
-/// `herdr plugin pane open --direction` splits rightward or downward only, and a same-tab
-/// `herdr pane move` cannot reposition a pane afterward, so a side maps straight onto a direction.
+#[test]
+fn a_split_or_zoomed_pane_attaches_to_a_pane_and_a_tab_or_overlay_one_to_the_workspace() {
+    for (placement, attaches) in [
+        (Placement::Split, true),
+        (Placement::Zoomed, true),
+        (Placement::Tab, false),
+        (Placement::Overlay, false),
+    ] {
+        assert_eq!(
+            placement.attaches_to_a_pane_rather_than_the_workspace(),
+            attaches,
+            "{placement:?}"
+        );
+    }
+}
+
 #[test]
 fn every_side_maps_onto_the_direction_herdr_splits_in() {
     for (text, direction) in [("right", "right"), ("down", "down")] {
@@ -235,8 +246,6 @@ fn the_marks_are_nerd_font_glyphs_until_the_plain_set_is_asked_for() {
     );
 }
 
-/// Zero turns the interval off, leaving `R` and the read that follows every write, so it is a
-/// legal value rather than a missing one.
 #[test]
 fn a_refresh_interval_of_zero_turns_the_interval_off_rather_than_taking_the_default() {
     assert_eq!(
@@ -253,8 +262,6 @@ fn a_refresh_interval_of_zero_turns_the_interval_off_rather_than_taking_the_defa
     );
 }
 
-/// The theme vocabulary belongs to the crate that paints, so the parse knows nothing about it and
-/// the composition root checks the name against the palettes it has.
 #[test]
 fn a_theme_is_checked_against_the_names_the_caller_knows_rather_than_a_list_of_its_own() {
     let config = Config::parse(r#"theme = "gruvbox""#).expect("parses");

@@ -1,16 +1,10 @@
 id = "herdr-damnit"
 name = "damnit"
 version = "0.1.0"
-# `herdr plugin pane open --entrypoint` and the plugin pane registry this plugin's actions drive
-# are present from 0.7.0. `S` also reads `herdr agent list`, whose `pane_id`, `workspace_id` and
-# `agent` fields are documented from 0.7.5, which is what sets the floor.
 min_herdr_version = "0.7.5"
 platforms = ["macos", "linux"]
 description = "A task pane over the dam task store: the terminal UI, and a doctor check for dam."
 
-# Compiled at install time into bin/, which every entry point below runs by absolute path since the
-# binary is not on PATH. `herdr plugin link` skips this step, so a local checkout runs the same two
-# commands by hand.
 [[build]]
 command = [
   "sh",
@@ -24,8 +18,6 @@ title = "damnit"
 placement = "split"
 command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\""]
 
-# A workspace gained focus. The command reads the config and exits when `auto_open` is off, which
-# is the default, so the pane stays closed until an action asks for it.
 [[events]]
 on = "workspace.focused"
 command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" auto-open"]
@@ -48,19 +40,12 @@ title = "damnit: focus pane"
 contexts = ["pane", "workspace"]
 command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" focus"]
 
-# The staging model is the reason this plugin exists, so it gets a chord of its own.
 [[actions]]
 id = "status"
 title = "damnit: open pane on the status screen"
 contexts = ["pane", "workspace"]
 command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-damnit\" status"]
 
-# One action per view number. herdr states that actions are manifest-only ("runtime action
-# registration ... not part of plugin v1") and a `plugin_action` keybinding passes its action name
-# and nothing else, so a `view:<name>` action per configured view cannot exist: the views are the
-# operator's config, the manifest is not. The numbers are the pane's own view numbers, 1 being the
-# unfiltered list and 2 onwards the `[[views]]` entries in the order they are written. A number
-# the config has no view for exits non-zero saying how many views there are.
 [[actions]]
 id = "view:1"
 title = "damnit: show view 1"

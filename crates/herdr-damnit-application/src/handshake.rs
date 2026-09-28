@@ -1,10 +1,5 @@
-//! What the pane checks before it draws anything: the version of `dam` it found, and that one
-//! `dam status --json` carries the five keys every screen reads.
-
 use herdr_damnit_domain::{DamVersion, Verdict, parse_version, verdict};
 
-/// The five top-level keys `dam status --json` returns. A document missing one is a `dam` built
-/// from a fork rather than the one this pane was written against.
 const STATUS_KEYS: [&str; 5] = ["staged", "unstaged", "conflicts", "notices", "unpushed"];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -16,8 +11,6 @@ pub enum Handshake {
     Refuse(String),
 }
 
-/// What `dam --version` alone decides. The pane asks this first and stops there on a refusal,
-/// because a `dam` whose command surface this pane does not know is not one to send a read to.
 pub fn check_version(version_output: &str) -> Handshake {
     let Some(version) = parse_version(version_output) else {
         return Handshake::Refuse(
@@ -39,8 +32,6 @@ pub fn check_version(version_output: &str) -> Handshake {
     }
 }
 
-/// Whether one `dam status --json` carries the five keys every screen reads, and the refusal
-/// naming the first one it does not.
 pub fn check_status(status_output: &str) -> Result<(), String> {
     let Ok(document) = serde_json::from_str::<serde_json::Value>(status_output) else {
         return Err(herdr_damnit_domain::message(

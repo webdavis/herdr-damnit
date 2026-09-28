@@ -1,19 +1,9 @@
-//! The views the pane can show: the open list first, then the named queries from the config.
-//! Numbering, selection and the picker are pure functions over that list.
-
-/// The name of the view every pane has, whatever the config says.
 pub const OPEN: &str = "open";
 
-/// `dam ls` with no query returns every object, completed ones included, so the open list is a
-/// query rather than an absent one.
 pub const OPEN_QUERY: &str = "!done";
 
-/// The query the Done screen reads.
 pub const DONE_QUERY: &str = "done";
 
-/// The highest view number a number key or a `view:<n>` action reaches. herdr declares plugin
-/// actions in the manifest with no runtime registration, so the manifest carries exactly this
-/// many numbered actions.
 pub const MAX_NUMBERED_VIEW: usize = 9;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -50,8 +40,6 @@ impl Views {
         self.views.len()
     }
 
-    /// Always false: the open list is there whatever the config says. `len` has a companion here
-    /// because clippy pairs the two.
     pub fn is_empty(&self) -> bool {
         false
     }
@@ -60,7 +48,6 @@ impl Views {
         self.current
     }
 
-    /// Show the view at `index`, reporting whether the showing view changed.
     pub fn select(&mut self, index: usize) -> bool {
         if index >= self.views.len() {
             return false;
@@ -77,7 +64,6 @@ impl Views {
         }
     }
 
-    /// The name of the nth view, counting from 1 the way the number keys and the `view` actions do.
     pub fn name_of_number(&self, number: usize) -> Option<&str> {
         number
             .checked_sub(1)

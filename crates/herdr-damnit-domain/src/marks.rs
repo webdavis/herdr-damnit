@@ -1,11 +1,17 @@
-//! The marks a row carries: the object's own state, and the staging state `dam status` reports for
-//! it. Two sets draw them. The Nerd Font set uses glyphs from the Font Awesome block every Nerd
-//! Font patches in, each one cell wide, except the notice, which draws a plain `!` in both sets;
-//! the plain set uses one character per mark, for a terminal whose font has none of those glyphs.
-
 use crate::{DueState, Priority, Slot};
 
-/// Which set of marks the pane draws, chosen in the config file.
+const FONT_AWESOME_FLAG: &str = "\u{f024}";
+const FONT_AWESOME_WARNING: &str = "\u{f071}";
+const FONT_AWESOME_CLOCK: &str = "\u{f017}";
+const FONT_AWESOME_CALENDAR: &str = "\u{f073}";
+const FONT_AWESOME_REFRESH: &str = "\u{f021}";
+const FONT_AWESOME_PENCIL: &str = "\u{f040}";
+const FONT_AWESOME_PLUS: &str = "\u{f067}";
+const FONT_AWESOME_ARROW_UP: &str = "\u{f062}";
+const FONT_AWESOME_CROSS: &str = "\u{f00d}";
+const FONT_AWESOME_TAGS: &str = "\u{f02c}";
+const NOTICE_IN_EITHER_SET: &str = "!";
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum IconSet {
     #[default]
@@ -29,12 +35,10 @@ pub enum Mark {
 }
 
 impl Mark {
-    /// The mark a priority draws, or `None` for 4, which `dam` treats as no priority at all.
     pub fn of_priority(priority: Priority) -> Option<Self> {
         (!priority.is_lowest()).then_some(Self::Priority(priority))
     }
 
-    /// The mark a due state draws, or `None` when the object has no date.
     pub fn of_due(state: DueState) -> Option<Self> {
         match state {
             DueState::Overdue => Some(Self::Overdue),
@@ -70,36 +74,36 @@ impl Mark {
 
     fn labels_sigil(set: IconSet) -> &'static str {
         match set {
-            IconSet::NerdFont => "\u{f02c}",
+            IconSet::NerdFont => FONT_AWESOME_TAGS,
             IconSet::Ascii => "@",
         }
     }
 
     fn single(self, set: IconSet) -> &'static str {
         match (self, set) {
-            (Self::Priority(_), IconSet::NerdFont) => "\u{f024}",
+            (Self::Priority(_), IconSet::NerdFont) => FONT_AWESOME_FLAG,
             (Self::Priority(priority), IconSet::Ascii) => match priority.get() {
                 1 => "!",
                 2 => "^",
                 _ => "-",
             },
-            (Self::Overdue, IconSet::NerdFont) => "\u{f071}",
+            (Self::Overdue, IconSet::NerdFont) => FONT_AWESOME_WARNING,
             (Self::Overdue, IconSet::Ascii) => "<",
-            (Self::Today, IconSet::NerdFont) => "\u{f017}",
+            (Self::Today, IconSet::NerdFont) => FONT_AWESOME_CLOCK,
             (Self::Today, IconSet::Ascii) => "*",
-            (Self::Upcoming, IconSet::NerdFont) => "\u{f073}",
+            (Self::Upcoming, IconSet::NerdFont) => FONT_AWESOME_CALENDAR,
             (Self::Upcoming, IconSet::Ascii) => ">",
-            (Self::Recurring, IconSet::NerdFont) => "\u{f021}",
+            (Self::Recurring, IconSet::NerdFont) => FONT_AWESOME_REFRESH,
             (Self::Recurring, IconSet::Ascii) => "~",
-            (Self::Working, IconSet::NerdFont) => "\u{f040}",
+            (Self::Working, IconSet::NerdFont) => FONT_AWESOME_PENCIL,
             (Self::Working, IconSet::Ascii) => "*",
-            (Self::Staged, IconSet::NerdFont) => "\u{f067}",
+            (Self::Staged, IconSet::NerdFont) => FONT_AWESOME_PLUS,
             (Self::Staged, IconSet::Ascii) => "+",
-            (Self::Unpushed, IconSet::NerdFont) => "\u{f062}",
+            (Self::Unpushed, IconSet::NerdFont) => FONT_AWESOME_ARROW_UP,
             (Self::Unpushed, IconSet::Ascii) => "^",
-            (Self::Conflict, IconSet::NerdFont) => "\u{f00d}",
+            (Self::Conflict, IconSet::NerdFont) => FONT_AWESOME_CROSS,
             (Self::Conflict, IconSet::Ascii) => "x",
-            (Self::Notice, _) => "!",
+            (Self::Notice, _) => NOTICE_IN_EITHER_SET,
             (Self::Labels(_), _) => Self::labels_sigil(set),
         }
     }
@@ -155,11 +159,8 @@ mod tests {
         }
     }
 
-    /// A notice is a decision waiting rather than the refusal a conflict is, so it draws below
-    /// red, and it draws the `!` the spec's Status screen shows in both sets: the Font Awesome
-    /// block has no glyph that reads as a notice more plainly than the character itself.
     #[test]
-    fn a_notice_draws_the_same_bang_whichever_set_is_chosen() {
+    fn a_notice_is_a_decision_waiting_so_it_draws_below_red_and_the_same_bang_in_either_set() {
         assert_eq!(Mark::Notice.glyph(IconSet::Ascii), "!");
         assert_eq!(Mark::Notice.glyph(IconSet::NerdFont), "!");
         assert_eq!(Mark::Notice.slot(), Slot::Orange);
@@ -172,11 +173,8 @@ mod tests {
         assert_eq!(Mark::Labels(2).glyph(IconSet::NerdFont), "\u{f02c}2");
     }
 
-    /// The codepoint each mark draws is a contract with the spec, which names every one of these
-    /// by the Font Awesome glyph it is: flag, warning, clock, calendar, refresh, pencil, plus, up
-    /// arrow, cross and tags.
     #[test]
-    fn every_nerd_font_mark_draws_the_codepoint_it_is_named_for() {
+    fn every_nerd_font_mark_draws_the_font_awesome_codepoint_the_spec_names() {
         for (mark, glyph) in [
             (Mark::Priority(priority(1)), "\u{f024}"),
             (Mark::Overdue, "\u{f071}"),
@@ -200,11 +198,8 @@ mod tests {
         assert_eq!(Mark::of_due(DueState::None), None);
     }
 
-    /// Every Nerd Font mark is one character, which is what lets the drawing crate measure a row
-    /// by counting marks. How many cells that character occupies is the terminal's answer, over
-    /// codepoints whose East Asian Width is Ambiguous, so the drawing crate measures it.
     #[test]
-    fn every_nerd_font_glyph_is_a_single_character() {
+    fn every_nerd_font_glyph_is_one_character_so_a_row_is_measured_by_counting_marks() {
         for mark in [
             Mark::Priority(priority(1)),
             Mark::Overdue,

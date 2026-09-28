@@ -1,3 +1,5 @@
+mod status;
+
 use std::time::Instant;
 
 use crossterm::event::KeyCode;
@@ -18,8 +20,6 @@ const LS: &str = r#"{"objects":[
 
 const CLEAN: &str = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#;
 
-/// The frames the plain spinner steps through. Which one is on screen depends on how many ticks
-/// the reads before this one took, so the assertion is that one of them is drawn.
 const PLAIN_FRAMES: [&str; 4] = ["|", "/", "-", "\\"];
 
 fn ascii_config() -> Config {
@@ -150,31 +150,6 @@ fn a_mark_takes_its_own_colour_and_the_subject_stays_plain() {
     assert_eq!(priority.fg, palette.color(herdr_damnit_domain::Slot::Red));
 }
 
-const FULL_STATUS: &str = r#"{
-  "staged":[
-    {"oid":"1a2b3c4","op":"create","before":null,
-     "after":{"oid":"1a2b3c4","kind":"task","subject":"ship the pin bump"}}],
-  "unstaged":[
-    {"oid":"9a0b1c2","op":"update",
-     "before":{"oid":"9a0b1c2","kind":"task","subject":"water the plants"},
-     "after":{"oid":"9a0b1c2","kind":"task","subject":"water the plants"}}],
-  "unpushed":[{"remote":"example","commits":1}],
-  "conflicts":[{"oid":"3d4e5f6","remote":"example",
-    "ours":{"oid":"3d4e5f6","kind":"task","subject":"mine"},
-    "theirs":{"oid":"3d4e5f6","kind":"task","subject":"theirs"}}],
-  "notices":[{"kind":"pull_failed","remote":"example","why":"unreachable"}]}"#;
-
-fn on_status() -> crate::app::tests::Harness {
-    let mut harness = harness_with(ascii_config());
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
-    harness.answer(0, 0, FULL_STATUS, "");
-    harness.app.screen = Screen::Status;
-    harness
-}
-
 #[test]
 fn tab_cycles_the_three_screens_forward_and_shift_tab_back() {
     let mut harness = loaded();
@@ -201,71 +176,6 @@ fn each_screen_keeps_its_own_cursor_across_the_cycle() {
     harness.press(KeyCode::Tab);
 
     assert_eq!(harness.app.list.selected_oid().cloned(), on_list);
-}
-
-#[test]
-fn the_status_screen_draws_the_four_sections_in_dams_order() {
-    let harness = on_status();
-
-    let drawn = render_to_text(&harness.app, 32, 12);
-    let headings: Vec<&str> = drawn
-        .lines()
-        .filter(|line| ["Staged", "Working", "Unpushed", "Notices"].contains(line))
-        .collect();
-    assert_eq!(headings, vec!["Staged", "Working", "Unpushed", "Notices"]);
-    assert!(drawn.contains("example: pull failed"), "{drawn}");
-}
-
-/// The plan's rule for this screen: a row draws the mark its own change carries, and a row that
-/// carries none draws none. A mark taken from the section heading above it would say a remote's
-/// failed pull was staged.
-#[test]
-fn a_status_row_draws_its_own_mark_and_a_row_with_none_draws_none() {
-    let harness = on_status();
-
-    let drawn = render_to_text(&harness.app, 32, 12);
-    assert!(
-        drawn.lines().any(|line| line == "  ^ example  1 commit"),
-        "{drawn}"
-    );
-    assert!(
-        drawn
-            .lines()
-            .any(|line| line.starts_with("  example: pull failed")),
-        "{drawn}"
-    );
-    assert!(
-        drawn.lines().any(|line| line.starts_with("  + new")),
-        "{drawn}"
-    );
-}
-
-#[test]
-fn the_status_screen_names_itself_and_counts_the_stage_in_dams_own_words() {
-    let harness = on_status();
-
-    assert_eq!(harness.app.header(Instant::now()), "dam  status");
-    assert_eq!(
-        counts(&harness.app),
-        "1 staged  1 changed  1 unpushed  1 notice"
-    );
-}
-
-#[test]
-fn a_clean_status_screen_says_so_in_dams_own_words() {
-    let mut harness = harness_with(ascii_config());
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
-    harness.answer(0, 0, CLEAN, "");
-    harness.app.screen = Screen::Status;
-
-    assert!(
-        render_to_text(&harness.app, 32, 6).contains("nothing staged, nothing changed"),
-        "{}",
-        render_to_text(&harness.app, 32, 6)
-    );
 }
 
 #[test]

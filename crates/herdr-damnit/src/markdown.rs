@@ -1,21 +1,6 @@
-//! The markdown a task's description and a comment's body are written in, turned into styled
-//! lines the pane draws.
-//!
-//! A deliberately small subset, because a Todoist description is free text a person typed on
-//! their phone and the pane it lands in is about 32 columns wide. Block structure is resolved
-//! here (headings, lists, quotes, rules, fenced code) and so is inline emphasis, while the
-//! WRAPPING is left to the paragraph widget that draws these lines: it breaks on a word boundary
-//! and splits a token longer than the pane, which is what keeps a URL or a table row inside the
-//! pane instead of running off it.
-//!
-//! What is shown as written rather than rendered: a table, because 32 columns cannot hold one,
-//! and the body of a fenced code block, because reflowing code changes what it says. Both wrap.
-
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
-/// Render markdown into lines. `indent` is prefixed to every line, which is how a comment's body
-/// sits under its header.
 pub fn render(source: &str, indent: &str) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     let mut fenced = false;
@@ -26,8 +11,6 @@ pub fn render(source: &str, indent: &str) -> Vec<Line<'static>> {
             continue;
         }
         if fenced {
-            // Code is kept byte for byte, dim so it reads as a block, and never re-flowed by the
-            // renderer: only the paragraph widget's own wrap touches it.
             lines.push(prefixed(
                 indent,
                 vec![Span::styled(
@@ -51,25 +34,23 @@ fn prefixed(indent: &str, spans: Vec<Span<'static>>) -> Line<'static> {
     Line::from(all)
 }
 
-/// A fence opens or closes a code block. Both spellings the syntax allows are recognised.
 fn is_fence(line: &str) -> bool {
     line.starts_with("```") || line.starts_with("~~~")
 }
 
-/// One block-level line: its markers turned into what the pane draws, and its text into spans.
 fn block(line: &str) -> Vec<Span<'static>> {
     let bare = line.trim_start();
     let leading = &line[..line.len() - bare.len()];
     if bare.is_empty() {
         return Vec::new();
     }
-    if is_rule(bare) {
+    if is_thematic_break(bare) {
         return vec![Span::styled(
             "---".to_string(),
             Style::new().add_modifier(Modifier::DIM),
         )];
     }
-    if let Some(text) = heading(bare) {
+    if let Some(text) = heading_text_whatever_its_level(bare) {
         return vec![Span::styled(
             text.to_string(),
             Style::new().add_modifier(Modifier::BOLD),
@@ -95,16 +76,13 @@ fn block(line: &str) -> Vec<Span<'static>> {
     spans
 }
 
-/// A thematic break: three or more of one of the rule characters, and nothing else.
-fn is_rule(line: &str) -> bool {
+fn is_thematic_break(line: &str) -> bool {
     ["-", "*", "_"].iter().any(|character| {
         line.len() >= 3 && line.chars().all(|found| found.to_string() == *character)
     })
 }
 
-/// An ATX heading's text, with its hashes and its level dropped: a pane this narrow has no room
-/// to draw six levels differently, so every heading is one bold line.
-fn heading(line: &str) -> Option<&str> {
+fn heading_text_whatever_its_level(line: &str) -> Option<&str> {
     let hashes = line.len() - line.trim_start_matches('#').len();
     if hashes == 0 || hashes > 6 {
         return None;
@@ -112,16 +90,12 @@ fn heading(line: &str) -> Option<&str> {
     line[hashes..].strip_prefix(' ').map(str::trim)
 }
 
-/// A bullet's text. The marker is normalised to one dash, so a list written with any of the three
-/// markers draws the same.
 fn bullet(line: &str) -> Option<&str> {
     ["- ", "* ", "+ "]
         .iter()
         .find_map(|marker| line.strip_prefix(marker))
 }
 
-/// A numbered item's own marker and text. The number written is kept, because a list that starts
-/// at 3 was written that way on purpose.
 fn numbered(line: &str) -> Option<(&str, &str)> {
     let digits = line.len()
         - line
@@ -137,15 +111,13 @@ fn numbered(line: &str) -> Option<(&str, &str)> {
     Some((&line[..digits + 1], text))
 }
 
-/// Inline markup: bold, italics, code and links. Everything else, `|` table pipes included, is
-/// left as it was typed.
 fn inline(text: &str) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
     let mut plain = String::new();
     let mut rest = text;
-    let mut preceding = None;
+    let mut preceding_character = None;
     while !rest.is_empty() {
-        if let Some((span, tail)) = marked(rest, preceding) {
+        if let Some((span, tail)) = marked(rest, preceding_character) {
             if !plain.is_empty() {
                 spans.push(Span::raw(std::mem::take(&mut plain)));
             }
@@ -156,7 +128,7 @@ fn inline(text: &str) -> Vec<Span<'static>> {
         let mut characters = rest.chars();
         if let Some(character) = characters.next() {
             plain.push(character);
-            preceding = Some(character);
+            preceding_character = Some(character);
         }
         rest = characters.as_str();
     }
@@ -166,11 +138,7 @@ fn inline(text: &str) -> Vec<Span<'static>> {
     spans
 }
 
-/// One inline marker at the head of `text`, as the span it draws and what follows it. A link
-/// becomes its text followed by its target in brackets, because a pane cannot be clicked and the
-/// target is the half a reader has to be able to copy. `preceding` is the character already
-/// drawn, which is what tells an underscore inside a word from one opening emphasis.
-fn marked(text: &str, preceding: Option<char>) -> Option<(Span<'static>, &str)> {
+fn marked(text: &str, preceding_character: Option<char>) -> Option<(Span<'static>, &str)> {
     if let Some(rest) = text.strip_prefix('[')
         && let Some((label, after)) = rest.split_once("](")
         && let Some((target, tail)) = after.split_once(')')
@@ -193,7 +161,7 @@ fn marked(text: &str, preceding: Option<char>) -> Option<(Span<'static>, &str)> 
         if let Some(rest) = text.strip_prefix(fence)
             && let Some((inner, tail)) = rest.split_once(fence)
             && !inner.is_empty()
-            && (!fence.starts_with('_') || !intraword(preceding, tail))
+            && (!fence.starts_with('_') || !underscore_sits_inside_a_word(preceding_character, tail))
         {
             return Some((
                 Span::styled(inner.to_string(), Style::new().add_modifier(modifier)),
@@ -204,18 +172,15 @@ fn marked(text: &str, preceding: Option<char>) -> Option<(Span<'static>, &str)> 
     None
 }
 
-/// Whether an underscore run sits inside a word, which the syntax does not read as emphasis: a
-/// name like `a_variable_name` is one word, not an italic in the middle of one.
-fn intraword(preceding: Option<char>, tail: &str) -> bool {
+fn underscore_sits_inside_a_word(preceding_character: Option<char>, tail: &str) -> bool {
     let alphanumeric = |character: char| character.is_alphanumeric();
-    preceding.is_some_and(alphanumeric) || tail.chars().next().is_some_and(alphanumeric)
+    preceding_character.is_some_and(alphanumeric) || tail.chars().next().is_some_and(alphanumeric)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The text of every rendered line, with its indent, so a case reads as what the pane draws.
     fn texts(source: &str) -> Vec<String> {
         render(source, "")
             .iter()
@@ -228,7 +193,6 @@ mod tests {
             .collect()
     }
 
-    /// Every span carrying `modifier`, in order.
     fn styled(source: &str, modifier: Modifier) -> Vec<String> {
         render(source, "")
             .iter()
