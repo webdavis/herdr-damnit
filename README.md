@@ -15,6 +15,9 @@ switch with a picker or a number key. The editing keys follow.
 herdr plugin install webdavis/herdr-damnit
 ```
 
+It needs herdr 0.7.5 or later: plugin panes and their registry arrived in 0.7.0, and `S` reads the
+`pane_id`, `workspace_id` and `agent` fields of `herdr agent list`, which herdr documents from 0.7.5.
+
 The install step builds the binary into `bin/herdr-damnit` with cargo, so a Rust toolchain is
 needed. A local checkout is linked instead, and builds itself:
 
@@ -432,6 +435,11 @@ cargo test --workspace
 
 The tests never reach Todoist: the client is proven against a loopback HTTP double, one canned
 response per case.
+
+The `dam` documents the adapters read are fixtures in `crates/herdr-damnit-adapters/tests/fixtures`,
+captured from a real `dam`. `capture.sh [<dam revision>]` there regenerates them from `dam` built
+at that revision, `main` by default, and `DAM_BIN=/path/to/dam ./capture.sh` replays them against
+a `dam` already built. The four sync documents are captured by hand.
 
 ## License
 
