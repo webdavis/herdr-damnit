@@ -1,7 +1,3 @@
-//! The `kind` `dam` names on an error document. One word per kind, and the word itself for one
-//! `dam` adds later, so a parser has somewhere to put a word this pane has not heard of.
-
-/// Every kind word `dam` 0.2.0 publishes, and the word itself for one it adds later.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ErrorKind {
     Refused,

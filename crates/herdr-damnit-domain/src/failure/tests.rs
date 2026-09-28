@@ -32,7 +32,7 @@ fn a_refusal_carries_dams_own_sentence_its_rule_and_its_oids() {
         message(&failure),
         "98d8780 cannot be completed: child a9db854 is open"
     );
-    assert!(leaves_model_untouched(&failure));
+    assert!(leaves_model_and_prompt_untouched(&failure));
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn an_empty_stage_is_a_refusal_now_rather_than_an_ordinary_failure() {
         Some(refusal("nothing_to_commit", "nothing to commit", &[])),
         "",
     );
-    assert!(leaves_model_untouched(&failure));
+    assert!(leaves_model_and_prompt_untouched(&failure));
     assert_eq!(message(&failure), "nothing to commit");
 }
 
@@ -106,9 +106,8 @@ fn a_held_store_says_who_is_holding_it_and_what_to_press() {
     );
 }
 
-/// clap answers a bad command line before `dam` runs, so there is no document to read.
 #[test]
-fn a_failure_whose_own_kind_is_not_the_store_takes_no_retry_advice() {
+fn a_failure_whose_own_kind_is_not_the_store_takes_no_retry_advice_even_naming_a_lock() {
     let failure = classify(
         Some(1),
         Some(ErrorDocument {
@@ -149,7 +148,7 @@ fn a_command_line_dam_would_not_read_falls_back_to_its_first_line() {
     );
     assert_eq!(message(&failure), "error: unexpected argument '--nope'");
     assert!(
-        !leaves_model_untouched(&failure),
+        !leaves_model_and_prompt_untouched(&failure),
         "a bad command line is this pane's own bug, not a rule dam kept"
     );
 }
@@ -166,13 +165,17 @@ fn a_cancelled_run_is_never_an_error_banner() {
         classify(Some(3), None, ""),
         Failure::Cancelled { killed: false }
     );
-    assert!(leaves_model_untouched(&classify(Some(3), None, "")));
+    assert!(leaves_model_and_prompt_untouched(&classify(
+        Some(3),
+        None,
+        ""
+    )));
     assert_eq!(message(&classify(Some(3), None, "")), "cancelled");
     assert_eq!(
         message(&Failure::Cancelled { killed: true }),
         "cancelled (killed)"
     );
-    assert!(leaves_model_untouched(&Failure::Cancelled {
+    assert!(leaves_model_and_prompt_untouched(&Failure::Cancelled {
         killed: false
     }));
 }

@@ -1,6 +1,3 @@
-//! What a non-zero `dam` exit means, and the one sentence the status line carries for it. Under
-//! `--json` a failure is one document on standard error, so the text and the rule are `dam`'s own.
-
 use crate::Oid;
 
 mod kind;
@@ -9,18 +6,13 @@ mod rule;
 pub use kind::ErrorKind;
 pub use rule::Rule;
 
-/// The read deadline the pane cancels a local read at. A SQLite read that takes this long is a
-/// wedged store rather than a slow one.
 pub const READ_DEADLINE_SECONDS: u64 = 30;
 
-/// `dam`'s error document, parsed by the adapters crate and handed here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ErrorDocument {
     pub kind: ErrorKind,
     pub message: String,
-    /// The rule a refusal broke, and `None` for every other kind.
     pub rule: Option<Rule>,
-    /// The objects the message names, in the order it names them.
     pub oids: Vec<Oid>,
 }
 
@@ -41,10 +33,10 @@ pub enum Failure {
     Deadline(String),
 }
 
-/// The exit code `dam` reports for a rule of its own, and for nothing else.
-const REFUSED: i32 = 4;
-/// The exit code `dam` reports when it was interrupted or a prompt went unanswered.
-const CANCELLED: i32 = 3;
+const EXIT_REFUSED_BY_A_RULE: i32 = 4;
+const EXIT_INTERRUPTED_OR_UNANSWERED: i32 = 3;
+
+const SQLITE_BUSY_TIMEOUT_MESSAGES: [&str; 2] = ["database is locked", "database table is locked"];
 
 pub fn classify(code: Option<i32>, error: Option<ErrorDocument>, fallback: &str) -> Failure {
     let said = |error: &Option<ErrorDocument>| match error {
@@ -52,15 +44,17 @@ pub fn classify(code: Option<i32>, error: Option<ErrorDocument>, fallback: &str)
         None => first_line(fallback),
     };
     match (code, error) {
-        (Some(REFUSED), Some(document)) => Failure::Refused {
+        (Some(EXIT_REFUSED_BY_A_RULE), Some(document)) => Failure::Refused {
             rule: document
                 .rule
                 .unwrap_or_else(|| Rule::Unknown(String::new())),
             said: document.message,
             oids: document.oids,
         },
-        (Some(CANCELLED), _) => Failure::Cancelled { killed: false },
-        (Some(_), error) if is_store(&error, fallback) => Failure::Store(said(&error)),
+        (Some(EXIT_INTERRUPTED_OR_UNANSWERED), _) => Failure::Cancelled { killed: false },
+        (Some(_), error) if is_the_store_held_by_another_writer(&error, fallback) => {
+            Failure::Store(said(&error))
+        }
         (Some(_), error) => Failure::Other(said(&error)),
         (None, _) => Failure::Other(String::new()),
     }
@@ -83,9 +77,7 @@ pub fn message(failure: &Failure) -> String {
     }
 }
 
-/// Whether the pane's model and any open prompt survive this failure untouched, which is what a
-/// refused write leaves behind.
-pub fn leaves_model_untouched(failure: &Failure) -> bool {
+pub fn leaves_model_and_prompt_untouched(failure: &Failure) -> bool {
     matches!(
         failure,
         Failure::Refused { .. } | Failure::Cancelled { .. } | Failure::Deadline(_)
@@ -97,11 +89,7 @@ fn first_line(stderr: &str) -> String {
     line.strip_prefix("dam: ").unwrap_or(line).to_string()
 }
 
-/// A held store is both halves `dam` reports: its own `store` kind, and SQLite's words for a
-/// writer holding the store past the five-second busy timeout. A disk error under the same kind
-/// takes no advice about waiting for another writer. A failure with no document is judged on its
-/// line alone, which is what a `dam` too old to print one leaves behind.
-fn is_store(error: &Option<ErrorDocument>, fallback: &str) -> bool {
+fn is_the_store_held_by_another_writer(error: &Option<ErrorDocument>, fallback: &str) -> bool {
     let said = match error {
         Some(document) => {
             if document.kind != ErrorKind::Store {
@@ -112,7 +100,9 @@ fn is_store(error: &Option<ErrorDocument>, fallback: &str) -> bool {
         None => fallback,
     }
     .to_ascii_lowercase();
-    said.contains("database is locked") || said.contains("database table is locked")
+    SQLITE_BUSY_TIMEOUT_MESSAGES
+        .iter()
+        .any(|busy| said.contains(busy))
 }
 
 #[cfg(test)]

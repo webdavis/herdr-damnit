@@ -85,7 +85,7 @@ fn object() -> Object {
             priority: Priority::default(),
             due: None,
             deadline: None,
-            attached: None,
+            attached_event: None,
         }),
         event: None,
     }

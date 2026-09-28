@@ -1,6 +1,3 @@
-//! One object as `dam` describes it. The field names and the optionality are `dam`'s own wire
-//! shape; what the pane adds is the three questions every row asks whatever the kind.
-
 use crate::{Date, Oid, Priority};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,8 +26,7 @@ pub struct TaskFields {
     pub priority: Priority,
     pub due: Option<Date>,
     pub deadline: Option<Date>,
-    /// The oid of the event this task is attached to.
-    pub attached: Option<Oid>,
+    pub attached_event: Option<Oid>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -86,7 +82,7 @@ mod tests {
                 priority: Priority::new(1).expect("a priority"),
                 due: parse_date("2026-09-18"),
                 deadline: None,
-                attached: None,
+                attached_event: None,
             }),
             event: None,
         }

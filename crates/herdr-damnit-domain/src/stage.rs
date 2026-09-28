@@ -1,6 +1,3 @@
-//! The staging model `dam status` reports, and the Status screen drawn from it. A section with
-//! nothing in it is left out, and an entirely empty stage says so in `dam`'s own words.
-
 use crate::{Mark, Oid, StagingMarks};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -10,7 +7,6 @@ pub enum Op {
     Delete,
 }
 
-/// One object `dam` reports as changed, and the field names the change touches.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Change {
     pub oid: Oid,
@@ -19,13 +15,10 @@ pub struct Change {
     pub fields: Vec<String>,
 }
 
-/// How far one remote is behind the local commits, and which objects those commits touch.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Unpushed {
     pub remote: String,
     pub commits: u64,
-    /// The objects whose changes sit in this remote's unpushed commits. Empty when the `dam` that
-    /// answered does not publish them, which costs the rows their unpushed mark and nothing else.
     pub oids: Vec<Oid>,
 }
 
@@ -45,7 +38,6 @@ pub struct Notice {
     pub message: String,
 }
 
-/// The five arrays `dam status --json` answers with.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Stage {
     pub staged: Vec<Change>,
@@ -55,8 +47,6 @@ pub struct Stage {
     pub notices: Vec<Notice>,
 }
 
-/// One line of the Status screen. A `Change` row names an oid and is therefore a cursor target; a
-/// `Line` names none, and carries a mark only where the screen draws one beside it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StatusRow {
     Heading(String),
@@ -81,7 +71,6 @@ impl Stage {
         self.staged.len()
     }
 
-    /// Whether an object's changes sit in some remote's unpushed commits.
     pub fn is_unpushed(&self, oid: &Oid) -> bool {
         self.unpushed
             .iter()
@@ -131,8 +120,8 @@ impl Stage {
                         "  {}  {}  ours: \"{}\"  theirs: \"{}\"",
                         conflict.oid.short(),
                         conflict.remote,
-                        one_line(&conflict.ours),
-                        one_line(&conflict.theirs)
+                        newlines_as_spaces(&conflict.ours),
+                        newlines_as_spaces(&conflict.theirs)
                     ),
                 });
             }
@@ -148,9 +137,7 @@ impl Stage {
     }
 }
 
-/// A conflicting value as one row can carry it. The quotes are the spec's; a newline becomes a
-/// space so a multi-line value cannot break the row it is drawn in.
-fn one_line(value: &str) -> String {
+fn newlines_as_spaces(value: &str) -> String {
     value.replace(['\n', '\r'], " ")
 }
 
@@ -167,7 +154,6 @@ fn section(rows: &mut Vec<StatusRow>, heading: &str, changes: &[Change], mark: M
 }
 
 impl Change {
-    /// One change as the Status screen draws it, in `dam`'s own column shape.
     fn line(&self) -> String {
         let word = match self.op {
             Op::Create => "new     ",
@@ -184,8 +170,6 @@ impl Change {
 }
 
 impl Notice {
-    /// A notice that names an object is a cursor target, the way a conflict is. One about a remote
-    /// rather than an object, such as a failed pull, names none and draws its message alone.
     fn row(&self) -> StatusRow {
         match &self.oid {
             Some(oid) => StatusRow::Change {
@@ -202,8 +186,6 @@ impl Notice {
 }
 
 impl StagingMarks for Stage {
-    /// Most urgent first: a conflict beats staged, staged beats working, and working beats
-    /// unpushed.
     fn mark_of(&self, oid: &Oid) -> Option<Mark> {
         if self.conflicts.iter().any(|conflict| &conflict.oid == oid) {
             return Some(Mark::Conflict);

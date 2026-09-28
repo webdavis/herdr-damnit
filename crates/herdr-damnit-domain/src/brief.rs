@@ -1,6 +1,3 @@
-//! The text `S` hands to the workspace's agent pane. Plain text, because an agent pane is a shell:
-//! it is pasted into that pane's input and the operator presses return themselves.
-
 use crate::{Kind, Object, long};
 
 pub fn brief(object: &Object, note: &str) -> String {
@@ -59,7 +56,7 @@ mod tests {
                 priority: Priority::new(1).expect("a priority"),
                 due: parse_date("2026-09-20"),
                 deadline: None,
-                attached: None,
+                attached_event: None,
             }),
             event: None,
         }
@@ -93,7 +90,7 @@ mod tests {
                 priority: Priority::default(),
                 due: None,
                 deadline: None,
-                attached: None,
+                attached_event: None,
             }),
             ..task()
         };

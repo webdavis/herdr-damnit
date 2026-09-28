@@ -201,10 +201,8 @@ fn every_row_naming_an_oid_is_a_cursor_target() {
     );
 }
 
-/// The spec's Status mock leads the unpushed row with the up arrow, and every other plain row with
-/// nothing, so the mark is a field rather than a character the renderer has to know to add.
 #[test]
-fn the_unpushed_row_carries_its_own_mark_and_no_other_plain_row_does() {
+fn the_unpushed_row_carries_its_mark_as_a_field_and_no_other_plain_row_carries_one() {
     let mut stage = full();
     stage.notices.push(Notice {
         kind: "pull_failed".to_string(),
