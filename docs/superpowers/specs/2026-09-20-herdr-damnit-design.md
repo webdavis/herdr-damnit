@@ -97,7 +97,7 @@ with the `dam` change that closes them.
 The manifest `id` is what herdr registers a plugin as, verbatim, with no owner namespacing, so
 every `plugin_action` keybinding names `herdr-damnit.<action>` and nothing else changes about the
 binding shape. GitHub keeps redirecting the old repository path after a rename, so a clone by the
-old name still resolves; the roster is still updated to the new one, because a pin that reads
+old name still resolves; an install pin still names the new one, because a pin that reads
 `webdavis/herdr-todoist` for a plugin called `herdr-damnit` is a trap for the next reader.
 
 ### Action names
@@ -111,22 +111,17 @@ old name still resolves; the roster is still updated to the new one, because a p
 | `doctor` | `doctor` | Checks `dam` rather than the Todoist API. |
 | none | `status` | One addition: open the pane on the Status screen. The staging model is the reason this plugin exists, so it gets a chord of its own. |
 
-### What the dotfiles repository must change
+### Migrating from `herdr-todoist`
 
-Four edits, all in `webdavis/dotfiles`, none of which an agent applies:
+A user of `herdr-todoist` makes four changes by hand:
 
-1. **`dot_config/herdr/config.toml`**: the one `plugin_action` binding under the `herdr-todoist`
-   banner changes its `command` from `herdr-todoist.toggle` to `herdr-damnit.toggle`, and the
-   banner comment changes with it. The key stays `prefix+d`. Optionally a second binding for
-   `herdr-damnit.status`.
-1. **`.chezmoidata/system_packages_autoinstall.yaml`**: the roster row under
-   `packages.herdr_plugins` changes `id: herdr-todoist` to `id: herdr-damnit`, `repo:
-   webdavis/herdr-todoist` to `repo: webdavis/herdr-damnit`, and its `ref:` to the revision of the
-   first `herdr-damnit` release. The comment beside it loses the sentence about the token, which is
-   no longer the plugin's business.
-1. **The plugin config**: `dot_config/herdr/plugins/config/herdr-todoist/config.toml` becomes
-   `dot_config/herdr/plugins/config/herdr-damnit/config.toml`, with `token_command` removed and the
-   `[[views]]` filters rewritten in `dam`'s grammar.
+1. **The keybinding**: a `plugin_action` binding whose `command` is `herdr-todoist.toggle` becomes
+   `herdr-damnit.toggle`. Optionally a second binding for `herdr-damnit.status`.
+1. **The install pin**: wherever the plugin is installed from, `webdavis/herdr-todoist` becomes
+   `webdavis/herdr-damnit`, at the revision of the first `herdr-damnit` release.
+1. **The plugin config**: the `herdr-todoist` plugin config moves to the directory
+   `herdr plugin config-dir herdr-damnit` prints, with `token_command` removed and the `[[views]]`
+   filters rewritten in `dam`'s grammar.
 1. **`dam`'s own config**, `~/.config/dam/config.toml`, gains the remote and the token source:
 
    ```toml
@@ -136,31 +131,18 @@ Four edits, all in `webdavis/dotfiles`, none of which an agent applies:
    ```
 
    A `_command` inherits `dam`'s standard input (spec 375 to 377), and a client spawns `dam` with
-   standard input closed, so a vault CLI that prompts for a password cannot resolve here. The
-   deployed `herdr-todoist` config records that this was measured for both the pane and the Neovim
-   plugin on 2026-09-18 and that the keychain read is what works. The same argv moves across
-   unchanged.
+   standard input closed, so a vault CLI that prompts for a password cannot resolve here. A keychain
+   read does.
 
-### The `run_after_53` reinstall path, and what it does not do
-
-`.chezmoiscripts/run_after_53-install-herdr-third-party-plugins.sh.tmpl` reads the roster, asks
-`herdr plugin list --plugin <id> --json` for the revision herdr recorded, and reinstalls whatever
-no longer sits at its pinned revision. It installs; **it never uninstalls.** A plugin whose `id`
-changed is, to that script, one new plugin to install and one old plugin it has simply stopped
-being told about, so `herdr-todoist` stays registered and its `prefix+d` binding would resolve to
-whichever of the two herdr matched.
-
-That makes three one-time operator steps, which belong in the migration pull request's body rather
-than in any script, because this repository builds no removal mechanisms:
+Installing `herdr-damnit` does not uninstall `herdr-todoist`: a plugin whose `id` changed is one new
+plugin to install, and the old one stays registered, so its binding would resolve to whichever of
+the two herdr matched. That makes two one-time steps, which this repository leaves to the user
+because it builds no removal mechanisms:
 
 ```bash
 herdr plugin uninstall herdr-todoist
 trash ~/.config/herdr/plugins/config/herdr-todoist
 ```
-
-and a full `chezmoi apply`, which is what installs `herdr-damnit` at its pin and rewrites the
-binding. Chezmoi does not delete a target that left the source, so the old plugin config directory
-in the home directory is the operator's to remove.
 
 ### No compatibility shim
 
@@ -187,7 +169,7 @@ surface the single contract, which is also the one `dam`'s own tests pin.
 versioned migrations, and opening it reports `OpenError::NewerSchema { found, supported }`
 (`crates/dam-adapters/src/sqlite/mod.rs`). A linked `dam-application` is a **second writer** with
 its own schema opinion, installed and upgraded on its own schedule: the pane is installed by
-`herdr plugin install` at a roster pin, and `dam` by `cargo install`. The day those diverge, a pane
+`herdr plugin install` at a pinned revision, and `dam` by `cargo install`. The day those diverge, a pane
 built against schema N opens a store the installed `dam` migrated to N plus one, and the failure is
 a refusal to open at best. Spawning means exactly one binary ever writes the store, and its version
 is a fact the pane can read rather than a fact it embeds.
@@ -518,8 +500,8 @@ name = "today"
 query = "!done & (due:today | overdue)"
 
 [[views]]
-name = "dotfiles"
-query = "!done & path:webdavis/dotfiles/"
+name = "app"
+query = "!done & path:example/app/"
 
 [[views]]
 name = "deep"

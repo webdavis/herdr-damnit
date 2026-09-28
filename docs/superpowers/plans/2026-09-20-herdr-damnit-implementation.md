@@ -24,8 +24,8 @@ unicode-width, libc. No async runtime and no HTTP client.
 
 Every task's requirements implicitly include this section.
 
-- Rust follows the clean-code standard at `~/.agents/skills/clean-code-rust/SKILL.md`. Read it and its
-  parent `~/.agents/skills/clean-code/SKILL.md` before the first task.
+- Rust follows the clean-code Rust standard. Read it and its parent clean-code standard before the
+  first task.
 - Every `.rs` file is 300 lines ideal and 500 lines hard cap, unit tests included, with no waiver.
   `main.rs` targets 50 to 150 lines and must be under 150 at completion.
 - Every test runs under one second. No network, no real herdr, no real `dam` store: the plugin's tests
@@ -34,8 +34,7 @@ Every task's requirements implicitly include this section.
   request bodies.
 - Comments say what the code does or why it is the way it is. A comment never says what was rejected,
   what the file does not do, or anything about the conversation that produced it.
-- Conventional commits, every commit made with `SKIP_AI_COMMIT=1` in the environment and no
-  co-author trailer of any kind.
+- Conventional commits, with no co-author trailer of any kind.
 - The plugin never holds or reads a Todoist token. `dam` owns the token and resolves it from its own
   remote config.
 - This is a public repository. No home directory paths, machine names, tokens or personal data in
@@ -45,9 +44,6 @@ Every task's requirements implicitly include this section.
   `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`
   and `cargo doc --workspace --no-deps --locked`. All four keep `--workspace`. There is no markdown
   formatter in this repository's CI.
-- The dotfiles side is out of this plan. The `packages.herdr_plugins` roster row and the config leaf
-  `dot_config/herdr/plugins/config/herdr-todoist/config.toml` in `webdavis/dotfiles` get their own
-  pull request once the manifest id changes. Task 2 records exactly which values move.
 
 ## File Structure
 
@@ -180,7 +176,7 @@ Expected: both clean.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "refactor: rename the command crate and its binary to herdr-damnit"
+git commit -m "refactor: rename the command crate and its binary to herdr-damnit"
 ```
 
 ---
@@ -196,18 +192,6 @@ SKIP_AI_COMMIT=1 git commit -m "refactor: rename the command crate and its binar
   `view:1` to `view:9`, `doctor`), and the binary path `bin/herdr-damnit`. The binary must answer the
   subcommand `status`, which Task 41 implements; until then it exits non-zero with the usage banner,
   which is what an unknown command already does.
-
-**The dotfiles values that move, for the separate pull request against `webdavis/dotfiles`:**
-
-| File | Old value | New value |
-|---|---|---|
-| `dot_config/herdr/config.toml` | `command = "herdr-todoist.toggle"` on the `prefix+d` binding, under a `herdr-todoist` banner comment | `command = "herdr-damnit.toggle"`, banner `herdr-damnit`, description `damnit: toggle the task pane` |
-| `.chezmoidata/system_packages_autoinstall.yaml` | `- id: herdr-todoist` / `repo: webdavis/herdr-todoist` / `ref: bef263d7d86f5aabb6aba35c3be56bc619e4ee21` | `- id: herdr-damnit` / `repo: webdavis/herdr-damnit` / `ref:` the revision of the first `herdr-damnit` release, with the comment's token sentence removed |
-| `dot_config/herdr/plugins/config/herdr-todoist/config.toml` | the whole file, including `token_command`, `width = 0.3`, `default_view = "today"` and three `[[views]]` with `filter =` | moves to `dot_config/herdr/plugins/config/herdr-damnit/config.toml`, drops `token_command` and its comment block, keeps `width` and `default_view`, and rewrites each `filter =` as `query =` in `dam`'s grammar |
-| `~/.config/dam/config.toml` | absent | gains `[remote.todoist]` with `url = "todoist::"` and the same `security find-generic-password` argv the plugin config held |
-
-The three one-time operator steps belong in that pull request's body: `herdr plugin uninstall
-herdr-todoist`, `trash ~/.config/herdr/plugins/config/herdr-todoist`, and a full `chezmoi apply`.
 
 - [ ] **Step 1: Rewrite the manifest head**
 
@@ -326,7 +310,7 @@ Expected: `manifest ok: 14 actions`
 
 ```bash
 git add herdr-plugin.toml
-SKIP_AI_COMMIT=1 git commit -m "refactor(manifest): rename the plugin id and add the status action"
+git commit -m "refactor(manifest): rename the plugin id and add the status action"
 ```
 
 ---
@@ -446,7 +430,7 @@ Expected: PASS, every test.
 
 ```bash
 git add crates/herdr-damnit/src/config.rs crates/herdr-damnit/src/state.rs
-SKIP_AI_COMMIT=1 git commit -m "refactor(config): pin the renamed config and state directories with tests"
+git commit -m "refactor(config): pin the renamed config and state directories with tests"
 ```
 
 ---
@@ -714,7 +698,7 @@ Expected: PASS, every test in both packages.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(domain): add the domain crate with the oid, the priority and the colour slot"
+git commit -m "feat(domain): add the domain crate with the oid, the priority and the colour slot"
 ```
 
 ---
@@ -863,7 +847,7 @@ Expected: PASS, ten tests: the five from Task 4 and the five here.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(domain): read a dam date and say where it sits against today"
+git commit -m "feat(domain): read a dam date and say where it sits against today"
 ```
 
 ---
@@ -1141,7 +1125,7 @@ Expected: PASS, every test.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(domain): add the mark set with dam's own priority direction"
+git commit -m "feat(domain): add the mark set with dam's own priority direction"
 ```
 
 ---
@@ -1324,7 +1308,7 @@ Expected: PASS.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(domain): model a dam object and the three questions every row asks"
+git commit -m "feat(domain): model a dam object and the three questions every row asks"
 ```
 
 ---
@@ -1672,7 +1656,7 @@ Expected: PASS, six new tests.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(domain): group rows by dam's path and lead them with their marks"
+git commit -m "feat(domain): group rows by dam's path and lead them with their marks"
 ```
 
 ---
@@ -1907,7 +1891,7 @@ Expected: PASS, six new tests.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(domain): carry the cursor by oid across a re-read"
+git commit -m "feat(domain): carry the cursor by oid across a re-read"
 ```
 
 ---
@@ -2116,7 +2100,7 @@ Expected: PASS.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(domain): number the views over dam queries with the open list first"
+git commit -m "feat(domain): number the views over dam queries with the open list first"
 ```
 
 ---
@@ -2824,7 +2808,7 @@ Expected: both under 300. If `stage.rs` is over 300, move the `rows` builder and
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(domain): model dam's staging report and the status screen it draws"
+git commit -m "feat(domain): model dam's staging report and the status screen it draws"
 ```
 
 ---
@@ -3021,7 +3005,7 @@ Expected: PASS and clean.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(domain): write the agent brief from a dam object"
+git commit -m "feat(domain): write the agent brief from a dam object"
 ```
 
 ---
@@ -3245,7 +3229,7 @@ Expected: PASS.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(domain): compare the dam this pane found against the one it was built for"
+git commit -m "feat(domain): compare the dam this pane found against the one it was built for"
 ```
 
 ---
@@ -3813,7 +3797,7 @@ Expected: PASS and clean.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(domain): map a dam exit and its error document to one sentence"
+git commit -m "feat(domain): map a dam exit and its error document to one sentence"
 ```
 
 ---
@@ -3986,7 +3970,7 @@ Expected: PASS, one test.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(application): add the application crate with the dam, herdr and clock ports"
+git commit -m "feat(application): add the application crate with the dam, herdr and clock ports"
 ```
 
 ---
@@ -4371,7 +4355,7 @@ Expected: PASS, fifteen tests.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(application): spell every dam command the pane spawns"
+git commit -m "feat(application): spell every dam command the pane spawns"
 ```
 
 ---
@@ -4849,7 +4833,7 @@ Expected: under 300.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(application): run one exclusive dam job at a time and re-read after every write"
+git commit -m "feat(application): run one exclusive dam job at a time and re-read after every write"
 ```
 
 ---
@@ -5024,7 +5008,7 @@ Expected: PASS, six new tests.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(application): check dam's version and its status document before drawing"
+git commit -m "feat(application): check dam's version and its status document before drawing"
 ```
 
 ---
@@ -5485,7 +5469,7 @@ Expected: both under 300.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(application): hand a dam object to the workspace's agent pane"
+git commit -m "feat(application): hand a dam object to the workspace's agent pane"
 ```
 
 ---
@@ -6008,7 +5992,7 @@ Expected: PASS, six tests.
 - [ ] **Step 8: Prove the fixtures carry no personal data**
 
 ```bash
-! grep -rniE 'stephen|webdavis|/Users/|todoist api|token' crates/herdr-damnit-adapters/tests/fixtures/*.json
+! grep -rniE 'webdavis|/Users/|todoist api|token' crates/herdr-damnit-adapters/tests/fixtures/*.json
 ```
 
 Expected: no match. A fixture that matches was captured against a real store and must be recaptured
@@ -6018,7 +6002,7 @@ by `capture.sh`.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "test(adapters): add the fake dam and the fixtures it replays"
+git commit -m "test(adapters): add the fake dam and the fixtures it replays"
 ```
 
 ---
@@ -6333,7 +6317,7 @@ Expected: no match.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(adapters): spawn dam on a thread and answer the draw loop on a channel"
+git commit -m "feat(adapters): spawn dam on a thread and answer the draw loop on a channel"
 ```
 
 ---
@@ -6845,7 +6829,7 @@ Expected: PASS, every test in the crate.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(adapters): cancel a dam run with SIGINT to its group and a deadline of its own"
+git commit -m "feat(adapters): cancel a dam run with SIGINT to its group and a deadline of its own"
 ```
 
 ---
@@ -7496,7 +7480,7 @@ Expected: all six inside the 300 line ideal, none over 500.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(adapters): read dam's documents into the pane's own types"
+git commit -m "feat(adapters): read dam's documents into the pane's own types"
 ```
 
 ---
@@ -7873,7 +7857,7 @@ a config naming no theme at all.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(adapters): read the pane's config with dam's query grammar and no token key"
+git commit -m "feat(adapters): read the pane's config with dam's query grammar and no token key"
 ```
 
 ---
@@ -8023,7 +8007,7 @@ the free `herdr::call` became that trait method.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(adapters): move the state directory, the clock and the herdr client into the adapters"
+git commit -m "feat(adapters): move the state directory, the clock and the herdr client into the adapters"
 ```
 
 ---
@@ -8623,7 +8607,7 @@ that runs clippy.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): draw and read keys while a dam job runs"
+git commit -m "feat(pane): draw and read keys while a dam job runs"
 ```
 
 ---
@@ -8903,7 +8887,7 @@ it. `cut_to` is the same rule over a bare string, which the status line and the 
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): draw the list screen, the status line and the hints"
+git commit -m "feat(pane): draw the list screen, the status line and the hints"
 ```
 
 ---
@@ -9265,7 +9249,7 @@ Task 29 re-adds `press` with the Tab-cycle tests that call it.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): open on dam and delete the Todoist client"
+git commit -m "feat(pane): open on dam and delete the Todoist client"
 ```
 
 ---
@@ -9514,7 +9498,7 @@ screens now draw coloured segment runs through it.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): add the status and done screens to the tab cycle"
+git commit -m "feat(pane): add the status and done screens to the tab cycle"
 ```
 
 ---
@@ -9706,7 +9690,7 @@ Expected: PASS, seventeen tests.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): draw one object's detail from dam show"
+git commit -m "feat(pane): draw one object's detail from dam show"
 ```
 
 ---
@@ -9715,8 +9699,7 @@ SKIP_AI_COMMIT=1 git commit -m "feat(pane): draw one object's detail from dam sh
 
 **Ruling 26 (carried in from Task 26).** `config.default_view` has no owner anywhere in this plan.
 `Config::check_default_view` proves the name is a view that exists and nothing ever selects it, so
-`default_view = "today"` in the operator's own config file opens the pane on the open list in
-silence. This task owns view selection, so it discharges it: `App::new` follows `Views::new` with
+a config file with `default_view = "today"` opens the pane on the open list in silence. This task owns view selection, so it discharges it: `App::new` follows `Views::new` with
 `views.select_named(name)` for a configured `default_view`, under a test that asserts the showing
 view.
 
@@ -9940,7 +9923,7 @@ Expected: PASS.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): move the cursor, pick a view and re-read on demand"
+git commit -m "feat(pane): move the cursor, pick a view and re-read on demand"
 ```
 
 ---
@@ -10129,7 +10112,7 @@ Expected: PASS.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): stage, unstage and commit from the pane"
+git commit -m "feat(pane): stage, unstage and commit from the pane"
 ```
 
 ---
@@ -10439,7 +10422,7 @@ Expected: PASS, eleven new tests.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): push and pull without freezing the pane"
+git commit -m "feat(pane): push and pull without freezing the pane"
 ```
 
 ---
@@ -10569,7 +10552,7 @@ Expected: PASS.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): complete, force-complete and remove an object"
+git commit -m "feat(pane): complete, force-complete and remove an object"
 ```
 
 ---
@@ -10711,7 +10694,7 @@ Expected: PASS.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): cycle a priority and set a due date or a deadline"
+git commit -m "feat(pane): cycle a priority and set a due date or a deadline"
 ```
 
 ---
@@ -10898,7 +10881,7 @@ Expected: under 500, ideally under 300. The key match is the part that grew; mov
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): pick a label, move a path and add an object"
+git commit -m "feat(pane): pick a label, move a path and add an object"
 ```
 
 ---
@@ -11076,7 +11059,7 @@ Expected: PASS.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): hand the terminal to dam edit and take it back"
+git commit -m "feat(pane): hand the terminal to dam edit and take it back"
 ```
 
 ---
@@ -11272,7 +11255,7 @@ Expected: PASS.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): hand a task to the agent pane and record it as a label"
+git commit -m "feat(pane): hand a task to the agent pane and record it as a label"
 ```
 
 ---
@@ -11421,7 +11404,7 @@ Expected: PASS.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): resolve a conflict and leave a running push to finish"
+git commit -m "feat(pane): resolve a conflict and leave a running push to finish"
 ```
 
 ---
@@ -11550,7 +11533,7 @@ Expected: PASS.
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): bind the discard key only on a dam that has restore"
+git commit -m "feat(pane): bind the discard key only on a dam that has restore"
 ```
 
 ---
@@ -11674,7 +11657,7 @@ there is no herdr and no `dam` in this shell; `nonsense` prints `herdr-damnit: u
 
 ```bash
 git add -A
-SKIP_AI_COMMIT=1 git commit -m "feat(pane): check dam in the doctor and open the pane on the status screen"
+git commit -m "feat(pane): check dam in the doctor and open the pane on the status screen"
 ```
 
 ---
@@ -11744,7 +11727,7 @@ keep, in which case narrow the grep rather than the README.
 - [ ] **Step 3: Verify the whole repository has no personal data in it**
 
 ```bash
-! grep -rniE 'stephen|/Users/|dresden|Todoist API Token' README.md crates/ herdr-plugin.toml
+! grep -rniE '/Users/|Todoist API Token' README.md crates/ herdr-plugin.toml
 ```
 
 Expected: no match.
@@ -11773,7 +11756,7 @@ in its own commit.
 
 ```bash
 git add README.md
-SKIP_AI_COMMIT=1 git commit -m "docs: describe the pane over dam rather than the Todoist API"
+git commit -m "docs: describe the pane over dam rather than the Todoist API"
 ```
 
 ---
@@ -11788,7 +11771,7 @@ onto a task:
 | Spec section | Tasks |
 |---|---|
 | 1, the split and the fate table | 28 deletes the Todoist path; every fate row lands in the task that rebuilds it |
-| 2, naming and migration | 1, 2, 3; the dotfiles values are tabulated in Task 2 and are out of this plan |
+| 2, naming and migration | 1, 2, 3 |
 | 3, the dam boundary, the handshake, the error mapping | 14, 15, 18, 20, 21, 28 |
 | 4, the three screens, the keys, the views, the pickers, the detail, the hand-off, the editor, colours | 4 to 13, 27, 29 to 40 |
 | 5, non-blocking operations, jobs, the header, cancellation, completion, closing mid-push | 17, 21, 22, 26, 33, 39 |
