@@ -1139,16 +1139,12 @@ Made while writing this design, on 2026-09-20:
 ### Needed from dam
 
 Each item names what the pane needs, why, and the `dam` change that would provide it. None of them
-blocks the pane shipping. The one marked **blocking a key** is why a key is re-aimed in version one,
-and the one marked **blocking a mark** is why a mark in the List screen's table stays unlit until
-`dam` publishes the field behind it.
+blocks the pane shipping. Item 1 was why a key was re-aimed in version one, and item 9 why a mark in
+the List screen's table stayed unlit; both have since shipped.
 
-**1. Clear `done` on a task. Blocking a key.** `dam` version one has `done` and no inverse:
-`dam edit --help` lists no done flag, and there is no `undone` or `reopen` subcommand
-(`crates/dam-cli/src/commands/mod.rs`, `dispatch`). A completed task cannot be reopened from any
-client. Proposed: `dam edit <oid> --undone`, next to the other paired flags `--no-due`,
-`--no-deadline`, `--no-recurrence` and `--detach`, which already establish the shape. The pane would
-bind it to `u`, matching the completed list's existing key.
+**1. Clear `done` on a task. DELIVERED in `dam` 0.2.0.** `dam edit <oid> --undone` reopens a
+completed task, next to the other paired flags `--no-due`, `--no-deadline`, `--no-recurrence` and
+`--detach` as proposed (`webdavis/damnit` PR #2, `c2565c1`). The completed list's `u` has its verb.
 
 **2. Discard a working change. DELIVERED in `dam` 0.2.0.** `dam reset` unstages, and
 `dam restore <oid>...` puts an object back to its last committed state: git's own word for it since
@@ -1174,18 +1170,16 @@ under a machine format is refused as `needs_an_editor` rather than run. The mapp
 nothing else does, `nothing_to_commit` among them. Exit 2 is now the command line alone, exit 1 is
 every other failure including a dead editor, and exit 3 is cancelled.
 
-**5. A completion timestamp.** The Done screen wants a completion date per task and the object
-document has none (`crates/dam-protocol/src/messages.rs`, `WireTask` carries `done`, `priority`,
-`due`, `deadline` and `event`). The pane recovers it by reading `dam log --json` and finding the
-commit whose change flipped `done`, which is exact but is a second read and misses an uncommitted
-completion. Proposed: a `completed_at` field on `WireTask`, set when `done` becomes true.
+**5. A completion timestamp. DELIVERED in `dam` 0.2.0.** `WireTask` carries `completed_at`, RFC
+3339 in UTC, set when `dam done` completes a task, null on an open task and cleared by `--undone`
+(`webdavis/damnit` PR #5). The Done screen can read its date from the object document instead of
+finding the completing commit in `dam log --json`.
 
-**6. The category catalogue and the saved filters.** Both live in `dam`'s config and no command
-prints either. The pane cannot group a label picker by category, cannot pre-refuse an exclusive
-clash, and cannot offer the saved filters as views. Proposed: `dam config --json` printing the
-declared categories with their values and their `exclusive` flag, and the saved filter names with
-their queries. Reading the config file directly is the alternative and it is wrong: the pane would
-own a second parser for a file `dam` owns.
+**6. The category catalogue and the saved filters. DELIVERED in `dam` 0.2.0.** `dam category list`
+prints the declared categories with their values and whether each is exclusive, and
+`dam filter list` prints the saved filter names with their queries, each as one JSON document under
+`--json` (`webdavis/damnit` PR #6). The pane can read the catalogue from `dam` and own no second
+parser for `dam`'s config.
 
 **7. A `status` that does not embed whole objects. DELIVERED in `dam` 0.2.0, as the default.**
 `dam status --json` and `dam diff --json` answer one change document per change carrying the oid,
@@ -1198,21 +1192,11 @@ a `warnings` list, which matters to a client that adds a remote and this pane ne
 `--toon` prints the same error document as `--json`, which this pane has no use for because it reads
 JSON.
 
-**9. The objects behind an unpushed count. Blocking a mark.** `dam status --json` answers `unpushed`
-as one row per remote carrying `remote` and `commits`
-(`crates/dam-application/src/use_cases/status.rs`, `Status::unpushed`, a `Vec<(RemoteName, usize)>`,
-serialized in `crates/dam-cli/src/commands/status.rs`). No oid is published, so a client can say how
-far a remote is behind but not which objects are behind on it, and the unpushed mark in the List
-screen's mark table above has nothing to read. `dam` already holds the answer: `push` coalesces the
-unpushed commits' changes per oid (`crates/dam-application/src/use_cases/push/mutations.rs`).
-Proposed, additive and therefore a 0.2.x change: each `unpushed` row gains `"oids": [...]`, the
-objects whose changes sit in that remote's unpushed commits. The pane reads the field when it is
-there and leaves its set empty when it is not, so a `dam` without it draws every other mark as
-before and only loses the up arrow.
+**9. The objects behind an unpushed count. DELIVERED in `dam` 0.2.0.** Each `unpushed` row in
+`dam status --json` carries `"oids": [...]`, the objects whose changes sit in that remote's unpushed
+commits, as proposed (`webdavis/damnit` PR #7). The pane reads the field when it is there and leaves
+its set empty when it is not, so the unpushed mark has something to read.
 
-**8. Richer date words.** `--due` accepts `today`, `tomorrow`, `YYYY-MM-DD` and `YYYY-MM-DDTHH:MM`;
-`dam` refuses `next mon` with a message naming exactly that set (measured). The old pane leaned on
-the server's parser for `next mon` and `in 3 days`, and operators will reach for those. Proposed:
-extend the `--due` parser with weekday names, `next <weekday>` and `in <n> <unit>`. The recurrence
-parser already handles weekday names (`crates/dam-domain/src/recurrence/parse.rs`), so the vocabulary
-exists in the crate.
+**8. Richer date words. DELIVERED in `dam` 0.2.0.** `--due` accepts weekday names, `next <weekday>`
+and `in <n> days|weeks|months` beside `today`, `tomorrow`, `YYYY-MM-DD` and `YYYY-MM-DDTHH:MM`
+(`webdavis/damnit` PR #6, `crates/dam-domain/src/when/words.rs`).
