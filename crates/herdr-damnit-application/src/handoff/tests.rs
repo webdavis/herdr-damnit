@@ -10,7 +10,6 @@ const LISTING: &str = r#"{"result":{"agents":[
   {"pane_id":"w2:p9","workspace_id":"w2","agent":"codex"}
 ]}}"#;
 
-/// `Herdr` is `Send + Sync`, so the fake records through a `Mutex`.
 struct FakeHerdr {
     calls: Mutex<Vec<Vec<String>>>,
     listing: String,
@@ -133,7 +132,7 @@ fn a_pane_herdr_lists_no_agent_for_is_passed_over_for_the_one_it_does() {
 }
 
 #[test]
-fn the_brief_is_one_bracketed_paste_and_carries_no_return() {
+fn the_brief_is_one_bracketed_paste_and_carries_no_return_so_the_operator_submits_it() {
     let herdr = FakeHerdr::new();
     hand_off(&herdr, &here(), &object(), "start here", "");
 
@@ -150,14 +149,13 @@ fn the_brief_is_one_bracketed_paste_and_carries_no_return() {
 
 #[test]
 fn a_paste_terminator_inside_the_brief_cannot_end_the_frame_early() {
-    let framed = pasted("before \u{1b}[201~ after");
+    let framed = as_one_bracketed_paste("before \u{1b}[201~ after");
     assert_eq!(framed.matches("\u{1b}[201~").count(), 1, "{framed:?}");
 }
 
-/// A terminator spliced together by removing the one before it must not survive either.
 #[test]
-fn two_terminators_sharing_their_characters_are_both_removed() {
-    let framed = pasted("\u{1b}[20\u{1b}[201~1~");
+fn a_terminator_spliced_together_by_removing_the_one_before_it_is_removed_too() {
+    let framed = as_one_bracketed_paste("\u{1b}[20\u{1b}[201~1~");
     assert_eq!(framed.matches("\u{1b}[201~").count(), 1, "{framed:?}");
 }
 
@@ -257,7 +255,7 @@ fn an_agent_pane_that_names_nothing_at_all_is_called_the_agent() {
 }
 
 #[test]
-fn a_refused_send_is_a_refusal_and_a_refused_focus_is_not() {
+fn a_refused_send_is_a_refusal_and_a_refused_focus_is_not_because_the_brief_already_arrived() {
     let refused_send = FakeHerdr {
         refuse_send: true,
         ..FakeHerdr::new()
@@ -280,12 +278,13 @@ fn a_refused_send_is_a_refusal_and_a_refused_focus_is_not() {
 #[test]
 fn a_configured_label_comes_back_as_the_write_the_caller_submits() {
     let herdr = FakeHerdr::new();
-    let HandOff::Sent { label, .. } = hand_off(&herdr, &here(), &object(), "", "handed-off") else {
+    let HandOff::Sent { label_write, .. } = hand_off(&herdr, &here(), &object(), "", "handed-off")
+    else {
         panic!("expected a send");
     };
 
     assert_eq!(
-        label,
+        label_write,
         Some(vec![
             "edit".to_string(),
             "1a2b3c4".to_string(),
@@ -299,10 +298,10 @@ fn a_configured_label_comes_back_as_the_write_the_caller_submits() {
 #[test]
 fn an_empty_label_writes_nothing_and_the_status_line_is_the_whole_record() {
     let herdr = FakeHerdr::new();
-    let HandOff::Sent { label, .. } = hand_off(&herdr, &here(), &object(), "", "  ") else {
+    let HandOff::Sent { label_write, .. } = hand_off(&herdr, &here(), &object(), "", "  ") else {
         panic!("expected a send");
     };
-    assert_eq!(label, None);
+    assert_eq!(label_write, None);
 }
 
 #[test]

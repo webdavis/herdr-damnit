@@ -50,7 +50,6 @@ fn completing_is_one_flag_apart_from_forcing_it() {
     assert_eq!(line(done(&oid(), true)), "done 1a2b3c4 --force --json");
 }
 
-/// The exact line the spec pins: `p` on a priority-2 task.
 #[test]
 fn the_priority_key_spells_dams_own_short_flag() {
     let next = Priority::new(2).expect("a priority").next();
@@ -113,16 +112,12 @@ fn a_new_object_under_no_path_leaves_the_flag_off_rather_than_sending_an_empty_o
     assert_eq!(line(create("file taxes", "")), "new file taxes --json");
 }
 
-/// `dam edit -e --json` is refused as `needs_an_editor`, so the editor round trip is the one
-/// command that must not carry the flag.
 #[test]
-fn the_editor_round_trip_asks_for_no_report_because_it_owns_the_terminal() {
+fn the_editor_round_trip_carries_no_json_flag_because_dam_refuses_it_as_needs_an_editor() {
     assert_eq!(line(edit_in_editor(&oid())), "edit 1a2b3c4 -e");
     assert!(!edit_in_editor(&oid()).contains(&JSON.to_string()));
 }
 
-/// Every other command carries `--json`, which is what makes a failure answer with the error
-/// document Task 14 maps instead of a line to match substrings against.
 #[test]
 fn every_command_that_reports_a_failure_asks_for_the_document() {
     for argv in [

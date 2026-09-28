@@ -1,10 +1,5 @@
-//! Every `dam` command the pane spawns, as the arguments that follow the configured `dam` argv.
-//! One function per command, so a test compares the whole line and a flag typo fails it.
-
 use herdr_damnit_domain::{Oid, Priority};
 
-/// `--json` is a global flag on `dam`. It selects the report on standard output and the error
-/// document on standard error, so every command whose failure the pane reports ends with it.
 pub const JSON: &str = "--json";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -109,8 +104,6 @@ pub fn move_to(oid: &Oid, path: &str) -> Vec<String> {
     words(&["mv", oid.as_str(), path, JSON])
 }
 
-/// A new object under the cursor's path. An empty path leaves the flag off, because `dam`'s own
-/// default for `--path` is the empty string.
 pub fn create(subject: &str, path: &str) -> Vec<String> {
     match path.is_empty() {
         true => words(&["new", subject, JSON]),
@@ -118,7 +111,6 @@ pub fn create(subject: &str, path: &str) -> Vec<String> {
     }
 }
 
-/// `dam edit -e` owns the terminal and prints no report the pane reads.
 pub fn edit_in_editor(oid: &Oid) -> Vec<String> {
     words(&["edit", oid.as_str(), "-e"])
 }
