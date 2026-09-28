@@ -215,6 +215,35 @@ fn an_agent_pane_with_no_name_of_its_own_is_called_by_its_kind() {
 }
 
 #[test]
+fn the_agent_kind_outranks_the_auth_profile_herdr_lists_as_display_agent() {
+    let herdr = FakeHerdr {
+        listing: r#"{"result":{"agents":[{"pane_id":"w1:p7","workspace_id":"w1","agent":"codex","display_agent":"work"}]}}"#
+            .to_string(),
+        ..FakeHerdr::new()
+    };
+    let HandOff::Sent { agent, .. } = hand_off(&herdr, &here(), &object(), "", "") else {
+        panic!("expected a send");
+    };
+    assert_eq!(agent.name, "codex");
+}
+
+#[test]
+fn with_two_agent_panes_in_this_workspace_the_first_herdr_lists_wins() {
+    let herdr = FakeHerdr {
+        listing: r#"{"result":{"agents":[
+          {"pane_id":"w1:p3","workspace_id":"w1","agent":"codex"},
+          {"pane_id":"w1:p4","workspace_id":"w1","agent":"claude"}
+        ]}}"#
+            .to_string(),
+        ..FakeHerdr::new()
+    };
+    let HandOff::Sent { agent, .. } = hand_off(&herdr, &here(), &object(), "", "") else {
+        panic!("expected a send");
+    };
+    assert_eq!(agent.pane, "w1:p3");
+}
+
+#[test]
 fn an_agent_pane_that_names_nothing_at_all_is_called_the_agent() {
     let herdr = FakeHerdr {
         listing: r#"{"result":{"agents":[{"pane_id":"w1:p7","workspace_id":"w1","agent":""}]}}"#
