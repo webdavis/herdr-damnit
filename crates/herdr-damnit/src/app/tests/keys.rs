@@ -244,6 +244,23 @@ fn the_interval_is_held_back_while_an_overlay_is_open_or_another_screen_shows() 
 }
 
 #[test]
+fn a_refresh_interval_of_zero_never_re_reads_on_its_own() {
+    let config = Config::parse("refresh_seconds = 0\n").expect("parses");
+    let mut harness = loaded_with(config);
+    let now = Instant::now();
+    harness.app.tick(now);
+    let before = harness.lines().len();
+
+    harness.app.tick(now + Duration::from_secs(3600));
+
+    assert_eq!(
+        harness.lines().len(),
+        before,
+        "it re-read with the interval off"
+    );
+}
+
+#[test]
 fn a_status_request_shows_the_status_screen_rather_than_a_view() {
     let mut harness = loaded_with(three_views());
     let path = std::env::temp_dir().join(format!("herdr-damnit-status-{}", std::process::id()));

@@ -80,7 +80,7 @@ impl App {
             return;
         };
         let interval = Duration::from_secs(self.config.refresh_seconds());
-        let held_back = self.overlay.is_some() || self.screen != Screen::List;
+        let held_back = interval.is_zero() || self.overlay.is_some() || self.screen != Screen::List;
         if now.saturating_duration_since(since) >= interval && !held_back {
             self.reread();
             self.last_reread = Some(now);
