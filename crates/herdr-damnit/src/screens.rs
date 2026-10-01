@@ -46,7 +46,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     if let Some(open) = &app.overlay {
         overlay::draw(frame, body, open, app.config.icons(), &palette);
     }
-    frame.render_widget(hint_line(hints.width, &palette), hints);
+    frame.render_widget(hint_line(app, hints.width, &palette), hints);
 }
 
 #[cfg(test)]
@@ -101,10 +101,14 @@ fn open_counts(app: &App) -> String {
     counts.join("  ")
 }
 
-fn hint_line(width: u16, palette: &Palette) -> Paragraph<'static> {
+fn hint_line(app: &App, width: u16, palette: &Palette) -> Paragraph<'static> {
+    let (said, colour) = match app.message.is_empty() {
+        true => (HINTS, palette.dim1),
+        false => (app.message.as_str(), palette.text),
+    };
     Paragraph::new(Line::styled(
-        cut_to(HINTS, width as usize),
-        Style::new().fg(palette.dim1),
+        cut_to(said, width as usize),
+        Style::new().fg(colour),
     ))
 }
 

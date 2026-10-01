@@ -257,3 +257,21 @@ fn the_done_screen_draws_the_date_first_newest_first_with_the_uncommitted_ones_o
     assert_eq!(body[2], "2026-09-20  newer");
     assert_eq!(body[3], "2026-09-18  older");
 }
+
+#[test]
+fn a_message_takes_the_hint_line_until_the_next_key() {
+    let mut harness = loaded();
+    harness.app.message = "the config has 1 views.".to_string();
+    let drawn = render_to_text(&harness.app, 32, 8);
+    assert_eq!(drawn.lines().last(), Some("the config has 1 views."));
+
+    harness.press(KeyCode::Char('j'));
+    let drawn = render_to_text(&harness.app, 32, 8);
+    assert!(
+        drawn
+            .lines()
+            .last()
+            .is_some_and(|line| line.starts_with("x X dd")),
+        "{drawn}"
+    );
+}

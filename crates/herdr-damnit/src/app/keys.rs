@@ -1,13 +1,18 @@
-use crossterm::event::{KeyCode, KeyEvent};
-use herdr_damnit_application::JobKind;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use herdr_damnit_application::{JobKind, SyncKind, argv};
 use herdr_damnit_domain::{Cursor, Oid};
 
 use super::{After, App, Screen};
-use crate::overlay::Overlay;
 
 impl App {
     pub fn key(&mut self, key: KeyEvent) -> After {
+        self.message.clear();
+
         if self.refusal.is_some() {
+            return After::Stay;
+        }
+        if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.jobs.cancel_current();
             return After::Stay;
         }
         if let Some(overlay) = self.overlay.take() {
@@ -28,25 +33,14 @@ impl App {
                 self.open_view_picker()
             }
             KeyCode::Char('R' | 'r') => self.reread(),
+            KeyCode::Char(' ') => self.toggle_staged(),
+            KeyCode::Char('A') => self.write(argv::stage_all()),
+            KeyCode::Char('U') => self.write(argv::unstage_all()),
+            KeyCode::Char('c') => self.open_commit_box(),
+            KeyCode::Char('P') => self.sync(SyncKind::Push, argv::push()),
+            KeyCode::Char('L') => self.sync(SyncKind::Pull, argv::pull()),
             KeyCode::Enter => self.read_detail(),
             _ => After::Stay,
-        }
-    }
-
-    fn overlay_key(&mut self, overlay: Overlay, key: KeyEvent) -> After {
-        let Overlay::View(mut picker) = overlay;
-        match key.code {
-            KeyCode::Esc => After::Stay,
-            KeyCode::Enter => self.show_view(picker.selected),
-            code => {
-                match code {
-                    KeyCode::Char('j') | KeyCode::Down => picker.move_by(1),
-                    KeyCode::Char('k') | KeyCode::Up => picker.move_by(-1),
-                    _ => {}
-                }
-                self.overlay = Some(Overlay::View(picker));
-                After::Stay
-            }
         }
     }
 
@@ -65,9 +59,26 @@ impl App {
 
     fn read_detail(&mut self) -> After {
         if let Some(oid) = self.selected_oid().cloned() {
-            let argv = herdr_damnit_application::argv::show(&oid);
-            self.submit(JobKind::ReadShow(oid), argv);
+            self.submit(JobKind::ReadShow(oid.clone()), argv::show(&oid));
         }
+        After::Stay
+    }
+
+    fn toggle_staged(&mut self) -> After {
+        match self.selected_oid().cloned() {
+            Some(oid) if self.stage.is_staged(&oid) => self.write(argv::unstage(&oid)),
+            Some(oid) => self.write(argv::stage(&oid)),
+            None => After::Stay,
+        }
+    }
+
+    fn write(&mut self, argv: Vec<String>) -> After {
+        self.submit(JobKind::Write, argv);
+        After::Stay
+    }
+
+    fn sync(&mut self, kind: SyncKind, argv: Vec<String>) -> After {
+        self.submit(JobKind::Exclusive(kind), argv);
         After::Stay
     }
 
