@@ -10,6 +10,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::app::{App, Screen};
 use crate::theme::Palette;
 
+mod detail;
 mod done;
 mod list;
 mod refusal;
@@ -39,6 +40,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
         Screen::List => list::draw(frame, body, app, &palette),
         Screen::Status => status::draw(frame, body, app, &palette),
         Screen::Done => done::draw(frame, body, app, &palette),
+        Screen::Detail => detail::draw(frame, body, app, &palette),
     }
     frame.render_widget(hint_line(hints.width, &palette), hints);
 }
@@ -86,6 +88,7 @@ fn counts(app: &App) -> String {
                 .filter(|row| row.oid().is_some())
                 .count()
         ),
+        Screen::Detail => String::new(),
     }
 }
 

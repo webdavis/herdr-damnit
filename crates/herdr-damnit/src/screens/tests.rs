@@ -1,3 +1,4 @@
+mod detail;
 mod status;
 
 use std::time::Instant;

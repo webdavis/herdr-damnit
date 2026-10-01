@@ -1,5 +1,7 @@
+mod apply;
 mod done;
 mod header;
+mod keys;
 mod screen;
 
 pub use screen::Screen;
@@ -10,14 +12,10 @@ pub(crate) mod tests;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use crossterm::event::{KeyCode, KeyEvent};
-use herdr_damnit_adapters::{Config, wire};
-use herdr_damnit_application::{
-    Completion, Handshake, JobKind, Jobs, Submitted, SyncKind, argv, check_status, check_version,
-};
+use herdr_damnit_adapters::Config;
+use herdr_damnit_application::{JobKind, Jobs, Submitted, argv};
 use herdr_damnit_domain::{
-    Cursor, DONE_QUERY, DamVersion, Date, Failure, Object, Oid, RowStyle, Stage, Views, classify,
-    message, rows,
+    Cursor, DONE_QUERY, DamVersion, Date, Failure, Object, Oid, Stage, Views, message,
 };
 
 const BUSY_POLL_WINDOW: Duration = Duration::from_millis(50);
@@ -40,6 +38,8 @@ pub struct App {
     pub today: Date,
     pub refusal: Option<String>,
     pub version: Option<DamVersion>,
+    pub detail: Option<Object>,
+    under_detail: Screen,
     handshake_accepted: bool,
     newer_dam_warning_shown: bool,
     objects: Vec<Object>,
@@ -63,6 +63,8 @@ impl App {
             today,
             refusal: None,
             version: None,
+            detail: None,
+            under_detail: Screen::List,
             handshake_accepted: false,
             newer_dam_warning_shown: false,
             objects: Vec::new(),
@@ -98,12 +100,12 @@ impl App {
         }
     }
 
-    pub fn key(&mut self, key: KeyEvent) -> After {
-        match key.code {
-            KeyCode::Tab => self.show(self.screen.next()),
-            KeyCode::BackTab => self.show(self.screen.previous()),
-            _ => After::Stay,
-        }
+    pub fn subject_of(&self, oid: &Oid) -> Option<&str> {
+        self.objects
+            .iter()
+            .chain(&self.done_objects)
+            .find(|object| &object.oid == oid)
+            .map(|object| object.subject.as_str())
     }
 
     fn show(&mut self, screen: Screen) -> After {
@@ -119,123 +121,5 @@ impl App {
             }
         }
         After::Stay
-    }
-
-    fn apply(&mut self, completion: Completion) {
-        if completion.finished.code != Some(0) {
-            self.message = message(&classify(
-                completion.finished.code,
-                wire::error_document(&completion.finished.stderr),
-                &completion.finished.stderr,
-            ));
-            return;
-        }
-        if self.applied_as_handshake(&completion) {
-            return;
-        }
-        if let Err(said) = self.read_into_model(&completion) {
-            self.message = said;
-            return;
-        }
-        for kind in completion.follow_up {
-            let argv = self.follow_up_argv(&kind);
-            self.submit(kind, argv);
-        }
-    }
-
-    fn applied_as_handshake(&mut self, completion: &Completion) -> bool {
-        match completion.kind {
-            JobKind::Version => {
-                match check_version(&completion.finished.stdout) {
-                    Handshake::Refuse(said) => self.refusal = Some(said),
-                    Handshake::Ready { version, warning } => {
-                        self.version = Some(version);
-                        if let (Some(warning), false) = (warning, self.newer_dam_warning_shown) {
-                            self.message = warning;
-                            self.newer_dam_warning_shown = true;
-                        }
-                        self.submit(JobKind::Handshake, argv::status());
-                    }
-                }
-                true
-            }
-            JobKind::Handshake => {
-                match check_status(&completion.finished.stdout) {
-                    Err(said) => self.refusal = Some(said),
-                    Ok(()) => {
-                        if let Err(said) = self.read_status(&completion.finished.stdout) {
-                            self.message = said;
-                            return true;
-                        }
-                        let query = self.views.current().query.clone();
-                        self.submit(JobKind::ReadList, argv::list(&query));
-                        self.handshake_accepted = true;
-                        self.show(self.screen);
-                    }
-                }
-                true
-            }
-            _ => false,
-        }
-    }
-
-    fn read_into_model(&mut self, completion: &Completion) -> Result<(), String> {
-        let unreadable = || message(&Failure::Unreadable);
-        match &completion.kind {
-            JobKind::ReadStatus => self.read_status(&completion.finished.stdout)?,
-            JobKind::ReadList => {
-                self.objects =
-                    wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
-                self.redraw_list();
-            }
-            JobKind::ReadDone => {
-                self.done_objects =
-                    wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
-            }
-            JobKind::ReadLog => {
-                self.completion_days =
-                    wire::completions(&completion.finished.stdout).map_err(|_| unreadable())?;
-            }
-            JobKind::Exclusive(SyncKind::Push) => {
-                self.message =
-                    wire::push_summary(&completion.finished.stdout).map_err(|_| unreadable())?;
-            }
-            JobKind::Exclusive(SyncKind::Pull) => {
-                self.message =
-                    wire::pull_summary(&completion.finished.stdout).map_err(|_| unreadable())?;
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    fn read_status(&mut self, stdout: &str) -> Result<(), String> {
-        self.stage = wire::stage(stdout).map_err(|_| message(&Failure::Unreadable))?;
-        self.redraw_list();
-        Ok(())
-    }
-
-    fn redraw_list(&mut self) {
-        let style = RowStyle {
-            icons: self.config.icons(),
-            today: self.today,
-        };
-        self.list.replace(rows(&self.objects, &self.stage, style));
-    }
-
-    fn follow_up_argv(&self, kind: &JobKind) -> Vec<String> {
-        match kind {
-            JobKind::ReadList => argv::list(&self.views.current().query),
-            JobKind::ReadDone => argv::list(DONE_QUERY),
-            JobKind::ReadStatus => argv::status(),
-            JobKind::ReadShow(oid) => argv::show(oid),
-            JobKind::ReadLog => argv::log(),
-            JobKind::Version => argv::version(),
-            JobKind::Handshake => argv::status(),
-            JobKind::Write => Vec::new(),
-            JobKind::Exclusive(SyncKind::Commit) => argv::commit(""),
-            JobKind::Exclusive(SyncKind::Push) => argv::push(),
-            JobKind::Exclusive(SyncKind::Pull) => argv::pull(),
-        }
     }
 }
