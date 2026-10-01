@@ -242,3 +242,20 @@ fn the_interval_is_held_back_while_an_overlay_is_open_or_another_screen_shows() 
         "it re-read under an open picker"
     );
 }
+
+#[test]
+fn a_refresh_interval_of_zero_never_re_reads_on_its_own() {
+    let config = Config::parse("refresh_seconds = 0\n").expect("parses");
+    let mut harness = loaded_with(config);
+    let now = Instant::now();
+    harness.app.tick(now);
+    let before = harness.lines().len();
+
+    harness.app.tick(now + Duration::from_secs(3600));
+
+    assert_eq!(
+        harness.lines().len(),
+        before,
+        "it re-read with the interval off"
+    );
+}
