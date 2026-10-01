@@ -180,3 +180,22 @@ fn an_interrupt_is_recorded_and_answered_with_the_cancelled_code() {
         "the fake recorded no interrupt"
     );
 }
+
+#[test]
+fn a_knob_given_before_the_argv_works_like_the_environment_and_is_not_logged() {
+    let scratch = Scratch::new("argv-knobs");
+    let log = scratch.file("argv.jsonl");
+    let output = Command::new(fake())
+        .arg(format!("FAKE_DAM_LOG={}", log.display()))
+        .arg(format!("FAKE_DAM_FIXTURE_DIR={}", fixtures().display()))
+        .args(["FAKE_DAM_FIXTURE=status-clean", "status", "--json"])
+        .output()
+        .expect("the fake ran");
+
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("\"staged\""));
+    assert_eq!(
+        std::fs::read_to_string(&log).expect("a log").trim(),
+        r#"["status","--json"]"#
+    );
+}
