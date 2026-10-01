@@ -1,6 +1,10 @@
 mod header;
 mod keys;
+mod non_blocking;
+mod staging;
+mod sync;
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -20,6 +24,7 @@ const TODAY: &str = "2026-09-20";
 pub(crate) struct Recorder {
     pub(crate) log: Arc<Mutex<Vec<Vec<String>>>>,
     pub(crate) senders: Arc<Mutex<Vec<Sender<Finished>>>>,
+    pub(crate) cancels: Arc<AtomicUsize>,
 }
 
 impl DamRunner for Recorder {
@@ -27,8 +32,11 @@ impl DamRunner for Recorder {
         self.log.lock().expect("the log").push(argv.to_vec());
         let (sender, results) = channel();
         self.senders.lock().expect("the senders").push(sender);
+        let cancels = Arc::clone(&self.cancels);
         Ok(RunningJob {
-            cancel: Box::new(|| {}),
+            cancel: Box::new(move || {
+                cancels.fetch_add(1, Ordering::SeqCst);
+            }),
             results,
         })
     }
@@ -62,6 +70,7 @@ pub(crate) struct Harness {
     started: Instant,
     log: Arc<Mutex<Vec<Vec<String>>>>,
     senders: Arc<Mutex<Vec<Sender<Finished>>>>,
+    cancels: Arc<AtomicUsize>,
 }
 
 pub(crate) fn harness() -> Harness {
@@ -80,6 +89,7 @@ pub(crate) fn harness_with_missing_dam() -> Harness {
         started: now,
         log: Arc::default(),
         senders: Arc::default(),
+        cancels: Arc::default(),
     }
 }
 
@@ -87,6 +97,7 @@ pub(crate) fn harness_with(config: Config) -> Harness {
     let recorder = Recorder::default();
     let log = Arc::clone(&recorder.log);
     let senders = Arc::clone(&recorder.senders);
+    let cancels = Arc::clone(&recorder.cancels);
     let today = parse_date(TODAY).expect("a date");
     let started = Instant::now();
     Harness {
@@ -104,6 +115,7 @@ pub(crate) fn harness_with(config: Config) -> Harness {
         started,
         log,
         senders,
+        cancels,
     }
 }
 
@@ -128,6 +140,33 @@ impl Harness {
 
     pub(crate) fn last(&self) -> String {
         self.lines().last().cloned().unwrap_or_default()
+    }
+
+    pub(crate) fn select(&mut self, oid: &str) {
+        let cursor = self.app.cursor_mut();
+        cursor.move_by(isize::MIN);
+        while cursor.selected_oid().map(|found| found.as_str()) != Some(oid) {
+            assert!(cursor.move_by(1), "{oid} is not on the showing screen");
+        }
+    }
+
+    pub(crate) fn type_line(&mut self, text: &str) {
+        for character in text.chars() {
+            self.press(KeyCode::Char(character));
+        }
+    }
+
+    pub(crate) fn cancels(&self) -> usize {
+        self.cancels.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn log_argv_last(&self) -> Vec<String> {
+        self.log
+            .lock()
+            .expect("the log")
+            .last()
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub(crate) fn lines(&self) -> Vec<String> {

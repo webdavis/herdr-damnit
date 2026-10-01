@@ -2,12 +2,14 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Clear, List, ListItem, ListState};
+use ratatui::widgets::{Block, Clear, List, ListItem, ListState, Paragraph};
 
 use herdr_damnit_domain::{IconSet, Mark};
 
-use crate::overlay::{Overlay, Picker};
+use crate::overlay::{LineBox, Overlay, Picker};
 use crate::theme::Palette;
+
+const LINE_BOX_HEIGHT: u16 = 3;
 
 pub fn draw(
     frame: &mut Frame<'_>,
@@ -16,10 +18,16 @@ pub fn draw(
     icons: IconSet,
     palette: &Palette,
 ) {
-    frame.render_widget(Clear, area);
     match overlay {
         Overlay::View(picker) => picked(frame, area, picker, icons, palette),
+        Overlay::Line(line) => typed(frame, area, line, palette),
     }
+}
+
+fn bordered(title: &str, palette: &Palette) -> Block<'static> {
+    Block::bordered()
+        .title(title.to_string())
+        .border_style(Style::new().fg(palette.dim1))
 }
 
 fn picked(frame: &mut Frame<'_>, area: Rect, picker: &Picker, icons: IconSet, palette: &Palette) {
@@ -33,15 +41,28 @@ fn picked(frame: &mut Frame<'_>, area: Rect, picker: &Picker, icons: IconSet, pa
         ))
     });
     let mut state = ListState::default().with_selected(Some(picker.selected));
+    frame.render_widget(Clear, area);
     frame.render_stateful_widget(
         List::new(items)
-            .block(
-                Block::bordered()
-                    .title(picker.title.clone())
-                    .border_style(Style::new().fg(palette.dim1)),
-            )
+            .block(bordered(&picker.title, palette))
             .highlight_style(Style::new().add_modifier(Modifier::REVERSED)),
         area,
         &mut state,
+    );
+}
+
+fn typed(frame: &mut Frame<'_>, area: Rect, line: &LineBox, palette: &Palette) {
+    let area = Rect {
+        height: LINE_BOX_HEIGHT.min(area.height),
+        ..area
+    };
+    frame.render_widget(Clear, area);
+    frame.render_widget(
+        Paragraph::new(Line::styled(
+            format!("{}_", line.text),
+            Style::new().fg(palette.text),
+        ))
+        .block(bordered(&line.title, palette).title_bottom(line.hint.clone())),
+        area,
     );
 }

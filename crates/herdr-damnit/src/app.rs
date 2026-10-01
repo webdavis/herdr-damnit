@@ -3,6 +3,7 @@ mod done;
 mod handshake;
 mod header;
 mod keys;
+mod overlay_keys;
 mod screen;
 mod views;
 

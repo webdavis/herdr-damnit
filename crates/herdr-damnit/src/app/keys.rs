@@ -6,6 +6,7 @@ use super::{After, App, Screen};
 
 impl App {
     pub fn key(&mut self, key: KeyEvent) -> After {
+        self.message.clear();
 
         if self.refusal.is_some() {
             return After::Stay;
