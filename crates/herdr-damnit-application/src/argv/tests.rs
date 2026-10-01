@@ -164,3 +164,8 @@ fn a_conflict_is_resolved_toward_one_side_by_name() {
 fn discarding_a_working_change_is_dams_restore() {
     assert_eq!(line(restore(&oid())), "restore 1a2b3c4 --json");
 }
+
+#[test]
+fn the_remotes_are_listed_in_dams_own_words() {
+    assert_eq!(line(remotes()), "remote list");
+}

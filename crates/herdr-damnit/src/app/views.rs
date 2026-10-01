@@ -64,6 +64,10 @@ impl App {
         else {
             return;
         };
+        if name == crate::pane::STATUS_REQUEST {
+            self.show(Screen::Status);
+            return;
+        }
         let index = self.views.names().position(|found| found == name);
         if let Some(index) = index {
             self.show_view(index);

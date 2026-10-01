@@ -242,3 +242,17 @@ fn the_interval_is_held_back_while_an_overlay_is_open_or_another_screen_shows() 
         "it re-read under an open picker"
     );
 }
+
+#[test]
+fn a_status_request_shows_the_status_screen_rather_than_a_view() {
+    let mut harness = loaded_with(three_views());
+    let path = std::env::temp_dir().join(format!("herdr-damnit-status-{}", std::process::id()));
+    std::fs::write(&path, crate::pane::STATUS_REQUEST).expect("the request is written");
+    harness.app.view_request = Some(path.clone());
+
+    harness.app.tick(Instant::now());
+
+    assert_eq!(harness.app.screen, Screen::Status);
+    assert_eq!(harness.app.views.current().name, "open");
+    assert!(!path.exists());
+}
