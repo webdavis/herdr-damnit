@@ -2,7 +2,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Line;
-use ratatui::widgets::ListItem;
+use ratatui::widgets::{ListItem, ListState};
 
 use crate::app::App;
 use crate::screens::list::spans;
@@ -12,14 +12,18 @@ use herdr_damnit_domain::{Mark, Segment, Slot, StatusRow};
 const MARKED_ROW_INDENT: &str = "  ";
 
 pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, palette: &Palette) {
-    frame.render_widget(
+    let mut state = ListState::default()
+        .with_selected(app.status.selected_oid().map(|_| app.status.selected()));
+    frame.render_stateful_widget(
         ratatui::widgets::List::new(
             app.stage
                 .rows()
                 .iter()
                 .map(|row| item(row, app.config.icons(), palette, area.width)),
-        ),
+        )
+        .highlight_style(Style::new().add_modifier(Modifier::REVERSED)),
         area,
+        &mut state,
     );
 }
 

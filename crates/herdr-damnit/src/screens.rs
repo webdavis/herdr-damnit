@@ -13,6 +13,7 @@ use crate::theme::Palette;
 mod detail;
 mod done;
 mod list;
+mod overlay;
 mod refusal;
 mod status;
 
@@ -41,6 +42,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
         Screen::Status => status::draw(frame, body, app, &palette),
         Screen::Done => done::draw(frame, body, app, &palette),
         Screen::Detail => detail::draw(frame, body, app, &palette),
+    }
+    if let Some(open) = &app.overlay {
+        overlay::draw(frame, body, open, app.config.icons(), &palette);
     }
     frame.render_widget(hint_line(hints.width, &palette), hints);
 }
@@ -81,13 +85,7 @@ fn counts(app: &App) -> String {
     match app.screen {
         Screen::List => open_counts(app),
         Screen::Status => app.stage.summary(),
-        Screen::Done => format!(
-            "{} done",
-            app.done_rows()
-                .iter()
-                .filter(|row| row.oid().is_some())
-                .count()
-        ),
+        Screen::Done => format!("{} done", app.done.object_count()),
         Screen::Detail => String::new(),
     }
 }
@@ -111,4 +109,4 @@ fn hint_line(width: u16, palette: &Palette) -> Paragraph<'static> {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
