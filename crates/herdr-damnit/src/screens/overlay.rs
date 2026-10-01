@@ -2,7 +2,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Clear, List, ListItem, ListState, Paragraph};
+use ratatui::widgets::{Block, Clear, List, ListItem, ListState, Paragraph, Wrap};
 
 use herdr_damnit_domain::{IconSet, Mark};
 
@@ -10,6 +10,8 @@ use crate::overlay::{LineBox, Overlay, Picker};
 use crate::theme::Palette;
 
 const LINE_BOX_HEIGHT: u16 = 3;
+
+const CONFIRM_HEIGHT: u16 = 4;
 
 pub fn draw(
     frame: &mut Frame<'_>,
@@ -19,8 +21,11 @@ pub fn draw(
     palette: &Palette,
 ) {
     match overlay {
-        Overlay::View(picker) => picked(frame, area, picker, icons, palette),
+        Overlay::View(picker) | Overlay::Label(_, picker) | Overlay::Path(_, picker) => {
+            picked(frame, area, picker, icons, palette)
+        }
         Overlay::Line(line) => typed(frame, area, line, palette),
+        Overlay::Confirm(confirm) => asked(frame, area, &confirm.question, palette),
     }
 }
 
@@ -63,6 +68,23 @@ fn typed(frame: &mut Frame<'_>, area: Rect, line: &LineBox, palette: &Palette) {
             Style::new().fg(palette.text),
         ))
         .block(bordered(&line.title, palette).title_bottom(line.hint.clone())),
+        area,
+    );
+}
+
+fn asked(frame: &mut Frame<'_>, area: Rect, question: &str, palette: &Palette) {
+    let area = Rect {
+        height: CONFIRM_HEIGHT.min(area.height),
+        ..area
+    };
+    frame.render_widget(Clear, area);
+    frame.render_widget(
+        Paragraph::new(Line::styled(
+            question.to_string(),
+            Style::new().fg(palette.text),
+        ))
+        .wrap(Wrap { trim: true })
+        .block(bordered("confirm", palette)),
         area,
     );
 }
