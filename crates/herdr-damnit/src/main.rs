@@ -1,6 +1,7 @@
 mod app;
 mod doctor;
 mod loop_;
+mod markdown;
 mod open;
 mod pane;
 mod screens;
