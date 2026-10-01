@@ -46,6 +46,7 @@ impl App {
             KeyCode::Char('x') => self.complete(false),
             KeyCode::Char('X') => self.complete(true),
             KeyCode::Char('d') => self.ask_delete(),
+            KeyCode::Char('!') => self.ask_discard(),
             KeyCode::Char('p') => self.cycle_priority(),
             KeyCode::Char('s') => self.open_date_box("due", LinePurpose::Due),
             KeyCode::Char('D') => self.open_date_box("deadline", LinePurpose::Deadline),
