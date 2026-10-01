@@ -48,7 +48,7 @@ impl Drop for Scratch {
     }
 }
 
-fn fake_dam() -> PathBuf {
+pub(super) fn fake_dam() -> PathBuf {
     let test_binary = std::env::current_exe().expect("the test binary");
     let profile = test_binary
         .parent()
@@ -75,6 +75,8 @@ fn app(scratch: &Scratch) -> App {
     App::new(
         config,
         Jobs::new(Box::new(runner), Box::new(SystemClock)),
+        Box::new(RecordingHerdr::default()),
+        here(),
         parse_date(TODAY).expect("a date"),
     )
 }

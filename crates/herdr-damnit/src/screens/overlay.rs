@@ -26,6 +26,7 @@ pub fn draw(
         }
         Overlay::Line(line) => typed(frame, area, line, palette),
         Overlay::Confirm(confirm) => asked(frame, area, &confirm.question, palette),
+        Overlay::Note(note) => noted(frame, area, &note.text, palette),
     }
 }
 
@@ -85,6 +86,19 @@ fn asked(frame: &mut Frame<'_>, area: Rect, question: &str, palette: &Palette) {
         ))
         .wrap(Wrap { trim: true })
         .block(bordered("confirm", palette)),
+        area,
+    );
+}
+
+fn noted(frame: &mut Frame<'_>, area: Rect, text: &str, palette: &Palette) {
+    frame.render_widget(Clear, area);
+    frame.render_widget(
+        Paragraph::new(format!("{text}_"))
+            .style(Style::new().fg(palette.text))
+            .wrap(Wrap { trim: false })
+            .block(
+                bordered("note for the agent", palette).title_bottom("<C-d> sends, <Esc> cancels"),
+            ),
         area,
     );
 }

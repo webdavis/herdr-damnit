@@ -1,5 +1,5 @@
-use herdr_damnit_application::argv;
-use herdr_damnit_domain::{Kind, Object};
+use herdr_damnit_application::{Side, argv};
+use herdr_damnit_domain::{Kind, Object, Oid};
 
 use super::{After, App};
 use crate::overlay::{Confirm, ConfirmPurpose, Overlay};
@@ -40,7 +40,53 @@ impl App {
     pub(super) fn confirmed(&mut self, purpose: ConfirmPurpose) -> After {
         match purpose {
             ConfirmPurpose::Delete(oid) => self.write(argv::remove(&oid)),
+            ConfirmPurpose::QuitMidJob => After::Quit,
         }
+    }
+
+    pub(super) fn quit(&mut self) -> After {
+        let Some(sync) = self.jobs.exclusive() else {
+            return After::Quit;
+        };
+        self.reopen(Overlay::Confirm(Confirm {
+            question: format!(
+                "a {} is running; q again quits and lets it finish",
+                sync.verb()
+            ),
+            key: 'q',
+            purpose: ConfirmPurpose::QuitMidJob,
+        }))
+    }
+
+    pub(super) fn resolve(&mut self, side: Side) -> After {
+        let conflicted = self.selected_oid().filter(|oid| {
+            self.stage
+                .conflicts
+                .iter()
+                .any(|conflict| &conflict.oid == *oid)
+        });
+        match conflicted.map(|oid| argv::resolve(oid, side)) {
+            Some(write) => self.write(write),
+            None => After::Stay,
+        }
+    }
+
+    pub(super) fn edit_in_editor(&self) -> After {
+        match self.selected_oid() {
+            Some(oid) => After::Editor(argv::edit_in_editor(oid)),
+            None => After::Stay,
+        }
+    }
+
+    pub fn subject_of(&self, oid: &Oid) -> Option<&str> {
+        self.object(oid).map(|object| object.subject.as_str())
+    }
+
+    pub(super) fn object(&self, oid: &Oid) -> Option<&Object> {
+        self.objects
+            .iter()
+            .chain(&self.done_objects)
+            .find(|object| &object.oid == oid)
     }
 
     pub(super) fn selected_object(&self) -> Option<&Object> {

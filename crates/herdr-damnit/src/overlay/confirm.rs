@@ -8,4 +8,5 @@ pub struct Confirm {
 
 pub enum ConfirmPurpose {
     Delete(Oid),
+    QuitMidJob,
 }
