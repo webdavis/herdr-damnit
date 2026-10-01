@@ -1,5 +1,6 @@
 mod app;
 mod doctor;
+mod editor;
 mod loop_;
 mod markdown;
 mod open;
@@ -8,8 +9,8 @@ mod pane;
 mod screens;
 mod theme;
 
-use herdr_damnit_adapters::{Config, ProcessDamRunner, SystemClock};
-use herdr_damnit_application::{Clock, Jobs};
+use herdr_damnit_adapters::{CliHerdr, Config, ProcessDamRunner, SystemClock};
+use herdr_damnit_application::{Clock, Jobs, Workspace};
 use pane::Mode;
 
 const USAGE: &str = "\
@@ -68,7 +69,11 @@ fn run_pane() -> std::process::ExitCode {
         Box::new(ProcessDamRunner::new(config.dam.clone())),
         Box::new(clock),
     );
-    let mut app = app::App::new(config, jobs, today);
+    let here = Workspace {
+        workspace: std::env::var("HERDR_WORKSPACE_ID").ok(),
+        me: std::env::var("HERDR_PANE_ID").unwrap_or_default(),
+    };
+    let mut app = app::App::new(config, jobs, Box::new(CliHerdr), here, today);
     app.view_request = Some(herdr_damnit_adapters::state::view_request_path());
     open::start(&mut app);
     match loop_::run(&mut app) {

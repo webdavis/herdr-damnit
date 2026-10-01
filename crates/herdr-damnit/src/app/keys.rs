@@ -1,5 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use herdr_damnit_application::{JobKind, SyncKind, argv};
+use herdr_damnit_application::{JobKind, Side, SyncKind, argv};
 use herdr_damnit_domain::{Cursor, Oid};
 
 use super::{After, App, Screen};
@@ -10,7 +10,10 @@ impl App {
         self.message.clear();
 
         if self.refusal.is_some() {
-            return After::Stay;
+            return match key.code {
+                KeyCode::Char('q') | KeyCode::Esc => After::Quit,
+                _ => After::Stay,
+            };
         }
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.jobs.cancel_current();
@@ -49,17 +52,27 @@ impl App {
             KeyCode::Char('l') => self.open_label_picker(),
             KeyCode::Char('m') => self.open_path_picker(),
             KeyCode::Char('a') => self.open_new_box(),
+            KeyCode::Char('S') => self.open_note_box(),
+            KeyCode::Char('e') => self.edit_in_editor(),
+            KeyCode::Char('o') => self.resolve(Side::Ours),
+            KeyCode::Char('t') => self.resolve(Side::Theirs),
+            KeyCode::Char('q') => self.quit(),
+            KeyCode::Esc => After::Quit,
             KeyCode::Enter => self.read_detail(),
             _ => After::Stay,
         }
     }
 
     fn detail_key(&mut self, key: KeyEvent) -> After {
-        if key.code == KeyCode::Esc {
-            self.screen = self.under_detail;
-            self.detail = None;
+        match key.code {
+            KeyCode::Esc => {
+                self.screen = self.under_detail;
+                self.detail = None;
+                After::Stay
+            }
+            KeyCode::Char('q') => self.quit(),
+            _ => After::Stay,
         }
-        After::Stay
     }
 
     fn move_cursor(&mut self, steps: isize) -> After {

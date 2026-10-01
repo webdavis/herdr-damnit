@@ -1,3 +1,4 @@
+mod agent;
 mod apply;
 mod boxes;
 mod done;
@@ -22,7 +23,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use herdr_damnit_adapters::Config;
-use herdr_damnit_application::{JobId, JobKind, Jobs, Submitted};
+use herdr_damnit_application::{Herdr, JobId, JobKind, Jobs, Submitted, Workspace};
 use herdr_damnit_domain::{Cursor, DamVersion, Date, Failure, Object, Oid, Stage, Views, message};
 
 const BUSY_POLL_WINDOW: Duration = Duration::from_millis(50);
@@ -32,6 +33,8 @@ const IDLE_POLL_WINDOW: Duration = Duration::from_millis(200);
 #[derive(Debug, PartialEq, Eq)]
 pub enum After {
     Stay,
+    Quit,
+    Editor(Vec<String>),
 }
 
 pub struct App {
@@ -53,6 +56,9 @@ pub struct App {
     under_detail: Screen,
     last_reread: Option<Instant>,
     awaiting: Option<(JobId, LineBox)>,
+    labelled: Option<(JobId, String)>,
+    herdr: Box<dyn Herdr>,
+    here: Workspace,
     handshake_accepted: bool,
     newer_dam_warning_shown: bool,
     objects: Vec<Object>,
@@ -64,7 +70,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(config: Config, jobs: Jobs, today: Date) -> Self {
+    pub fn new(
+        config: Config,
+        jobs: Jobs,
+        herdr: Box<dyn Herdr>,
+        here: Workspace,
+        today: Date,
+    ) -> Self {
         let mut views = Views::new(&config.views());
         if let Some(name) = &config.default_view {
             views.select_named(name);
@@ -88,6 +100,9 @@ impl App {
             under_detail: Screen::List,
             last_reread: None,
             awaiting: None,
+            labelled: None,
+            herdr,
+            here,
             handshake_accepted: false,
             newer_dam_warning_shown: false,
             objects: Vec::new(),
@@ -124,16 +139,5 @@ impl App {
         }
         self.take_view_request();
         self.reread_on_the_interval(now);
-    }
-
-    pub fn subject_of(&self, oid: &Oid) -> Option<&str> {
-        self.object(oid).map(|object| object.subject.as_str())
-    }
-
-    fn object(&self, oid: &Oid) -> Option<&Object> {
-        self.objects
-            .iter()
-            .chain(&self.done_objects)
-            .find(|object| &object.oid == oid)
     }
 }

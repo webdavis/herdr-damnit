@@ -26,6 +26,11 @@ impl App {
                 Answer::Take => self.take_line(line),
                 Answer::Cancel => After::Stay,
             },
+            Overlay::Note(mut note) => match note.answer(key) {
+                Answer::Open => self.reopen(Overlay::Note(note)),
+                Answer::Take => self.send_note(note),
+                Answer::Cancel => After::Stay,
+            },
             Overlay::Confirm(confirm) => match key.code {
                 KeyCode::Char(pressed) if pressed == confirm.key => self.confirmed(confirm.purpose),
                 _ => After::Stay,

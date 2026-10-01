@@ -20,6 +20,9 @@ impl App {
                 &completion.finished.stderr,
             );
             self.message = message(&failure);
+            if let Some((_, agent)) = self.labelled.take_if(|(id, _)| *id == completion.id) {
+                self.message = format!("sent to {agent}, label refused: {}.", self.message);
+            }
             self.bring_the_box_back(awaited, &failure);
             return;
         }

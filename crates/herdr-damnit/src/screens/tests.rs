@@ -10,7 +10,7 @@ use super::*;
 use crate::app::Screen;
 use crate::app::tests::harness_with;
 
-const LS: &str = r#"{"objects":[
+pub(crate) const LS: &str = r#"{"objects":[
   {"oid":"1a2b3c4","kind":"task","subject":"ship the pin bump","path":"proj/dotfiles",
    "labels":["a","b"],"task":{"done":false,"priority":1,"due":"2026-09-18"}},
   {"oid":"5d6e7f8","kind":"task","subject":"refresh the roster row","path":"proj/dotfiles",
@@ -19,7 +19,8 @@ const LS: &str = r#"{"objects":[
    "task":{"done":false,"priority":4,"due":"2026-10-02"}}
 ]}"#;
 
-const CLEAN: &str = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#;
+pub(crate) const CLEAN: &str =
+    r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#;
 
 const PLAIN_FRAMES: [&str; 4] = ["|", "/", "-", "\\"];
 

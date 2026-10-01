@@ -16,6 +16,8 @@ pub fn run(app: &mut App) -> Result<(), String> {
             Ok(None) => continue,
             Ok(Some(key)) => match app.key(key) {
                 After::Stay => {}
+                After::Quit => break Ok(()),
+                After::Editor(argv) => crate::editor::round_trip(&mut terminal, app, &argv),
             },
         }
     };

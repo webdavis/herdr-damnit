@@ -38,7 +38,7 @@ impl App {
         After::Stay
     }
 
-    pub(super) fn reread(&mut self) -> After {
+    pub(crate) fn reread(&mut self) -> After {
         self.last_reread = None;
         if !self.handshake_accepted {
             crate::open::start(self);
