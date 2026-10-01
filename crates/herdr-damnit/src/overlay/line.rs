@@ -1,4 +1,5 @@
 use crossterm::event::KeyCode;
+use herdr_damnit_domain::Oid;
 
 use super::Answer;
 
@@ -12,6 +13,9 @@ pub struct LineBox {
 #[derive(Debug, PartialEq, Eq)]
 pub enum LinePurpose {
     Commit,
+    Due(Oid),
+    Deadline(Oid),
+    New(String),
 }
 
 impl LineBox {

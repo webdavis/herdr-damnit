@@ -3,6 +3,7 @@ use herdr_damnit_application::{JobKind, SyncKind, argv};
 use herdr_damnit_domain::{Cursor, Oid};
 
 use super::{After, App, Screen};
+use crate::overlay::LinePurpose;
 
 impl App {
     pub fn key(&mut self, key: KeyEvent) -> After {
@@ -39,6 +40,15 @@ impl App {
             KeyCode::Char('c') => self.open_commit_box(),
             KeyCode::Char('P') => self.sync(SyncKind::Push, argv::push()),
             KeyCode::Char('L') => self.sync(SyncKind::Pull, argv::pull()),
+            KeyCode::Char('x') => self.complete(false),
+            KeyCode::Char('X') => self.complete(true),
+            KeyCode::Char('d') => self.ask_delete(),
+            KeyCode::Char('p') => self.cycle_priority(),
+            KeyCode::Char('s') => self.open_date_box("due", LinePurpose::Due),
+            KeyCode::Char('D') => self.open_date_box("deadline", LinePurpose::Deadline),
+            KeyCode::Char('l') => self.open_label_picker(),
+            KeyCode::Char('m') => self.open_path_picker(),
+            KeyCode::Char('a') => self.open_new_box(),
             KeyCode::Enter => self.read_detail(),
             _ => After::Stay,
         }
@@ -72,7 +82,7 @@ impl App {
         }
     }
 
-    fn write(&mut self, argv: Vec<String>) -> After {
+    pub(super) fn write(&mut self, argv: Vec<String>) -> After {
         self.submit(JobKind::Write, argv);
         After::Stay
     }
@@ -90,7 +100,7 @@ impl App {
         }
     }
 
-    fn selected_oid(&self) -> Option<&Oid> {
+    pub(super) fn selected_oid(&self) -> Option<&Oid> {
         match self.screen {
             Screen::List => self.list.selected_oid(),
             Screen::Status => self.status.selected_oid(),

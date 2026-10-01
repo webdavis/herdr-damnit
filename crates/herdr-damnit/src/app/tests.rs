@@ -1,6 +1,8 @@
+mod edits;
 mod header;
 mod keys;
 mod non_blocking;
+mod pickers;
 mod staging;
 mod sync;
 

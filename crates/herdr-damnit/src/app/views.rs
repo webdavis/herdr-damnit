@@ -2,6 +2,7 @@ use std::time::{Duration, Instant};
 
 use herdr_damnit_adapters::state;
 use herdr_damnit_application::{JobKind, argv};
+use herdr_damnit_domain::DONE_QUERY;
 
 use super::{After, App, Screen};
 use crate::overlay::{Overlay, Picker, PickerEntry};
@@ -80,5 +81,20 @@ impl App {
             self.reread();
             self.last_reread = Some(now);
         }
+    }
+
+    pub(super) fn show(&mut self, screen: Screen) -> After {
+        self.screen = screen;
+        if screen == Screen::Done && self.handshake_accepted {
+            if !self.done_list_requested {
+                self.done_list_requested = true;
+                self.submit(JobKind::ReadDone, argv::list(DONE_QUERY));
+            }
+            if !self.done_log_requested {
+                self.done_log_requested = true;
+                self.submit(JobKind::ReadLog, argv::log());
+            }
+        }
+        After::Stay
     }
 }

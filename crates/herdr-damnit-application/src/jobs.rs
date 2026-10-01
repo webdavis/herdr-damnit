@@ -1,55 +1,11 @@
 use std::sync::mpsc::TryRecvError;
 use std::time::{Duration, Instant};
 
-use herdr_damnit_domain::Oid;
-
 use crate::{Clock, DamRunner, Finished, RunningJob, SpawnError};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SyncKind {
-    Commit,
-    Push,
-    Pull,
-}
+mod kind;
 
-impl SyncKind {
-    pub fn verb(self) -> &'static str {
-        match self {
-            Self::Commit => "commit",
-            Self::Push => "push",
-            Self::Pull => "pull",
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum JobKind {
-    Version,
-    Handshake,
-    ReadList,
-    ReadDone,
-    ReadStatus,
-    ReadShow(Oid),
-    ReadLog,
-    Write,
-    Exclusive(SyncKind),
-}
-
-impl JobKind {
-    fn supersedes_its_own_kind(&self) -> bool {
-        matches!(
-            self,
-            Self::ReadList | Self::ReadDone | Self::ReadStatus | Self::ReadShow(_) | Self::ReadLog
-        )
-    }
-
-    fn follow_up(&self) -> Vec<JobKind> {
-        match self {
-            Self::Write | Self::Exclusive(_) => vec![Self::ReadStatus, Self::ReadList],
-            _ => Vec::new(),
-        }
-    }
-}
+pub use kind::{JobKind, SyncKind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct JobId(u64);
@@ -64,6 +20,7 @@ pub enum Submitted {
 
 #[derive(Debug)]
 pub struct Completion {
+    pub id: JobId,
     pub kind: JobKind,
     pub finished: Finished,
     pub follow_up: Vec<JobKind>,
@@ -127,6 +84,7 @@ impl Jobs {
                 Ok(result) => {
                     finished.push(running.id);
                     completions.push(Completion {
+                        id: running.id,
                         kind: running.kind.clone(),
                         follow_up: running.kind.follow_up(),
                         finished: result,

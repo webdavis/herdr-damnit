@@ -1,12 +1,16 @@
 mod apply;
+mod boxes;
 mod done;
+mod edits;
 mod handshake;
 mod header;
 mod keys;
 mod overlay_keys;
+mod pickers;
 mod screen;
 mod views;
 
+use crate::overlay::LineBox;
 pub use crate::overlay::Overlay;
 pub use screen::Screen;
 
@@ -18,10 +22,8 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use herdr_damnit_adapters::Config;
-use herdr_damnit_application::{JobKind, Jobs, Submitted, argv};
-use herdr_damnit_domain::{
-    Cursor, DONE_QUERY, DamVersion, Date, Failure, Object, Oid, Stage, Views, message,
-};
+use herdr_damnit_application::{JobId, JobKind, Jobs, Submitted};
+use herdr_damnit_domain::{Cursor, DamVersion, Date, Failure, Object, Oid, Stage, Views, message};
 
 const BUSY_POLL_WINDOW: Duration = Duration::from_millis(50);
 
@@ -50,6 +52,7 @@ pub struct App {
     pub detail: Option<Object>,
     under_detail: Screen,
     last_reread: Option<Instant>,
+    awaiting: Option<(JobId, LineBox)>,
     handshake_accepted: bool,
     newer_dam_warning_shown: bool,
     objects: Vec<Object>,
@@ -84,6 +87,7 @@ impl App {
             detail: None,
             under_detail: Screen::List,
             last_reread: None,
+            awaiting: None,
             handshake_accepted: false,
             newer_dam_warning_shown: false,
             objects: Vec::new(),
@@ -102,12 +106,13 @@ impl App {
         }
     }
 
-    pub fn submit(&mut self, kind: JobKind, argv: Vec<String>) {
+    pub fn submit(&mut self, kind: JobKind, argv: Vec<String>) -> Option<JobId> {
         match self.jobs.submit(kind, argv) {
-            Submitted::Started(_) => {}
+            Submitted::Started(id) => return Some(id),
             Submitted::Refused(said) | Submitted::Failed(said) => self.message = said,
             Submitted::NotInstalled => self.message = message(&Failure::NotInstalled),
         }
+        None
     }
 
     pub fn tick(&mut self, now: Instant) {
@@ -122,25 +127,13 @@ impl App {
     }
 
     pub fn subject_of(&self, oid: &Oid) -> Option<&str> {
+        self.object(oid).map(|object| object.subject.as_str())
+    }
+
+    fn object(&self, oid: &Oid) -> Option<&Object> {
         self.objects
             .iter()
             .chain(&self.done_objects)
             .find(|object| &object.oid == oid)
-            .map(|object| object.subject.as_str())
-    }
-
-    fn show(&mut self, screen: Screen) -> After {
-        self.screen = screen;
-        if screen == Screen::Done && self.handshake_accepted {
-            if !self.done_list_requested {
-                self.done_list_requested = true;
-                self.submit(JobKind::ReadDone, argv::list(DONE_QUERY));
-            }
-            if !self.done_log_requested {
-                self.done_log_requested = true;
-                self.submit(JobKind::ReadLog, argv::log());
-            }
-        }
-        After::Stay
     }
 }

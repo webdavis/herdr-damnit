@@ -5,16 +5,30 @@ use herdr_damnit_domain::{
 };
 
 use super::{App, Screen};
+use crate::overlay::{LineBox, LinePurpose, Overlay};
 
 impl App {
     pub(super) fn apply(&mut self, completion: Completion) {
+        let awaited = self
+            .awaiting
+            .take_if(|(id, _)| *id == completion.id)
+            .map(|(_, line)| line);
         if completion.finished.code != Some(0) {
-            self.message = message(&classify(
+            let failure = classify(
                 completion.finished.code,
                 wire::error_document(&completion.finished.stderr),
                 &completion.finished.stderr,
-            ));
+            );
+            self.message = message(&failure);
+            self.bring_the_box_back(awaited, &failure);
             return;
+        }
+        if let Some(LineBox {
+            purpose: LinePurpose::New(_),
+            ..
+        }) = awaited
+        {
+            self.name_what_dam_made(&completion.finished.stdout);
         }
         if self.applied_as_handshake(&completion) {
             return;
@@ -67,6 +81,22 @@ impl App {
             _ => {}
         }
         Ok(())
+    }
+
+    /// A held store is the one failure the box stays shut for, so `R` reaches the retry.
+    fn bring_the_box_back(&mut self, awaited: Option<LineBox>, failure: &Failure) {
+        if let Some(line) = awaited
+            && !matches!(failure, Failure::Store(_))
+            && self.overlay.is_none()
+        {
+            self.overlay = Some(Overlay::Line(line));
+        }
+    }
+
+    fn name_what_dam_made(&mut self, stdout: &str) {
+        if let Ok(made) = wire::object(stdout) {
+            self.message = format!("made {}", made.oid.short());
+        }
     }
 
     pub(super) fn read_status(&mut self, stdout: &str) -> Result<(), String> {
