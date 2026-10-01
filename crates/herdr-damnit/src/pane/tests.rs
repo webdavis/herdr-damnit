@@ -1,3 +1,4 @@
+use super::requests::note_then_open;
 use super::*;
 
 fn default_config() -> Config {
@@ -161,5 +162,21 @@ fn a_view_that_opened_leaves_its_note_for_the_pane_and_says_what_it_shows() {
     assert_eq!(
         state::take_requested_view(&request),
         Some("work".to_string())
+    );
+}
+
+#[test]
+fn the_status_action_leaves_the_status_request_for_the_pane() {
+    let request =
+        std::env::temp_dir().join(format!("herdr-damnit-status-action-{}", std::process::id()));
+    let _ = std::fs::remove_file(&request);
+
+    let outcome = note_then_open(STATUS_REQUEST, &request, || Ok("focused w:p3".to_string()))
+        .expect("the open succeeded");
+
+    assert_eq!(outcome, "focused w:p3, showing status");
+    assert_eq!(
+        state::take_requested_view(&request).as_deref(),
+        Some("status")
     );
 }

@@ -28,6 +28,10 @@ pub fn log() -> Vec<String> {
     words(&["log", JSON])
 }
 
+pub fn remotes() -> Vec<String> {
+    words(&["remote", "list"])
+}
+
 pub fn stage(oid: &Oid) -> Vec<String> {
     words(&["add", oid.as_str(), JSON])
 }
