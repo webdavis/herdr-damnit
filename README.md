@@ -1,13 +1,13 @@
 # herdr-damnit
 
-A Todoist pane for the [herdr](https://herdr.dev) terminal multiplexer: a
-[ratatui](https://ratatui.rs) terminal user interface in a plugin-owned pane, talking to the
-[Todoist API v1](https://developer.todoist.com/api/v1) directly.
+A task pane for the [herdr](https://herdr.dev) terminal multiplexer over
+[`dam`](https://github.com/webdavis/damnit), the local task store: a [ratatui](https://ratatui.rs)
+terminal user interface in a plugin-owned pane. Every read and every write is a `dam` command run
+on a worker thread, so the pane keeps drawing and reading keys while a push or a pull is out.
 
-The pane lists every open task grouped by project and section, and shows any API failure (a
-rejected token, a rate limit with its retry delay, a network outage) in the status line while the
-last good list stays on screen. Named filter views, written in Todoist's own filter language,
-switch with a picker or a number key. The editing keys follow.
+The pane lists the objects of a view grouped by path, shows `dam`'s staging model on a second
+screen and the completed tasks on a third, and stages, commits, pushes and pulls the way `dam` does
+from a shell. Named views are `dam` queries and switch with a picker or a number key.
 
 ## Install
 
@@ -18,6 +18,9 @@ herdr plugin install webdavis/herdr-damnit
 It needs herdr 0.7.5 or later: plugin panes and their registry arrived in 0.7.0, and `S` reads the
 `pane_id`, `workspace_id` and `agent` fields of `herdr agent list`, which herdr documents from 0.7.5.
 
+It needs `dam` 0.2 or later on the `PATH`, installed with `cargo install damnit`. The pane checks
+the version as it opens and draws a refusal naming the version it found when it is too old.
+
 The install step builds the binary into `bin/herdr-damnit` with cargo, so a Rust toolchain is
 needed. A local checkout is linked instead, and builds itself:
 
@@ -26,19 +29,19 @@ cargo build --release --locked && mkdir -p bin && cp target/release/herdr-damnit
 herdr plugin link .
 ```
 
-## The token
-
-The plugin holds no credential and its config has no key that names one: the token is `dam`'s.
+The plugin holds no credential and its config has no key that names one. A remote's token is
+`dam`'s, resolved from that remote's own section of `dam`'s config.
 
 ## Actions
 
-| Action   | What it does                                                        |
-| -------- | ------------------------------------------------------------------- |
-| `open`   | open the pane in this workspace, or focus it when it is already open |
-| `toggle` | open the pane, or close it when it is already open                   |
-| `focus`  | focus the pane in this workspace                                     |
-| `view:1` to `view:9` | show that view, opening the pane when it is closed       |
-| `doctor` | check that the token resolves and that one API request succeeds      |
+| Action               | What it does                                                          |
+| -------------------- | --------------------------------------------------------------------- |
+| `open`               | open the pane in this workspace, or focus it when it is already open  |
+| `toggle`             | open the pane, or close it when it is already open                    |
+| `focus`              | focus the pane in this workspace                                      |
+| `status`             | open or focus the pane on its Status screen                           |
+| `view:1` to `view:9` | show that view, opening the pane when it is closed                    |
+| `doctor`             | check that `dam` answers, that its status reads, and list its remotes |
 
 Every action works on the pane in the workspace it runs in, and the plugin remembers one pane per
 workspace: `toggle` in a workspace whose pane is closed opens one there even when another workspace
@@ -53,31 +56,35 @@ herdr plugin action invoke toggle --plugin herdr-damnit
 herdr plugin action invoke doctor --plugin herdr-damnit
 ```
 
-`doctor` reports that the token resolved, and which indirection it came from, then that
-`GET /user` succeeded. It exits non-zero with the reason when either step fails.
+`doctor` prints the `dam` version it found, confirms that `dam status --json` carries every key the
+pane reads, and lists the remotes `dam remote list` names, each in `dam`'s own words, which include
+when it was last pulled and pushed. It exits non-zero with the reason when `dam` is too old or its
+status is missing a key, and when `dam` cannot be started it names the program it looked for and
+the `PATH` it searched.
 
 ## Configuration
 
 The config is `config.toml` in the plugin's config directory (`herdr plugin config-dir
 herdr-damnit` prints it). A missing file is the default configuration.
 
-| Key             | Default   | Allowed values                      | Meaning                                                 |
-| --------------- | --------- | ----------------------------------- | ------------------------------------------------------- |
-| `dam`           | `["dam"]` | an argv whose first word is not blank | the command the pane runs as `dam`, each call's own arguments following it |
-| `placement`     | `"split"` | `overlay`, `split`, `tab`, `zoomed` | how `open` and `toggle` place the pane                  |
-| `side`          | `"right"` | `right`, `down`                     | which side of the calling pane a `split` takes          |
-| `width`         | none      | a fraction above 0 and below 1      | the share of the tab the pane takes                     |
-| `default_view`  | none      | a view name                         | the view the pane opens on                              |
-| `auto_open`     | `false`   | `true`, `false`                     | whether focusing a workspace opens the pane there       |
-| `theme`         | `"catppuccin"` | a herdr theme name             | the palette the pane paints with                        |
-| `icons`         | `"nerd-font"` | `nerd-font`, `ascii`            | which set of marks a task line carries                  |
-| `refresh_seconds` | `300`   | whole seconds, `0` to turn it off   | how often the pane reads `dam` on its own; `0` still leaves `R` and the read after every write |
-| `handoff_label` | `"handed-off"` | any label, `""` for none       | the label a successful hand-off to the agent writes on the object |
-| `[[views]]`     | none      | `name` and `query`                  | the named views, each a query in `dam`'s grammar, which `dam` resolves against its saved filters first; numbered after the open list in the order they are written |
+| Key               | Default        | Allowed values                        | Meaning                                                                         |
+| ----------------- | -------------- | ------------------------------------- | ------------------------------------------------------------------------------- |
+| `dam`             | `["dam"]`      | an argv whose first word is not blank | the command the pane runs as `dam`, each call's own arguments following it      |
+| `placement`       | `"split"`      | `overlay`, `split`, `tab`, `zoomed`   | how `open` and `toggle` place the pane                                          |
+| `side`            | `"right"`      | `right`, `down`                       | which side of the calling pane a `split` takes                                  |
+| `width`           | none           | a fraction above 0 and below 1        | the share of the tab the pane takes                                             |
+| `default_view`    | none           | a view name                           | the view the pane opens on                                                      |
+| `auto_open`       | `false`        | `true`, `false`                       | whether focusing a workspace opens the pane there                               |
+| `theme`           | `"catppuccin"` | a herdr theme name                    | the palette the pane paints with                                                |
+| `icons`           | `"nerd-font"`  | `nerd-font`, `ascii`                  | which set of marks a row carries                                                |
+| `refresh_seconds` | `300`          | whole seconds, `0` to turn it off     | how often the pane reads `dam` on its own                                       |
+| `handoff_label`   | `"handed-off"` | any label, `""` for none              | the label a successful hand-off to the agent writes on the object               |
+| `[[views]]`       | none           | `name` and `query`                    | the named views, numbered after the open list in the order they are written     |
 
 An unrecognized `placement` or `side` is a config parse error naming the values above, and so is a
 `width` that is not a share of the tab, a `default_view` no view answers to, or a `theme` name no
-palette answers to.
+palette answers to. A key the pane does not read is an error too, so a leftover `token_command`,
+`filter` or `editor` from `herdr-todoist` is named rather than ignored.
 
 ## Placement
 
@@ -92,86 +99,74 @@ picks the direction the open itself splits in and a `width` is one `herdr pane r
 after. With no `width`, the open places the pane by itself and no resize is made. A refused resize
 leaves the pane at the even split and says so: a pane at the wrong width still lists tasks.
 
-`width` is the share of the tab the Todoist pane gets, so `0.3` is a third of it and the pane the
-action ran in keeps the rest.
+`width` is the share of the tab the pane gets, so `0.3` is a third of it and the pane the action
+ran in keeps the rest.
 
 ## Opening the pane
 
-`default_view` is the view the pane opens on, the unfiltered list when it is unset. A `view:<n>`
-action outranks it: the action notes the view it was pressed for and the pane reads that note, so
-`view:3` shows view 3 whatever `default_view` says.
+`default_view` is the view the pane opens on, the open list when it is unset. A `view:<n>` action
+outranks it: the action notes the view it was pressed for and the running pane reads that note on
+its next tick, so `view:3` shows view 3 whatever `default_view` says. The `status` action leaves
+the note `status`, which the pane reads as the Status screen rather than as a view name. A view
+that is itself named `status` is still reached by its number and from the picker.
 
 `auto_open = true` opens the pane in a workspace as that workspace gains focus, without taking the
 focus off the pane you switched to. It is `false` by default, which keeps the pane closed until
-`open`, `toggle` or a `view` action asks for it.
+`open`, `toggle`, `status` or a `view` action asks for it.
 
-## Cache, refresh and writes made offline
+## Reading, refreshing and writes made offline
 
-The pane opens on the view it last read, so its local copy fills the rows before anything is
-asked of the API. That local copy is one file per view in a `cache` directory under the plugin's
-state directory, which herdr names in `HERDR_PLUGIN_STATE_DIR` and which is
-`~/.local/state/herdr/plugins/state/herdr-damnit` for a run outside herdr. Each file holds the
-API's own task, project and section documents. Every successful read replaces the file for
-that view. A file that cannot be read, because it was half written or came from an older version
-of the plugin, is treated as no cache at all: the pane opens empty rather than refusing to open.
+The store is `dam`'s. The pane keeps no cache and no queue of its own: as it opens it asks
+`dam --version`, then `dam status --json`, then `dam ls <query> --json` for the showing view, and
+every later read is the same two local commands.
 
-The pane reads once as soon as it opens, whatever `refresh_seconds` is set to, and again every
-`refresh_seconds`, after every write, and on `R`. Setting `refresh_seconds` to `0` turns off only
-that interval; the opening read, the read after a write and `R` still happen. The interval is
-driven by the pane's own draw loop, so it stops when the pane does, and it is held back while a
-prompt is open: redrawing the list under a half-typed comment would take the words away.
+The pane reads again every `refresh_seconds`, after every write, and on `R`. Setting
+`refresh_seconds` to `0` turns off only that interval. The interval is held back while a picker or
+a box is open, or a screen other than the List is showing, so a half-typed line is never redrawn
+away.
 
-When a read cannot reach the API, the rows stay on screen and the status line says how old they
-are, `stale 5m`. Every other failure keeps its own message, so a rejected token or a refused
-filter still reads as itself.
+A write made with the network down is an ordinary `dam` commit: it waits as an unpushed commit,
+counted on the status line as `^1 unpushed`, until a push reaches the remote. A failed mutation in
+a push stays in the Notices section of the Status screen with `dam`'s reason until it is dealt with.
 
-A write made while the network is down is not sent and not drawn onto its row, which would put
-something on screen the server has not agreed to. It goes to the back of a queue in
-`queue.json` beside the cache, its row takes a `+` mark, and the status line counts what is
-waiting (`stale 5m +2`). The queue is written to disk the moment a write joins it, so a task
-completed on a train is still waiting to be sent after the pane is closed and opened again.
-
-The next read that reaches the API sends the queue, oldest first, one write at a time. A write the
-API refuses, a task somebody else deleted for instance, is dropped with the API's own message
-(`dropped 1: Task not found  sent 7`) and the writes behind it still go: one write nobody can make
-any more is not a reason to strand the seven behind it. A write that fails because the network is
-still down stays at the head of the queue with everything behind it, in order, for the next try.
+Every message the pane has for the operator, `dam`'s own refusals included, takes the bottom line
+in place of the key hints until the next key is pressed.
 
 ## Views
 
-A view is a name and a Todoist filter query, the same
-[filter language](https://www.todoist.com/help/articles/introduction-to-filters-V98wIH) the app's
-Filters feature uses, so anything Todoist accepts as a filter is a view:
+A view is a name and a `dam` query, which the pane passes to `dam ls` as it is:
 
 ```toml
 [[views]]
 name = "today"
-filter = "today | overdue"
+query = "!done & (due:today | overdue)"
 
 [[views]]
-name = "work"
-filter = "#Work & !@waiting"
+name = "deep"
+query = "!done & effort:deep"
 ```
 
-View 1 is always `all`, the unfiltered list of every open task, and the configured views follow in
-the order they are written. Two views with one name is a config error, as is a view named `all`,
-which the unfiltered list already answers to, and as is a view missing its `name` or its
-`filter`.
+`dam` resolves a bare word against the saved filters in its own config first, so `query = "today"`
+with a `[filter.today]` in `dam`'s config keeps one definition for every client. The grammar is
+`&`, `|`, `!` and parentheses over terms such as `done`, `overdue`, `@<label>`, `p1` to `p4`,
+`due:`, `deadline:`, `path:<path>`, `kind:task` and `<category>:<value>`; `dam`'s own
+documentation has the full list.
 
-Press `v` for the picker or a number key to switch. A view keeps the cursor on its task when that
-task is in the view being switched to, and lands on the view's first task when it is not.
+View 1 is always `open`, the query `!done`: `dam ls` with no query includes completed objects. The
+configured views follow in the order they are written. Two views with one name is a config error,
+as is a view named `open` or one missing its `name` or its `query`.
 
-Todoist refuses a malformed filter query with its own message, which the status line shows while
-the rows already on screen stay put, so a typo in one view leaves the pane readable rather than
-blank. A filter that is merely matching nothing is an empty list and says `0 open tasks`.
+Press `v` for the picker or a number key to switch. A query `dam` refuses comes back with `dam`'s
+own message on the bottom line while the rows already on screen stay put, so a typo in one view
+leaves the pane readable rather than blank.
 
 ### Views as keybindings
 
 herdr declares plugin actions in the manifest and has no runtime action registration, and a
 `plugin_action` keybinding passes no arguments, so there can be no `view:<name>` action per
 configured view: the views are config and the manifest is not. The actions are numbered instead,
-`view:1` to `view:9`. Nine is `views::MAX_NUMBERED_VIEW`, the ceiling the manifest, the number
-keys and the pane's hint line all share; raising it means adding entries in all three places.
+`view:1` to `view:9`. Nine is `MAX_NUMBERED_VIEW`, the ceiling the manifest and the number keys
+share; raising it means adding entries in both places.
 
 ```toml
 [[keys.command]]
@@ -185,29 +180,30 @@ A number with no view behind it exits non-zero saying how many views the config 
 
 ## The list
 
-Open tasks, grouped by project and then by section, with subtasks folded under their parent one
-level of indentation deeper. Each line carries its marks, then the task's content, then the number
-of subtasks under it. A project or section with no open task of its own is left out.
+The objects of the showing view, grouped by `path`: one heading per path segment with an object
+under it, children indented one level deeper. Each row carries its marks, then the subject, then
+the number of labels.
 
-The marks lead so that a title too long for the pane is what gets cut, with an ellipsis where it
-was cut; a side pane is about 32 columns wide, and a task can be overdue, urgent, repeating and
-labelled all at once. Labels are counted rather than named for the same reason, and the detail
-screen names them.
+The marks lead so that a subject too long for the pane is what gets cut, with an ellipsis where it
+was cut; a side pane is about 32 columns wide. Labels are counted rather than named for the same
+reason, and the Detail screen names them.
 
-| Mark        | Nerd Font   | Plain | Color  | Meaning                                    |
-| ----------- | ----------- | ----- | ------ | ------------------------------------------ |
-| priority p1 | flag        | `!`   | red    | the app's p1, the most urgent              |
-| priority p2 | flag        | `^`   | orange | the app's p2                               |
-| priority p3 | flag        | `-`   | blue   | the app's p3                               |
-| overdue     | warning     | `<`   | red    | due before today, with the date beside it  |
-| today       | clock       | `*`   | yellow | due today, which needs no date beside it   |
-| upcoming    | calendar    | `>`   | blue   | due later, with the date beside it         |
-| recurring   | refresh     | `~`   | green  | the due date repeats                       |
-| labels      | tags        | `@`   | purple | how many labels the task carries           |
+| Mark       | Nerd Font  | Plain | Color  | Meaning                                    |
+| ---------- | ---------- | ----- | ------ | ------------------------------------------ |
+| priority 1 | flag       | `!`   | red    | `dam`'s priority 1, the most urgent        |
+| priority 2 | flag       | `^`   | orange | `dam`'s priority 2                         |
+| priority 3 | flag       | `-`   | blue   | `dam`'s priority 3                         |
+| overdue    | warning    | `<`   | red    | due before today, with the date beside it  |
+| today      | clock      | `*`   | yellow | due today, which needs no date beside it   |
+| upcoming   | calendar   | `>`   | blue   | due later, with the date beside it         |
+| recurring  | refresh    | `~`   | green  | the object carries a recurrence rule       |
+| labels     | tags       | `@`   | purple | how many labels the object carries         |
+| working    | pencil     | `*`   | yellow | changed here, not staged                   |
+| staged     | plus       | `+`   | green  | staged, not committed                      |
+| unpushed   | up arrow   | `^`   | cyan   | committed here, not yet on the remote      |
+| conflict   | cross      | `x`   | red    | both sides changed it                      |
 
-The app's p4 is its "no priority" and carries no mark, and neither does a task with no due date. A
-date on another day of this year is shown as its month and day; a date in another year is shown
-whole, so an old one cannot read as a near one.
+Priority 4 is `dam`'s default and carries no mark, and neither does an object with no due date.
 
 ## Colors
 
@@ -216,83 +212,91 @@ palettes, so a workspace's panes match: `catppuccin` (the default), `catppuccin-
 `catppuccin-frappe`, `catppuccin-macchiato`, `dracula`, `github-light`, `gruvbox`, `gruvbox-light`,
 `monokai`, `nord`, `one-dark`, `one-light`, `rose-pine`, `rose-pine-dawn`, `solarized`,
 `solarized-light`, `tokyo-night` and `tokyo-night-day`. The pane paints foregrounds only: the
-background stays the terminal's own.
+background stays the terminal's own. The staging marks take green, yellow, cyan and red from the
+same palette.
 
 `icons = "ascii"` draws the plain set instead of the glyphs. A terminal whose font has no Nerd Font
 glyph draws a replacement box that is often two cells wide, which puts every column in the pane out
 by one, and no terminal reports which font it is using, so a pane cannot tell on its own: set this
 key when the glyphs come out as boxes.
 
-## The completed list
+## The three screens
 
-`<Tab>` shows the completed tasks instead of the open ones, and `<Tab>` again goes back. It is a
-second screen rather than a tenth view: the numbered views are filter queries over open tasks, and
-this list has no filter and no grouping. `1` to `9` and the view picker go back to the open list on
-the view they name, so a `view:<n>` keybinding behaves the same whichever list is on screen.
+`<Tab>` cycles List, Status and Done, and `<S-Tab>` goes back. Each keeps its own cursor.
 
-Completed tasks are newest first, one line each, the completion date first so the dates line up
-down the pane. The list is paged: the first screen is one request when the newest window has rows,
-and reaching the bottom row asks for the next page. An account whose newest windows hold nothing
-walks back through them before the first screen draws, since each page is a request of its own.
-`u` reopens the task under the cursor, which drops its row at once, since a reopened task is no
-longer completed; the cursor takes the row below it. A refused reopen leaves every row where it is
-and reports the API's own message in the status line.
+- **List** is the showing view.
+- **Status** is `dam status`: Staged, Working, Unpushed, and Notices (conflicts and the notices a
+  pull or push left), drawn in `dam`'s own order. An empty section is left out, and an empty
+  screen says `nothing staged, nothing changed`. Every row that names an object is a cursor
+  target, so staging, the detail, resolving and removing all work from here.
+- **Done** is `dam ls done`, newest completion first with the date leading, the dates read from
+  `dam log`. A task completed but not yet committed has no date and sorts to the top under
+  `not committed`.
 
-The API reads completed tasks in a window of at most three months at a time, so the list walks back
-one window per page. It stops about three years back and the status line says so along with the day
-it read back to, rather than leaving the bottom of the list looking like the end of the history. How
-much of that reads at all is the account's own retention: a free plan keeps a week of completed
-tasks.
+The header names the screen, or the view on the List, and while a `dam` command is out it carries a
+spinner, the verb and the elapsed time: `dam  today  ⠙ push 3.2s`.
 
 ## Keys in the pane
 
-| Key           | What it does                                        |
-| ------------- | --------------------------------------------------- |
-| `j`, `<Down>` | move down one task                                  |
-| `k`, `<Up>`   | move up one task                                    |
-| `R`, `r`      | refresh the list                                    |
-| `v`           | open the view picker                                |
-| `1` to `9`    | show that view                                      |
-| `<Tab>`       | the completed list, and back                        |
-| `<CR>`        | the task's detail: its description and its comments |
-| `x`           | complete the task                                   |
-| `X`           | reopen the task                                     |
-| `dd`          | delete the task, after the confirm                  |
-| `p`           | cycle the priority one step up in urgency           |
-| `s`           | set the due date from a natural-language line       |
-| `l`           | toggle a label from a picker                        |
-| `m`           | move the task to a project or section from a picker |
-| `a`           | Quick Add a task from a whole line of its syntax    |
-| `S`           | hand the task to this workspace's agent pane        |
-| `e`           | edit the task in your editor, or in the pane's box  |
-| `q`, `<Esc>`  | close the pane                                      |
+Every key acts on the object under the cursor unless it says otherwise. A key pressed where it has
+nothing to act on, a heading or an empty list, does nothing and says nothing.
 
-In the picker, `j` and `k` move, `<CR>` takes the entry under the cursor and `<Esc>` cancels. In
-the completed list `j` and `k` move, `u` and `X` reopen, `R` starts the walk again from today and
-`q` closes the pane. On the detail screen `j` and `k` scroll, `c` opens the comment box, `R` reads
-the thread again, `<Esc>`, `<CR>` and `<Tab>` go back to the list and `q` closes the pane.
+| Key             | What it does                                                         |
+| --------------- | -------------------------------------------------------------------- |
+| `j`, `<Down>`   | move down one row                                                    |
+| `k`, `<Up>`     | move up one row                                                      |
+| `<Tab>`         | the next screen; `<S-Tab>` the one before                            |
+| `v`             | the view picker, on List or Done                                     |
+| `1` to `9`      | the List on that view                                                |
+| `R`, `r`        | read the list and the status again                                   |
+| `<CR>`          | the object's detail                                                  |
+| `<Space>`       | stage the object, or unstage it when it is staged                    |
+| `A`, `U`        | stage everything, unstage everything                                 |
+| `c`             | commit what is staged, with a one-line message                       |
+| `P`, `L`        | push, pull                                                           |
+| `<C-c>`         | cancel the `dam` command the header names                            |
+| `x`             | complete the task                                                    |
+| `X`             | complete the task even past open children and dependencies           |
+| `dd`            | remove the object, after the confirm                                 |
+| `!`             | discard the object's working change, after the confirm              |
+| `p`             | cycle the priority 4, 3, 2, 1 and back to 4                          |
+| `s`, `D`        | set the due date, the deadline                                       |
+| `l`             | add or remove a label from a picker                                  |
+| `m`             | move the object to another path from a picker                        |
+| `a`             | add a task under the path of the row under the cursor                |
+| `S`             | hand the task to this workspace's agent pane                         |
+| `e`             | edit the object in your editor through `dam edit -e`                 |
+| `o`, `t`        | resolve the conflict under the cursor toward ours, toward theirs     |
+| `q`             | close the pane                                                       |
+| `<Esc>`         | close the picker, box or Detail screen that is open; else the pane   |
 
-## The task detail
+In a picker, `j` and `k` move, `<CR>` takes the entry under the cursor and `<Esc>` cancels. In a
+one-line box, `<CR>` sends and `<Esc>` cancels.
 
-`<CR>` on a task opens its detail: the task's title, its description rendered as markdown, and its
-comment thread oldest first, so a comment just added is at the bottom where it was typed. The
-thread is ordered here rather than taken as it arrives, because the endpoint promises no ordering;
-a comment carrying no timestamp sorts after every dated one instead of jumping to the top. Each
-comment is headed with the day it was posted and the id of who posted it. Going back leaves the
-list exactly as it was, cursor included.
+**`X` is force-complete, not reopen.** In `herdr-todoist` it reopened a task; `dam` has no verb
+that clears `done`, so the key now completes past whatever blocks a plain `x`.
 
-The detail is a third screen rather than a tenth view, the way the completed list is: the numbered
-views are the operator's own filter queries and this screen has no filter, so `view:1` to `view:9`
-and `default_view` are untouched by it.
+**`!` is there only on a `dam` that has `restore`.** The pane reads the version as it opens and
+binds the key from `dam` 0.2.0 on, which is also the oldest `dam` it opens on at all. A destructive
+key that asked first and was then refused would be the worst shape a key could have, so without the
+verb the key is simply not bound. The confirm names the object and the fields the change would lose.
 
-An attachment is NAMED, never fetched: the line reads `[attached] <file name>`, and nothing in the
-pane downloads a file on a key press. The API sends a comment's attachment as a free-form object,
-so the name is read off it when there is one and the line says `[attached] file` when there is not.
+`q` with a push, pull or commit running asks once, and a second `q` closes the pane and leaves the
+`dam` child to finish. `dam push` records each mutation as its result arrives, so killing it halfway
+could send a mutation twice next time; `<C-c>` is what stops it.
+
+## The detail
+
+`<CR>` runs `dam show` and draws the object: the subject as the heading, then its path, kind,
+priority, due date, deadline, the event it is attached to, recurrence, every label by name, its
+dependencies as short oids with their subjects, and its body as markdown. An event draws its start,
+end, time zone, location, status, transparency and attendees with their responses. A field the
+object has nothing for is left out. `<Esc>` goes back to the screen underneath, cursor included.
 
 ### How much markdown is rendered
 
-A description is free text a person typed, often on a phone, and the pane it lands in is about 32
-columns wide, so the renderer covers what a person actually writes and leaves the rest as written:
+A body is free text a person typed, and the pane it lands in is about 32 columns wide, so the
+renderer covers what a person actually writes and leaves the rest as written:
 
 - **Rendered:** ATX headings (bold, one weight at every level), bullet lists (every marker drawn as
   one dash), numbered lists (keeping the numbers written), blockquotes, thematic breaks, bold,
@@ -302,32 +306,22 @@ columns wide, so the renderer covers what a person actually writes and leaves th
 - **Shown as written:** a table, because 32 columns cannot hold one, and the body of a fenced code
   block, because reflowing code changes what it says. The fences themselves are dropped.
 
-Every line is WRAPPED rather than cut: a long link, a wide table row and an unbreakable identifier
-each break inside the pane, which is pinned by a test that draws the screen 32 columns wide.
-
-## Adding a comment
-
-`c` on the detail screen opens a multi-line box, drawn by the pane, so no editor is entered. `<CR>`
-opens a line, `<C-d>` posts, `<Esc>` throws the draft away, and a box holding nothing but
-whitespace posts nothing. `<CR>` cannot also send, which is why posting is its own key.
-
-A posted comment arrives by a read of the thread rather than by being added to what is on screen,
-so the order and the timestamp drawn are the server's own. A REFUSED post leaves the box open with
-every line still in it and the API's own message in the status line: a person has just typed
-several lines and losing them to a refusal would be the worst thing this screen could do.
+Every line wraps rather than being cut: a long link, a wide table row and an unbreakable identifier
+each break inside the pane.
 
 ## Sending a task to the agent
 
-`S` hands the task under the cursor to the agent working in this workspace. It opens the same
-multi-line box a comment is typed in, for an optional note: `<C-d>` sends, `<Esc>` cancels, and a
-box submitted blank sends the brief with no note rather than refusing. NOTHING here happens on its
-own: no timer, no event hook, no hand-off the operator did not press `S` for.
+`S` hands the object under the cursor to the agent working in this workspace. It opens a
+multi-line box for an optional note: `<CR>` opens a line, `<C-d>` sends and `<Esc>` throws the
+draft away. A box sent blank sends the brief with no note. Nothing here happens on its own: no
+timer, no event hook, no hand-off the operator did not press `S` for.
 
-The brief is plain text, because an agent pane is a shell rather than a structure:
+The brief is plain text:
 
 ```
-Todoist task: file taxes
-url: https://app.todoist.com/app/task/6cfCrxxxxxxxxxxx
+dam task: file taxes
+oid: 1a2b3c4d5e6f
+path: home/admin/
 due: 2026-09-20
 priority: p1
 labels: home, slow
@@ -337,104 +331,99 @@ receipts are in the drawer
 note: start with the receipts
 ```
 
-A field the task has nothing for is LEFT OUT rather than written empty, so the brief carries no
-line an agent has to discount. The URL is built from the task id: the v1 task object has no `url`
-field, and `https://app.todoist.com/app/task/<id>` is the form the vendor documents in its place.
+A field the object has nothing for is left out rather than written empty. The oid is what
+`dam show` and every other `dam` client accept.
 
-The brief reaches the pane through `herdr pane send-text`, which writes literal text into a pane's
-input WITHOUT a return, so the agent holds the brief until the operator submits it; `herdr agent
-focus` then puts the cursor there. It is sent as one bracketed paste, so a multi-line brief is
-inserted verbatim instead of being read key by key, and a paste terminator inside the text cannot
-end the frame early. A refused focus does not fail the send, since the brief is already delivered.
+The brief reaches the pane through `herdr pane send-text` as one bracketed paste, without a return,
+so the agent holds it until the operator submits it; `herdr agent focus` then puts the cursor there,
+and a refused focus does not fail the send. Which pane is the agent pane comes from
+`herdr agent list`: a pane herdr names an agent for, in this workspace, other than this one. A
+workspace with no such pane says so.
 
-WHICH pane is the agent pane comes from `herdr agent list`: a pane herdr names an agent for, in
-this workspace, other than this one. A workspace with no such pane refuses by saying so, and where
-there are several the first herdr names wins and the status line says which agent got it.
+The record of the hand-off is a label. With `handoff_label` set, a successful send runs
+`dam edit <oid> --label <handoff_label>`, an ordinary working change that shows under Working on
+the Status screen and is staged with everything else. A refused label says
+`sent to <name>, label refused: <dam's message>.` rather than pretending the send failed, because
+the agent has the work either way. With `handoff_label = ""` nothing is written and the bottom line
+is the whole record.
 
-A comment on the task then records the hand-off (`Handed to the agent <name> from the herdr Todoist
-pane.`). It names the AGENT rather than its pane, which means nothing a day later, and WHEN is the
-comment's own posted date, which Todoist stamps and the detail screen draws. The comment is written
-only after the send succeeded, so a refused send leaves no record of a hand-off that did not
-happen. A refused comment says `sent to <name>, comment refused: <the API's message>` rather than
-pretending the send failed: the agent has the work either way, and that is what the operator needs
-to know.
-## Editing a task in an editor
+## Editing in an editor
 
-`e` on a task runs the editor in this pane, waits for it, and reads the list again once it has
-gone. The command is
-[todoist.nvim](https://github.com/webdavis/todoist.nvim)'s own entry point:
+`e` runs `dam edit <oid> -e` on the pane's own terminal. `dam` renders the object as a commented
+TOML template, opens the editor (`VISUAL`, then `EDITOR`, then `vi`), reads the file back on save,
+and reopens it with the text intact when it does not parse, so nothing reaches the working layer
+until it does.
 
-```bash
-nvim +"Todoist task <id>"
-```
-
-which opens that one task as an editable buffer in an editor holding nothing else, so the herdr
-pane and the Neovim plugin are two halves of the same workflow. Any editor works: `editor` is argv,
-so the program is one entry and each argument is its own, and the `+Todoist task <id>` word is
-appended to it. An entry is never split on spaces, so a path with a space in it needs no quoting.
-
-With `editor` unset the pane runs `nvim`. `editor = []` turns the editor off and `e` opens the
-pane's own multi-line box over the task instead: the first line is the task's content and the lines
-under it are its description, `<CR>` opens a line, `<C-d>` saves and `<Esc>` throws the edit away.
-A refused save leaves the box open with every line still in it.
-
-The pane leaves the alternate screen before the editor starts and enters it again once the editor
-has gone, on every path: an editor that exited non-zero, and an `editor` naming a program that is
-not installed, both come back to a drawn pane rather than a terminal left in raw mode. A program
-that cannot be started at all is named in the status line.
-
-The list is read again whatever the editor exited with, since a person who quit in a hurry may
-still have saved.
+The pane leaves the alternate screen before `dam` starts and enters it again once `dam` has gone,
+on every path: a `dam` that exited non-zero and a `dam` that could not be started both come back to
+a drawn pane. The list is read again whatever `dam` exited with, since a person who quit in a hurry
+may still have saved. This is the one key that does not run on a worker thread, because it owns
+the terminal.
 
 ## Quick edits
 
-Each edit is one key press, and the three that need words are one line typed in the pane, drawn
-over the list in the same box the view picker uses. Only `e` enters an editor.
+Each edit is one `dam` command, and every one is followed by a read of the status and the showing
+view, so the rows come from the store rather than from a guess at what the write did.
 
-- `x` completes and `X` reopens the task under the cursor. `X` on a task that is already open is
-  refused by the API, which says so in the status line.
-- `dd` deletes. The first `d` draws a confirm naming the task; the second `d` sends the delete and
-  any other key dismisses it, sending nothing at all. A deleted task takes its subtasks with it and
-  there is no undo, which is why the confirm is there.
-- `p` cycles the priority one step up in urgency and wraps at the top: `p4`, `p3`, `p2`, `p1`, and
-  from `p1` back to `p4`. The API numbers priority the other way round from the app, 4 being the
-  app's `p1`; the pane speaks the app's wording throughout.
-- `s` takes a due date in Todoist's own words (`tomorrow`, `next mon`, `every 2 weeks`) and sends
-  it as `due_string`, so Todoist parses it. The pane has no date parser of its own, and a line it
-  cannot parse comes back as Todoist's own complaint with the line still in the box.
-- `l` opens a picker of every label, marking the ones the task carries. `<CR>` toggles the one
-  under the cursor and writes the task's whole label set; the picker stays open, so several labels
-  go on or off without reopening it. A label the account no longer lists but the task still carries
-  is offered too, so it can be taken off.
-- `m` opens a picker of every project with its sections indented under it, and `<CR>` moves the
-  task there.
-- `a` takes a whole line of
-  [Quick Add syntax](https://www.todoist.com/help/articles/use-task-quick-add-in-todoist-va4Lhpzz)
-  (`Pay rent tomorrow 9am p1 #Finances @home`) and sends it as typed, so Todoist parses the date,
-  the priority, the project and the labels. The status line names the task Todoist made of it.
+| Key            | The `dam` command                                                        |
+| -------------- | ------------------------------------------------------------------------ |
+| `<Space>`      | `dam add <oid>`, or `dam reset <oid>` when it is staged                  |
+| `A`, `U`       | `dam add -A`, `dam reset`                                                |
+| `c`            | `dam commit -m "<line>"`                                                 |
+| `x`, `X`       | `dam done <oid>`, `dam done <oid> --force`                               |
+| `dd`           | `dam rm <oid>`                                                           |
+| `!`            | `dam restore <oid>`                                                      |
+| `p`            | `dam edit <oid> -p <next>`                                               |
+| `s`            | `dam edit <oid> --due <line>`, or `--no-due` for an empty line           |
+| `D`            | `dam edit <oid> --deadline <line>`, or `--no-deadline` for an empty line |
+| `l`            | `dam edit <oid> --label <name>` or `--unlabel <name>`                    |
+| `m`            | `dam mv <oid> <path>`                                                    |
+| `a`            | `dam new "<line>" --path <path>`                                         |
+| `o`, `t`       | `dam resolve <oid> --ours`, `--theirs`                                   |
+| `P`, `L`       | `dam push`, `dam pull`                                                   |
 
-An empty line sends nothing, and `<Esc>` leaves any prompt without a request.
+- `c` with nothing staged says what to press instead, and a blank message is refused in the pane.
+  The box is headed with the count `dam status` reported.
+- The `s` and `D` box hints `today, tomorrow, YYYY-MM-DD or YYYY-MM-DDTHH:MM`.
+- The `l` picker offers every label the showing view carries, with the object's own marked, and
+  stays open after a pick so several labels go on or off at once. A label only this object carries
+  is offered too, so it can be taken off. `dam` refuses a second value of an exclusive category and
+  says which rule it broke.
+- The `m` picker offers every path in the showing view and each of its parents, with the object's
+  own path under the cursor.
+- `a` names the object `dam` made: `made 7a8b9c0`. A blank subject is refused in the pane.
 
-Every write is followed by a read of the showing view, so the rows come from the server rather than
-from a guess at what the write did: a completed or deleted task leaves the list, a moved task
-appears under its new project, and a task that no longer matches the showing filter disappears. A
-refused write leaves every row where it is and puts the API's own message in the status line, the
-same shape a refused filter query has.
+A box whose command `dam` refuses comes back with its line still in it and `dam`'s message on the
+bottom line, so a mistyped date is corrected rather than retyped. The one exception is a store held
+by another `dam`, which says to press `R` and closes the box so that `R` reaches the retry.
 
-A refresh keeps the cursor on the same task rather than on the same row, so a task added, removed
-or reordered above it does not move the highlight. When the task under the cursor is gone, the
-cursor takes the next task below it, or the one above when it was the last.
+A read keeps the cursor on the same object rather than on the same row, so an object added, removed
+or reordered above it does not move the highlight. When the object under the cursor is gone, the
+cursor takes the next one below it, or the one above when it was the last.
 
 ## Development
 
 ```bash
-cargo fmt --all --check
-cargo clippy --all-targets -- -D warnings
-cargo test --workspace
+just gates
 ```
 
-The tests never reach Todoist: the client is proven against a loopback HTTP double, one canned
-response per case.
+runs `cargo fmt --all --check`, `cargo clippy --locked --workspace --all-targets -- -D warnings`,
+`cargo doc` with warnings denied and `cargo test --locked --workspace`, which is what CI runs.
+
+The workspace is four crates whose dependencies point inward only:
+
+- `herdr-damnit-domain`: rows, marks, the staging model, views, the cursor, the brief, the version
+  rules and the failure mapping, over `std` and `jiff`.
+- `herdr-damnit-application`: the ports, every `dam` argv, the job table and the handshake.
+- `herdr-damnit-adapters`: the only place a `dam` process is spawned, plus the herdr CLI, the config,
+  the state directory, the clock and the parsing of `dam`'s JSON.
+- `herdr-damnit`: the binary, with the draw loop, the screens and the keys.
+
+No test runs a real `dam`, herdr or editor. The adapters crate builds `fake-dam`, a stand-in that
+logs its arguments, replays a fixture named by its subcommand, and can sleep, fail or ignore an
+interrupt on request; its knobs are `FAKE_DAM_*` environment variables or the same `NAME=value`
+words placed before its arguments. The pane's own tests drive the real draw loop over it, which is
+how a push is proven not to freeze the pane.
 
 The `dam` documents the adapters read are fixtures in `crates/herdr-damnit-adapters/tests/fixtures`,
 captured from a real `dam`. `capture.sh [<dam revision>]` there regenerates them from `dam` built
