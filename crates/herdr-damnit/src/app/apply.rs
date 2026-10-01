@@ -2,7 +2,9 @@ use herdr_damnit_adapters::wire;
 use herdr_damnit_application::{
     Completion, Handshake, JobKind, SyncKind, argv, check_status, check_version,
 };
-use herdr_damnit_domain::{DONE_QUERY, Failure, RowStyle, classify, message, rows};
+use herdr_damnit_domain::{
+    DONE_QUERY, Failure, ObjectRow, Row, RowStyle, StatusRow, classify, message, rows,
+};
 
 use super::{App, Screen};
 
@@ -77,6 +79,7 @@ impl App {
             JobKind::ReadDone => {
                 self.done_objects =
                     wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
+                self.done.replace(self.done_rows());
             }
             JobKind::ReadShow(_) => {
                 self.detail =
@@ -89,6 +92,7 @@ impl App {
             JobKind::ReadLog => {
                 self.completion_days =
                     wire::completions(&completion.finished.stdout).map_err(|_| unreadable())?;
+                self.done.replace(self.done_rows());
             }
             JobKind::Exclusive(SyncKind::Push) => {
                 self.message =
@@ -105,6 +109,7 @@ impl App {
 
     fn read_status(&mut self, stdout: &str) -> Result<(), String> {
         self.stage = wire::stage(stdout).map_err(|_| message(&Failure::Unreadable))?;
+        self.status.replace(cursor_targets(&self.stage.rows()));
         self.redraw_list();
         Ok(())
     }
@@ -132,4 +137,16 @@ impl App {
             JobKind::Exclusive(SyncKind::Pull) => argv::pull(),
         }
     }
+}
+
+fn cursor_targets(status: &[StatusRow]) -> Vec<Row> {
+    let target = |row: &StatusRow| match row {
+        StatusRow::Change { oid, text, .. } => Row::Object(ObjectRow {
+            oid: oid.clone(),
+            subject: text.clone(),
+            segments: Vec::new(),
+        }),
+        StatusRow::Heading(text) | StatusRow::Line { text, .. } => Row::Heading(text.clone()),
+    };
+    status.iter().map(target).collect()
 }

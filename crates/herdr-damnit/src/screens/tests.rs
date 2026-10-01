@@ -23,12 +23,16 @@ const CLEAN: &str = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],"u
 
 const PLAIN_FRAMES: [&str; 4] = ["|", "/", "-", "\\"];
 
-fn ascii_config() -> Config {
+pub(crate) fn ascii_config() -> Config {
     Config::parse("icons = \"ascii\"\n").expect("parses")
 }
 
-fn loaded() -> crate::app::tests::Harness {
-    let mut harness = harness_with(ascii_config());
+pub(crate) fn loaded() -> crate::app::tests::Harness {
+    loaded_with(ascii_config())
+}
+
+pub(crate) fn loaded_with(config: Config) -> crate::app::tests::Harness {
+    let mut harness = harness_with(config);
     crate::open::start(&mut harness.app);
     harness.answer(0, 0, "dam 0.2.0\n", "");
     harness.answer(1, 0, CLEAN, "");

@@ -3,13 +3,16 @@ mod done;
 mod header;
 mod keys;
 mod screen;
+mod views;
 
+pub use crate::overlay::Overlay;
 pub use screen::Screen;
 
 #[cfg(test)]
 pub(crate) mod tests;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use herdr_damnit_adapters::Config;
@@ -31,6 +34,10 @@ pub struct App {
     pub screen: Screen,
     pub views: Views,
     pub list: Cursor,
+    pub status: Cursor,
+    pub done: Cursor,
+    pub overlay: Option<Overlay>,
+    pub view_request: Option<PathBuf>,
     pub stage: Stage,
     pub message: String,
     pub spinner: usize,
@@ -40,6 +47,7 @@ pub struct App {
     pub version: Option<DamVersion>,
     pub detail: Option<Object>,
     under_detail: Screen,
+    last_reread: Option<Instant>,
     handshake_accepted: bool,
     newer_dam_warning_shown: bool,
     objects: Vec<Object>,
@@ -52,10 +60,18 @@ pub struct App {
 
 impl App {
     pub fn new(config: Config, jobs: Jobs, today: Date) -> Self {
+        let mut views = Views::new(&config.views());
+        if let Some(name) = &config.default_view {
+            views.select_named(name);
+        }
         Self {
             screen: Screen::List,
-            views: Views::new(&config.views()),
+            views,
             list: Cursor::new(Vec::new()),
+            status: Cursor::new(Vec::new()),
+            done: Cursor::new(Vec::new()),
+            overlay: None,
+            view_request: None,
             stage: Stage::default(),
             message: String::new(),
             spinner: 0,
@@ -65,6 +81,7 @@ impl App {
             version: None,
             detail: None,
             under_detail: Screen::List,
+            last_reread: None,
             handshake_accepted: false,
             newer_dam_warning_shown: false,
             objects: Vec::new(),
@@ -91,13 +108,15 @@ impl App {
         }
     }
 
-    pub fn tick(&mut self, _now: Instant) {
+    pub fn tick(&mut self, now: Instant) {
         if self.jobs.in_flight() > 0 {
             self.spinner = self.spinner.wrapping_add(1);
         }
         for completion in self.jobs.drain() {
             self.apply(completion);
         }
+        self.take_view_request();
+        self.reread_on_the_interval(now);
     }
 
     pub fn subject_of(&self, oid: &Oid) -> Option<&str> {

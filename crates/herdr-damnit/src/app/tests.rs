@@ -1,4 +1,5 @@
 mod header;
+mod keys;
 
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
@@ -123,6 +124,10 @@ impl Harness {
 
     pub(crate) fn press(&mut self, code: KeyCode) -> After {
         self.app.key(KeyEvent::from(code))
+    }
+
+    pub(crate) fn last(&self) -> String {
+        self.lines().last().cloned().unwrap_or_default()
     }
 
     pub(crate) fn lines(&self) -> Vec<String> {

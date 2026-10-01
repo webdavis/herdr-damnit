@@ -3,6 +3,7 @@ mod doctor;
 mod loop_;
 mod markdown;
 mod open;
+mod overlay;
 mod pane;
 mod screens;
 mod theme;
@@ -68,6 +69,7 @@ fn run_pane() -> std::process::ExitCode {
         Box::new(clock),
     );
     let mut app = app::App::new(config, jobs, today);
+    app.view_request = Some(herdr_damnit_adapters::state::view_request_path());
     open::start(&mut app);
     match loop_::run(&mut app) {
         Ok(()) => std::process::ExitCode::SUCCESS,
