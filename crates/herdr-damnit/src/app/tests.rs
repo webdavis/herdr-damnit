@@ -1,4 +1,5 @@
 mod agent;
+mod discard;
 mod editor;
 mod edits;
 mod harness;

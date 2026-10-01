@@ -1,6 +1,9 @@
 use herdr_damnit_adapters::config::Placement;
 use herdr_damnit_adapters::{Config, herdr_cli as herdr, state};
-use herdr_damnit_domain::Views;
+
+mod requests;
+
+pub use requests::{STATUS_REQUEST, open_on_status, view};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -101,37 +104,6 @@ pub fn auto_open(config: &Config) -> Result<String, String> {
         return Ok("auto_open is off".to_string());
     }
     run(Mode::AutoOpen, config)
-}
-
-pub fn view(argument: &str, config: &Config) -> Result<String, String> {
-    let number: usize = argument
-        .parse()
-        .map_err(|_| format!("'{argument}' is not a view number"))?;
-    let views = Views::new(&config.views());
-    let name = views.name_of_number(number).ok_or_else(|| {
-        format!(
-            "no view {number}: this config has {} views, 1 being the unfiltered list",
-            views.len()
-        )
-    })?;
-    note_then_open(name, &state::view_request_path(), || {
-        run(Mode::Open, config)
-    })
-}
-
-fn note_then_open(
-    name: &str,
-    request: &std::path::Path,
-    open: impl FnOnce() -> Result<String, String>,
-) -> Result<String, String> {
-    state::request_view(request, name);
-    match open() {
-        Ok(outcome) => Ok(format!("{outcome}, showing {name}")),
-        Err(error) => {
-            state::clear_view_request(request);
-            Err(error)
-        }
-    }
 }
 
 fn open_and_remember(workspace: &str, config: &Config, focus: Focus) -> Result<String, String> {

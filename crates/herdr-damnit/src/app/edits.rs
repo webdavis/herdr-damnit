@@ -1,5 +1,5 @@
 use herdr_damnit_application::{Side, argv};
-use herdr_damnit_domain::{Kind, Object, Oid};
+use herdr_damnit_domain::{DAM_RESTORE, Kind, Object, Oid};
 
 use super::{After, App};
 use crate::overlay::{Confirm, ConfirmPurpose, Overlay};
@@ -40,8 +40,38 @@ impl App {
     pub(super) fn confirmed(&mut self, purpose: ConfirmPurpose) -> After {
         match purpose {
             ConfirmPurpose::Delete(oid) => self.write(argv::remove(&oid)),
+            ConfirmPurpose::Discard(oid) => self.write(argv::restore(&oid)),
             ConfirmPurpose::QuitMidJob => After::Quit,
         }
+    }
+
+    /// The one key gated on a dam version: a confirm followed by a refusal is the worst shape a
+    /// destructive key can have, so without `restore` the key is simply not bound.
+    pub(super) fn ask_discard(&mut self) -> After {
+        if !self.version.is_some_and(|found| found >= DAM_RESTORE) {
+            return After::Stay;
+        }
+        let Some(change) = self
+            .selected_oid()
+            .and_then(|oid| self.stage.unstaged.iter().find(|change| &change.oid == oid))
+        else {
+            return After::Stay;
+        };
+        let lost = match change.fields.is_empty() {
+            true => "its working change".to_string(),
+            false => change.fields.join(", "),
+        };
+        let question = format!(
+            "discard {} {} ({lost})? ! discards it",
+            change.oid.short(),
+            change.subject
+        );
+        let oid = change.oid.clone();
+        self.reopen(Overlay::Confirm(Confirm {
+            question,
+            key: '!',
+            purpose: ConfirmPurpose::Discard(oid),
+        }))
     }
 
     pub(super) fn quit(&mut self) -> After {

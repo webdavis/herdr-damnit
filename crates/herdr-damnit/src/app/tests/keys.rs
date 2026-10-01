@@ -259,3 +259,17 @@ fn a_refresh_interval_of_zero_never_re_reads_on_its_own() {
         "it re-read with the interval off"
     );
 }
+
+#[test]
+fn a_status_request_shows_the_status_screen_rather_than_a_view() {
+    let mut harness = loaded_with(three_views());
+    let path = std::env::temp_dir().join(format!("herdr-damnit-status-{}", std::process::id()));
+    std::fs::write(&path, crate::pane::STATUS_REQUEST).expect("the request is written");
+    harness.app.view_request = Some(path.clone());
+
+    harness.app.tick(Instant::now());
+
+    assert_eq!(harness.app.screen, Screen::Status);
+    assert_eq!(harness.app.views.current().name, "open");
+    assert!(!path.exists());
+}

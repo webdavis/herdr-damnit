@@ -21,31 +21,42 @@ usage: herdr-damnit [<command>]
   toggle         open the pane, or close it when it is already open
   focus          focus the pane in this workspace
   auto-open      open the pane when the config asks for it, the workspace-focus hook
+  status         open or focus the pane on its status screen
   view <n>       show the nth configured view, opening the pane when it is closed
-  doctor         check that dam answers and its status carries every key the pane reads
+  doctor         check that dam answers, its status carries every key the pane reads, and its remotes
 ";
 
 fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.as_slice() {
         [] => run_pane(),
-        [command] => match command.as_str() {
-            "--help" | "-h" | "help" => {
-                print!("{USAGE}");
-                std::process::ExitCode::SUCCESS
-            }
-            "doctor" => with_config(doctor::run),
-            "open" => with_config(|config| pane::run(Mode::Open, config)),
-            "toggle" => with_config(|config| pane::run(Mode::Toggle, config)),
-            "focus" => with_config(|config| pane::run(Mode::Focus, config)),
-            "auto-open" => with_config(pane::auto_open),
-            other => fail(&format!("unknown command '{other}'\n{USAGE}")),
+        [command] if matches!(command.as_str(), "--help" | "-h" | "help") => {
+            print!("{USAGE}");
+            std::process::ExitCode::SUCCESS
+        }
+        [command] => match action(command) {
+            Some(run) => with_config(run),
+            None => fail(&format!("unknown command '{command}'\n{USAGE}")),
         },
         [command, argument] if command == "view" => {
             with_config(|config| pane::view(argument, config))
         }
         _ => fail(&format!("too many arguments\n{USAGE}")),
     }
+}
+
+type Action = fn(&Config) -> Result<String, String>;
+
+fn action(name: &str) -> Option<Action> {
+    Some(match name {
+        "doctor" => doctor::run,
+        "open" => |config| pane::run(Mode::Open, config),
+        "toggle" => |config| pane::run(Mode::Toggle, config),
+        "focus" => |config| pane::run(Mode::Focus, config),
+        "status" => pane::open_on_status,
+        "auto-open" => pane::auto_open,
+        _ => return None,
+    })
 }
 
 fn load_config_and_check_its_theme() -> Result<Config, String> {
@@ -102,14 +113,4 @@ fn fail(error: &str) -> std::process::ExitCode {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_config_funnel_rejects_a_theme_the_pane_cannot_draw() {
-        let error = load_with_theme_check(|| Config::parse("theme = 'unknown'"))
-            .expect_err("the theme is unknown");
-
-        assert!(error.contains("unknown theme 'unknown'"), "{error}");
-    }
-}
+mod tests;
