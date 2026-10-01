@@ -284,3 +284,20 @@ fn a_push_names_itself_while_it_runs_and_nothing_once_it_is_drained() {
     harness.jobs.drain();
     assert_eq!(harness.jobs.exclusive(), None);
 }
+
+#[test]
+fn a_completion_carries_the_id_its_submit_answered() {
+    let mut harness = harness();
+    let Submitted::Started(first) = harness.submit(JobKind::Write, crate::argv::stage_all()) else {
+        panic!("expected a start");
+    };
+    let Submitted::Started(second) = harness.submit(JobKind::Write, crate::argv::unstage_all())
+    else {
+        panic!("expected a start");
+    };
+    harness.answer(1, ok("{}"));
+    harness.answer(0, ok("{}"));
+
+    let ids: Vec<JobId> = harness.jobs.drain().iter().map(|done| done.id).collect();
+    assert_eq!(ids, vec![first, second]);
+}
