@@ -1,3 +1,5 @@
+mod one_line;
+
 use super::*;
 
 fn refusal(rule: &str, message: &str, oids: &[&str]) -> ErrorDocument {
