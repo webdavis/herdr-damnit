@@ -17,6 +17,8 @@ use crossterm::event::{KeyCode, KeyEvent};
 use herdr_damnit_application::{JobKind, Jobs, SyncKind};
 use herdr_damnit_domain::parse_date;
 
+use crate::screens::tests::loaded;
+
 pub(crate) use harness::*;
 
 use super::*;
@@ -71,17 +73,15 @@ fn a_tick_with_nothing_in_flight_does_not_block() {
 }
 
 #[test]
-fn a_write_completion_re_reads_the_status_and_the_list_rather_than_patching_the_model() {
-    let mut harness = harness();
-    harness
-        .app
-        .submit(JobKind::Write, herdr_damnit_application::argv::stage_all());
-    harness.answer(0, 0, "{}", "");
+fn a_write_completion_re_reads_the_status_and_the_list_once_each_rather_than_patching_the_model() {
+    let mut harness = loaded();
+    harness.press(KeyCode::Char('A'));
+    let before = harness.lines().len();
+    harness.answer(3, 0, "{}", "");
 
-    let lines = harness.lines();
-    assert_eq!(lines[0], "add -A --json");
-    assert!(lines.contains(&"status --json".to_string()), "{lines:?}");
-    assert!(lines.contains(&"ls !done --json".to_string()), "{lines:?}");
+    let mut asked = harness.lines()[before..].to_vec();
+    asked.sort();
+    assert_eq!(asked, ["ls !done --json", "status --json"]);
 }
 
 #[test]

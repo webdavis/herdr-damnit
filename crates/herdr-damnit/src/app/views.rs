@@ -46,6 +46,9 @@ impl App {
         }
         self.read_list();
         self.submit(JobKind::ReadStatus, argv::status());
+        if self.done_opened {
+            self.read_done();
+        }
         After::Stay
     }
 
@@ -54,6 +57,11 @@ impl App {
             let query = self.views.current().query.clone();
             self.submit(JobKind::ReadList, argv::list(&query));
         }
+    }
+
+    fn read_done(&mut self) {
+        self.submit(JobKind::ReadDone, argv::list(DONE_QUERY));
+        self.submit(JobKind::ReadLog, argv::log());
     }
 
     pub(super) fn take_view_request(&mut self) {
@@ -89,15 +97,9 @@ impl App {
 
     pub(super) fn show(&mut self, screen: Screen) -> After {
         self.screen = screen;
-        if screen == Screen::Done && self.handshake_accepted {
-            if !self.done_list_requested {
-                self.done_list_requested = true;
-                self.submit(JobKind::ReadDone, argv::list(DONE_QUERY));
-            }
-            if !self.done_log_requested {
-                self.done_log_requested = true;
-                self.submit(JobKind::ReadLog, argv::log());
-            }
+        if screen == Screen::Done && self.handshake_accepted && !self.done_opened {
+            self.done_opened = true;
+            self.read_done();
         }
         After::Stay
     }

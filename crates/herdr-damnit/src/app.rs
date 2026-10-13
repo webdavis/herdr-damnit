@@ -64,8 +64,7 @@ pub struct App {
     objects: Vec<Object>,
     done_objects: Vec<Object>,
     completion_days: HashMap<Oid, Date>,
-    done_list_requested: bool,
-    done_log_requested: bool,
+    done_opened: bool,
     jobs: Jobs,
 }
 
@@ -108,8 +107,7 @@ impl App {
             objects: Vec::new(),
             done_objects: Vec::new(),
             completion_days: HashMap::new(),
-            done_list_requested: false,
-            done_log_requested: false,
+            done_opened: false,
             jobs,
         }
     }
