@@ -161,14 +161,22 @@ fn r_before_dam_ever_answered_starts_the_handshake_again() {
 }
 
 #[test]
-fn keys_do_nothing_while_the_refusal_is_drawn() {
+fn r_on_the_too_old_refusal_asks_for_the_version_again_and_keeps_the_refusal_up_meanwhile() {
     let mut harness = harness();
     crate::open::start(&mut harness.app);
     harness.answer(0, 0, "dam 0.0.9\n", "");
-    harness.press(KeyCode::Char('R'));
     harness.press(KeyCode::Char('2'));
-
+    harness.press(KeyCode::Char('x'));
     assert_eq!(harness.lines(), vec!["--version".to_string()]);
+
+    harness.press(KeyCode::Char('R'));
+
+    assert_eq!(harness.lines(), vec!["--version".to_string(); 2]);
+    let drawn = crate::screens::render_to_text(&harness.app, 80, 4);
+    assert!(
+        drawn.contains("is older than the 0.2 this pane needs"),
+        "{drawn}"
+    );
 }
 
 #[test]

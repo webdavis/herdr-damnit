@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -47,10 +47,14 @@ pub(crate) struct Recorder {
     pub(crate) log: Arc<Mutex<Vec<Vec<String>>>>,
     pub(crate) senders: Arc<Mutex<Vec<Sender<Finished>>>>,
     pub(crate) cancels: Arc<AtomicUsize>,
+    pub(crate) missing: Arc<AtomicBool>,
 }
 
 impl DamRunner for Recorder {
     fn spawn(&self, argv: &[String]) -> Result<RunningJob, SpawnError> {
+        if self.missing.load(Ordering::SeqCst) {
+            return Err(SpawnError::NotFound);
+        }
         self.log.lock().expect("the log").push(argv.to_vec());
         let (sender, results) = channel();
         self.senders.lock().expect("the senders").push(sender);
@@ -79,20 +83,13 @@ impl Clock for StoppedClock {
     }
 }
 
-struct MissingDam;
-
-impl DamRunner for MissingDam {
-    fn spawn(&self, _argv: &[String]) -> Result<RunningJob, SpawnError> {
-        Err(SpawnError::NotFound)
-    }
-}
-
 pub(crate) struct Harness {
     pub(crate) app: App,
     started: Instant,
     log: Arc<Mutex<Vec<Vec<String>>>>,
     senders: Arc<Mutex<Vec<Sender<Finished>>>>,
     cancels: Arc<AtomicUsize>,
+    missing: Arc<AtomicBool>,
     herdr_calls: Arc<Mutex<Vec<String>>>,
 }
 
@@ -105,22 +102,9 @@ pub(crate) fn harness_with(config: Config) -> Harness {
 }
 
 pub(crate) fn harness_with_missing_dam() -> Harness {
-    let today = parse_date(TODAY).expect("a date");
-    let now = Instant::now();
-    Harness {
-        app: App::new(
-            Config::parse("").expect("the default config"),
-            Jobs::new(Box::new(MissingDam), Box::new(StoppedClock { today, now })),
-            Box::new(RecordingHerdr::default()),
-            here(),
-            today,
-        ),
-        started: now,
-        log: Arc::default(),
-        senders: Arc::default(),
-        cancels: Arc::default(),
-        herdr_calls: Arc::default(),
-    }
+    let harness = harness();
+    harness.missing.store(true, Ordering::SeqCst);
+    harness
 }
 
 pub(crate) fn harness_with_listing(config: Config, listing: &str) -> Harness {
@@ -133,6 +117,7 @@ pub(crate) fn harness_with_listing(config: Config, listing: &str) -> Harness {
     let log = Arc::clone(&recorder.log);
     let senders = Arc::clone(&recorder.senders);
     let cancels = Arc::clone(&recorder.cancels);
+    let missing = Arc::clone(&recorder.missing);
     let today = parse_date(TODAY).expect("a date");
     let started = Instant::now();
     Harness {
@@ -153,6 +138,7 @@ pub(crate) fn harness_with_listing(config: Config, listing: &str) -> Harness {
         log,
         senders,
         cancels,
+        missing,
         herdr_calls,
     }
 }
@@ -200,6 +186,10 @@ impl Harness {
 
     pub(crate) fn cancels(&self) -> usize {
         self.cancels.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn install_dam(&self) {
+        self.missing.store(false, Ordering::SeqCst);
     }
 
     pub(crate) fn log_argv_last(&self) -> Vec<String> {

@@ -3,8 +3,11 @@ use herdr_damnit_application::{JobKind, argv};
 
 use super::*;
 use crate::app::tests::{harness, harness_with_missing_dam};
+use crate::screens::tests::LS;
 
 const CLEAN: &str = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#;
+
+const NOT_ON_PATH: &str = "dam is not on PATH; install it with cargo install damnit, then press R.";
 
 fn unwrapped(drawn: &str) -> String {
     drawn.split_whitespace().collect::<Vec<_>>().join(" ")
@@ -102,13 +105,35 @@ fn a_status_document_missing_a_key_refuses_to_draw() {
 }
 
 #[test]
-fn a_dam_that_is_not_there_draws_the_install_line_rather_than_a_refusal_screen() {
+fn a_dam_that_is_not_there_draws_a_refusal_that_outlives_the_keys() {
     let mut harness = harness_with_missing_dam();
     start(&mut harness.app);
+    harness.press(KeyCode::Char('j'));
+    harness.press(KeyCode::Tab);
+    harness.press(KeyCode::Char('x'));
 
-    assert_eq!(
-        harness.app.message,
-        "dam is not on PATH; install it with cargo install damnit, then press R."
-    );
-    assert!(harness.app.refusal.is_none());
+    let drawn = crate::screens::render_to_text(&harness.app, 80, 6);
+    assert!(unwrapped(&drawn).contains(NOT_ON_PATH), "{drawn}");
+    assert!(!drawn.contains("0 open"), "{drawn}");
+    assert!(!drawn.contains("nothing in this view"), "{drawn}");
+}
+
+#[test]
+fn r_on_the_missing_dam_refusal_asks_for_the_version_again_and_a_dam_found_now_leads_to_the_list() {
+    let mut harness = harness_with_missing_dam();
+    start(&mut harness.app);
+    harness.press(KeyCode::Char('R'));
+    assert_eq!(harness.lines(), Vec::<String>::new());
+
+    harness.install_dam();
+    harness.press(KeyCode::Char('R'));
+    assert_eq!(harness.lines(), vec!["--version".to_string()]);
+
+    harness.answer(0, 0, "dam 0.2.0\n", "");
+    harness.answer(1, 0, CLEAN, "");
+    harness.answer(2, 0, LS, "");
+
+    let drawn = crate::screens::render_to_text(&harness.app, 80, 6);
+    assert!(drawn.contains("3 open"), "{drawn}");
+    assert!(!unwrapped(&drawn).contains(NOT_ON_PATH), "{drawn}");
 }
