@@ -5,12 +5,14 @@ mod edits;
 mod fakes;
 mod harness;
 mod header;
+mod interval;
 mod keys;
 mod non_blocking;
 mod pickers;
 mod quit;
 mod staging;
 mod sync;
+mod views;
 
 use std::time::{Duration, Instant};
 
