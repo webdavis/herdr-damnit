@@ -109,7 +109,7 @@ impl App {
     pub(super) fn redraw_list(&mut self) {
         let style = RowStyle {
             icons: self.config.icons(),
-            today: self.today,
+            today: self.clock.today(),
         };
         self.list.replace(rows(&self.objects, &self.stage, style));
     }

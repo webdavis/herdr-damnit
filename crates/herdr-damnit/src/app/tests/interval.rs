@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 
-use crate::screens::tests::{loaded, loaded_with};
+use crate::screens::render_to_text;
+use crate::screens::tests::{CLEAN, loaded, loaded_with};
 
 use super::views::three_views;
 use super::*;
@@ -52,5 +53,41 @@ fn a_refresh_interval_of_zero_never_re_reads_on_its_own() {
         harness.lines().len(),
         before,
         "it re-read with the interval off"
+    );
+}
+
+const DUE_ON_THE_TWENTIETH: &str = r#"{"objects":[
+  {"oid":"9a0b1c2","kind":"task","subject":"water the plants","path":"home",
+   "task":{"done":false,"priority":4,"due":"2026-09-20"}}
+]}"#;
+
+#[test]
+fn a_task_due_today_turns_overdue_when_the_interval_re_reads_past_midnight() {
+    let mut harness = loaded();
+    let now = Instant::now();
+    harness.app.tick(now);
+    harness.app.tick(now + Duration::from_secs(300));
+    harness.answer(3, 0, DUE_ON_THE_TWENTIETH, "");
+    harness.answer(4, 0, CLEAN, "");
+    assert_eq!(
+        render_to_text(&harness.app, 32, 4),
+        "\
+dam  open                 1 open
+home
+  * water the plants
+x X dd p s D l m a S e <CR> <Sp…"
+    );
+
+    harness.turn_the_day_to("2026-09-21");
+    harness.app.tick(now + Duration::from_secs(600));
+    harness.answer(5, 0, DUE_ON_THE_TWENTIETH, "");
+    harness.answer(6, 0, CLEAN, "");
+    assert_eq!(
+        render_to_text(&harness.app, 32, 4),
+        "\
+dam  open                 1 open
+home
+  < 09-20 water the plants
+x X dd p s D l m a S e <CR> <Sp…"
     );
 }

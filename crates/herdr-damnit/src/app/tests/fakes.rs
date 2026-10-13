@@ -64,14 +64,15 @@ impl DamRunner for Recorder {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct StoppedClock {
-    pub(crate) today: Date,
+    pub(crate) day: Arc<Mutex<Date>>,
     pub(crate) now: Instant,
 }
 
 impl Clock for StoppedClock {
     fn today(&self) -> Date {
-        self.today
+        *self.day.lock().expect("the day")
     }
 
     fn now(&self) -> Instant {

@@ -77,7 +77,7 @@ fn app(scratch: &Scratch) -> App {
         Jobs::new(Box::new(runner), Box::new(SystemClock)),
         Box::new(RecordingHerdr::default()),
         here(),
-        parse_date(TODAY).expect("a date"),
+        Box::new(SystemClock),
     )
 }
 
