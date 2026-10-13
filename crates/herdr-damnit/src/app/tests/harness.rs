@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent};
 use herdr_damnit_adapters::Config;
 use herdr_damnit_application::{Finished, Jobs};
-use herdr_damnit_domain::parse_date;
+use herdr_damnit_domain::{Date, parse_date};
 
 use super::fakes::{ONE_AGENT, Recorder, RecordingHerdr, StoppedClock, TODAY, here};
 use crate::app::{After, App};
@@ -14,6 +14,7 @@ use crate::app::{After, App};
 pub(crate) struct Harness {
     pub(crate) app: App,
     started: Instant,
+    day: Arc<Mutex<Date>>,
     log: Arc<Mutex<Vec<Vec<String>>>>,
     senders: Arc<Mutex<Vec<Sender<Finished>>>>,
     cancels: Arc<AtomicUsize>,
@@ -46,23 +47,22 @@ pub(crate) fn harness_with_listing(config: Config, listing: &str) -> Harness {
     let senders = Arc::clone(&recorder.senders);
     let cancels = Arc::clone(&recorder.cancels);
     let missing = Arc::clone(&recorder.missing);
-    let today = parse_date(TODAY).expect("a date");
-    let started = Instant::now();
+    let clock = StoppedClock {
+        day: Arc::new(Mutex::new(parse_date(TODAY).expect("a date"))),
+        now: Instant::now(),
+    };
+    let day = Arc::clone(&clock.day);
+    let started = clock.now;
     Harness {
         app: App::new(
             config,
-            Jobs::new(
-                Box::new(recorder),
-                Box::new(StoppedClock {
-                    today,
-                    now: started,
-                }),
-            ),
+            Jobs::new(Box::new(recorder), Box::new(clock.clone())),
             Box::new(herdr),
             here(),
-            today,
+            Box::new(clock),
         ),
         started,
+        day,
         log,
         senders,
         cancels,
@@ -118,6 +118,10 @@ impl Harness {
 
     pub(crate) fn install_dam(&self) {
         self.missing.store(false, Ordering::SeqCst);
+    }
+
+    pub(crate) fn turn_the_day_to(&self, date: &str) {
+        *self.day.lock().expect("the day") = parse_date(date).expect("a date");
     }
 
     pub(crate) fn log_argv_last(&self) -> Vec<String> {

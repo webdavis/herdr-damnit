@@ -18,7 +18,6 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use herdr_damnit_application::{JobKind, Jobs, SyncKind};
-use herdr_damnit_domain::parse_date;
 
 use crate::screens::tests::loaded;
 

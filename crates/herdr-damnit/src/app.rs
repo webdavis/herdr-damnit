@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use herdr_damnit_adapters::Config;
-use herdr_damnit_application::{Herdr, JobId, JobKind, Jobs, Submitted, Workspace};
+use herdr_damnit_application::{Clock, Herdr, JobId, JobKind, Jobs, Submitted, Workspace};
 use herdr_damnit_domain::{Cursor, DamVersion, Date, Failure, Object, Oid, Stage, Views, message};
 
 const BUSY_POLL_WINDOW: Duration = Duration::from_millis(50);
@@ -49,7 +49,6 @@ pub struct App {
     pub message: String,
     pub spinner: usize,
     pub config: Config,
-    pub today: Date,
     pub refusal: Option<String>,
     pub version: Option<DamVersion>,
     pub detail: Option<Object>,
@@ -59,6 +58,7 @@ pub struct App {
     labelled: Option<(JobId, String)>,
     herdr: Box<dyn Herdr>,
     here: Workspace,
+    clock: Box<dyn Clock>,
     handshake_accepted: bool,
     newer_dam_warning_shown: bool,
     objects: Vec<Object>,
@@ -74,7 +74,7 @@ impl App {
         jobs: Jobs,
         herdr: Box<dyn Herdr>,
         here: Workspace,
-        today: Date,
+        clock: Box<dyn Clock>,
     ) -> Self {
         let mut views = Views::new(&config.views());
         if let Some(name) = &config.default_view {
@@ -92,7 +92,6 @@ impl App {
             message: String::new(),
             spinner: 0,
             config,
-            today,
             refusal: None,
             version: None,
             detail: None,
@@ -102,6 +101,7 @@ impl App {
             labelled: None,
             herdr,
             here,
+            clock,
             handshake_accepted: false,
             newer_dam_warning_shown: false,
             objects: Vec::new(),

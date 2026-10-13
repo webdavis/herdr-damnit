@@ -10,7 +10,7 @@ mod screens;
 mod theme;
 
 use herdr_damnit_adapters::{CliHerdr, Config, ProcessDamRunner, SystemClock};
-use herdr_damnit_application::{Clock, Jobs, Workspace};
+use herdr_damnit_application::{Jobs, Workspace};
 use pane::Mode;
 
 const USAGE: &str = "\
@@ -74,17 +74,21 @@ fn run_pane() -> std::process::ExitCode {
         Ok(config) => config,
         Err(error) => return fail(&error),
     };
-    let clock = SystemClock;
-    let today = clock.today();
     let jobs = Jobs::new(
         Box::new(ProcessDamRunner::new(config.dam.clone())),
-        Box::new(clock),
+        Box::new(SystemClock),
     );
     let here = Workspace {
         workspace: std::env::var("HERDR_WORKSPACE_ID").ok(),
         me: std::env::var("HERDR_PANE_ID").unwrap_or_default(),
     };
-    let mut app = app::App::new(config, jobs, Box::new(CliHerdr), here, today);
+    let mut app = app::App::new(
+        config,
+        jobs,
+        Box::new(CliHerdr),
+        here,
+        Box::new(SystemClock),
+    );
     app.view_request = Some(herdr_damnit_adapters::state::view_request_path());
     open::start(&mut app);
     match loop_::run(&mut app) {
