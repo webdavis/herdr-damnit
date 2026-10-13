@@ -1,91 +1,15 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::{Sender, channel};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use herdr_damnit_adapters::Config;
-use herdr_damnit_application::{
-    Clock, DamRunner, Finished, Herdr, Jobs, RunningJob, SpawnError, Workspace,
-};
-use herdr_damnit_domain::{Date, parse_date};
+use herdr_damnit_application::{Finished, Jobs};
+use herdr_damnit_domain::parse_date;
 
+use super::fakes::{ONE_AGENT, Recorder, RecordingHerdr, StoppedClock, TODAY, here};
 use crate::app::{After, App};
-
-pub(crate) const TODAY: &str = "2026-09-20";
-
-pub(crate) const ONE_AGENT: &str = r#"{"result":{"agents":[
-  {"pane_id":"w1:p2","workspace_id":"w1","agent":"claude","name":"planner"}]}}"#;
-
-pub(crate) const NO_AGENT: &str = r#"{"result":{"agents":[]}}"#;
-
-#[derive(Default)]
-pub(crate) struct RecordingHerdr {
-    listing: String,
-    calls: Arc<Mutex<Vec<String>>>,
-}
-
-impl Herdr for RecordingHerdr {
-    fn call(&self, args: &[&str]) -> Result<String, String> {
-        self.calls.lock().expect("the calls").push(args.join(" "));
-        match args {
-            ["agent", "list"] => Ok(self.listing.clone()),
-            _ => Ok(String::new()),
-        }
-    }
-}
-
-pub(crate) fn here() -> Workspace {
-    Workspace {
-        workspace: Some("w1".to_string()),
-        me: "w1:p9".to_string(),
-    }
-}
-
-#[derive(Default)]
-pub(crate) struct Recorder {
-    pub(crate) log: Arc<Mutex<Vec<Vec<String>>>>,
-    pub(crate) senders: Arc<Mutex<Vec<Sender<Finished>>>>,
-    pub(crate) cancels: Arc<AtomicUsize>,
-}
-
-impl DamRunner for Recorder {
-    fn spawn(&self, argv: &[String]) -> Result<RunningJob, SpawnError> {
-        self.log.lock().expect("the log").push(argv.to_vec());
-        let (sender, results) = channel();
-        self.senders.lock().expect("the senders").push(sender);
-        let cancels = Arc::clone(&self.cancels);
-        Ok(RunningJob {
-            cancel: Box::new(move || {
-                cancels.fetch_add(1, Ordering::SeqCst);
-            }),
-            results,
-        })
-    }
-}
-
-struct StoppedClock {
-    today: Date,
-    now: Instant,
-}
-
-impl Clock for StoppedClock {
-    fn today(&self) -> Date {
-        self.today
-    }
-
-    fn now(&self) -> Instant {
-        self.now
-    }
-}
-
-struct MissingDam;
-
-impl DamRunner for MissingDam {
-    fn spawn(&self, _argv: &[String]) -> Result<RunningJob, SpawnError> {
-        Err(SpawnError::NotFound)
-    }
-}
 
 pub(crate) struct Harness {
     pub(crate) app: App,
@@ -93,6 +17,7 @@ pub(crate) struct Harness {
     log: Arc<Mutex<Vec<Vec<String>>>>,
     senders: Arc<Mutex<Vec<Sender<Finished>>>>,
     cancels: Arc<AtomicUsize>,
+    missing: Arc<AtomicBool>,
     herdr_calls: Arc<Mutex<Vec<String>>>,
 }
 
@@ -105,22 +30,9 @@ pub(crate) fn harness_with(config: Config) -> Harness {
 }
 
 pub(crate) fn harness_with_missing_dam() -> Harness {
-    let today = parse_date(TODAY).expect("a date");
-    let now = Instant::now();
-    Harness {
-        app: App::new(
-            Config::parse("").expect("the default config"),
-            Jobs::new(Box::new(MissingDam), Box::new(StoppedClock { today, now })),
-            Box::new(RecordingHerdr::default()),
-            here(),
-            today,
-        ),
-        started: now,
-        log: Arc::default(),
-        senders: Arc::default(),
-        cancels: Arc::default(),
-        herdr_calls: Arc::default(),
-    }
+    let harness = harness();
+    harness.missing.store(true, Ordering::SeqCst);
+    harness
 }
 
 pub(crate) fn harness_with_listing(config: Config, listing: &str) -> Harness {
@@ -133,6 +45,7 @@ pub(crate) fn harness_with_listing(config: Config, listing: &str) -> Harness {
     let log = Arc::clone(&recorder.log);
     let senders = Arc::clone(&recorder.senders);
     let cancels = Arc::clone(&recorder.cancels);
+    let missing = Arc::clone(&recorder.missing);
     let today = parse_date(TODAY).expect("a date");
     let started = Instant::now();
     Harness {
@@ -153,6 +66,7 @@ pub(crate) fn harness_with_listing(config: Config, listing: &str) -> Harness {
         log,
         senders,
         cancels,
+        missing,
         herdr_calls,
     }
 }
@@ -200,6 +114,10 @@ impl Harness {
 
     pub(crate) fn cancels(&self) -> usize {
         self.cancels.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn install_dam(&self) {
+        self.missing.store(false, Ordering::SeqCst);
     }
 
     pub(crate) fn log_argv_last(&self) -> Vec<String> {

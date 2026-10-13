@@ -27,9 +27,10 @@ impl App {
                             self.message = said;
                             return true;
                         }
+                        self.refusal = None;
+                        self.handshake_accepted = true;
                         let query = self.views.current().query.clone();
                         self.submit(JobKind::ReadList, argv::list(&query));
-                        self.handshake_accepted = true;
                         self.show(self.screen);
                     }
                 }

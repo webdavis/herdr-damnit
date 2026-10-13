@@ -12,6 +12,10 @@ impl App {
         if self.refusal.is_some() {
             return match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => After::Quit,
+                KeyCode::Char('R' | 'r') => {
+                    crate::open::start(self);
+                    After::Stay
+                }
                 _ => After::Stay,
             };
         }

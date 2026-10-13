@@ -2,14 +2,17 @@ mod agent;
 mod discard;
 mod editor;
 mod edits;
+mod fakes;
 mod harness;
 mod header;
+mod interval;
 mod keys;
 mod non_blocking;
 mod pickers;
 mod quit;
 mod staging;
 mod sync;
+mod views;
 
 use std::time::{Duration, Instant};
 
@@ -19,6 +22,7 @@ use herdr_damnit_domain::parse_date;
 
 use crate::screens::tests::loaded;
 
+pub(crate) use fakes::*;
 pub(crate) use harness::*;
 
 use super::*;

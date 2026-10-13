@@ -123,7 +123,7 @@ impl App {
         match self.jobs.submit(kind, argv) {
             Submitted::Started(id) => return Some(id),
             Submitted::Refused(said) | Submitted::Failed(said) => self.message = said,
-            Submitted::NotInstalled => self.message = message(&Failure::NotInstalled),
+            Submitted::NotInstalled => self.refusal = Some(message(&Failure::NotInstalled)),
         }
         None
     }
