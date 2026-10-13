@@ -2,6 +2,7 @@ mod agent;
 mod discard;
 mod editor;
 mod edits;
+mod fakes;
 mod harness;
 mod header;
 mod keys;
@@ -19,6 +20,7 @@ use herdr_damnit_domain::parse_date;
 
 use crate::screens::tests::loaded;
 
+pub(crate) use fakes::*;
 pub(crate) use harness::*;
 
 use super::*;
