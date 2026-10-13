@@ -1,4 +1,5 @@
 mod detail;
+mod done;
 mod status;
 
 use std::time::Instant;
@@ -182,27 +183,6 @@ fn each_screen_keeps_its_own_cursor_across_the_cycle() {
     harness.press(KeyCode::Tab);
 
     assert_eq!(harness.app.list.selected_oid().cloned(), on_list);
-}
-
-#[test]
-fn entering_the_done_screen_reads_the_done_list_and_the_log_once() {
-    let mut harness = loaded();
-    harness.press(KeyCode::Tab);
-    harness.press(KeyCode::Tab);
-
-    let lines = harness.lines();
-    assert!(lines.contains(&"ls done --json".to_string()), "{lines:?}");
-    assert!(lines.contains(&"log --json".to_string()), "{lines:?}");
-
-    let before = lines.len();
-    harness.press(KeyCode::Tab);
-    harness.press(KeyCode::Tab);
-    harness.press(KeyCode::Tab);
-    assert_eq!(
-        harness.lines().len(),
-        before,
-        "it re-read a screen it already had"
-    );
 }
 
 #[test]

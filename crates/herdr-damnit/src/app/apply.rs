@@ -1,8 +1,6 @@
 use herdr_damnit_adapters::wire;
-use herdr_damnit_application::{Completion, JobKind, SyncKind, argv};
-use herdr_damnit_domain::{
-    DONE_QUERY, Failure, ObjectRow, Row, RowStyle, StatusRow, classify, message, rows,
-};
+use herdr_damnit_application::{Completion, JobKind, SyncKind};
+use herdr_damnit_domain::{Failure, ObjectRow, Row, RowStyle, StatusRow, classify, message, rows};
 
 use super::{App, Screen};
 use crate::overlay::{LineBox, LinePurpose, Overlay};
@@ -40,9 +38,8 @@ impl App {
             self.message = said;
             return;
         }
-        for kind in completion.follow_up {
-            let argv = self.follow_up_argv(&kind);
-            self.submit(kind, argv);
+        if matches!(completion.kind, JobKind::Write | JobKind::Exclusive(_)) {
+            self.reread();
         }
     }
 
@@ -115,22 +112,6 @@ impl App {
             today: self.today,
         };
         self.list.replace(rows(&self.objects, &self.stage, style));
-    }
-
-    fn follow_up_argv(&self, kind: &JobKind) -> Vec<String> {
-        match kind {
-            JobKind::ReadList => argv::list(&self.views.current().query),
-            JobKind::ReadDone => argv::list(DONE_QUERY),
-            JobKind::ReadStatus => argv::status(),
-            JobKind::ReadShow(oid) => argv::show(oid),
-            JobKind::ReadLog => argv::log(),
-            JobKind::Version => argv::version(),
-            JobKind::Handshake => argv::status(),
-            JobKind::Write => Vec::new(),
-            JobKind::Exclusive(SyncKind::Commit) => argv::commit(""),
-            JobKind::Exclusive(SyncKind::Push) => argv::push(),
-            JobKind::Exclusive(SyncKind::Pull) => argv::pull(),
-        }
     }
 }
 
