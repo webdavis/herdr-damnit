@@ -1,7 +1,6 @@
 mod agent;
 mod apply;
 mod boxes;
-mod done;
 mod edits;
 mod handshake;
 mod header;

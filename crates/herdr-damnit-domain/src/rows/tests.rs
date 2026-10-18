@@ -59,7 +59,7 @@ fn every_path_segment_gets_one_heading_and_its_children_sit_under_it() {
     ];
 
     assert_eq!(
-        drawn(&rows(&objects, &NoMarks, style())),
+        drawn(&list_rows(&objects, &NoMarks, style())),
         vec![
             "proj".to_string(),
             "  dotfiles".to_string(),
@@ -74,7 +74,7 @@ fn every_path_segment_gets_one_heading_and_its_children_sit_under_it() {
 
 #[test]
 fn an_object_with_no_path_is_grouped_rather_than_dropped() {
-    let rows = rows(&[task("1", "", "file taxes")], &NoMarks, style());
+    let rows = list_rows(&[task("1", "", "file taxes")], &NoMarks, style());
     assert_eq!(
         drawn(&rows),
         vec!["(no path)".to_string(), "  file taxes".to_string()]
@@ -83,7 +83,7 @@ fn an_object_with_no_path_is_grouped_rather_than_dropped() {
 
 #[test]
 fn a_path_that_is_nothing_but_separators_is_no_path_either() {
-    let rows = rows(&[task("1", "/", "file taxes")], &NoMarks, style());
+    let rows = list_rows(&[task("1", "/", "file taxes")], &NoMarks, style());
     assert_eq!(rows[0].text(), "(no path)");
 }
 
@@ -97,7 +97,7 @@ fn the_marks_lead_the_line_in_one_order() {
         fields.due = parse_date("2026-09-18");
     }
 
-    let rows = rows(&[object], &OneMark(Oid::new("1"), Mark::Staged), style());
+    let rows = list_rows(&[object], &OneMark(Oid::new("1"), Mark::Staged), style());
 
     assert_eq!(rows[1].text(), "  + ! < 09-18 ~ pay the rent @2");
 }
@@ -106,7 +106,7 @@ fn the_marks_lead_the_line_in_one_order() {
 fn an_object_whose_commits_have_not_reached_the_remote_leads_with_the_up_arrow() {
     let object = task("1", "home", "refresh the roster row");
 
-    let rows = rows(&[object], &OneMark(Oid::new("1"), Mark::Unpushed), style());
+    let rows = list_rows(&[object], &OneMark(Oid::new("1"), Mark::Unpushed), style());
 
     assert_eq!(rows[1].text(), "  ^ refresh the roster row");
 }
@@ -118,7 +118,7 @@ fn a_date_due_today_carries_its_mark_and_no_date_beside_it() {
         fields.due = parse_date("2026-09-20");
     }
 
-    let rows = rows(&[object], &NoMarks, style());
+    let rows = list_rows(&[object], &NoMarks, style());
     assert_eq!(rows[1].text(), "  * call the bank");
 }
 
@@ -129,7 +129,7 @@ fn a_mark_is_painted_by_what_it_means_and_the_subject_is_plain_text() {
         fields.priority = Priority::new(1).expect("a priority");
     }
 
-    let rows = rows(&[object], &NoMarks, style());
+    let rows = list_rows(&[object], &NoMarks, style());
     let Row::Line { segments, .. } = &rows[1] else {
         panic!("expected an object row");
     };
@@ -139,7 +139,7 @@ fn a_mark_is_painted_by_what_it_means_and_the_subject_is_plain_text() {
 
 #[test]
 fn a_heading_names_no_oid_and_an_object_row_does() {
-    let rows = rows(&[task("1a2b3c4", "home", "x")], &NoMarks, style());
+    let rows = list_rows(&[task("1a2b3c4", "home", "x")], &NoMarks, style());
     assert_eq!(rows[0].oid(), None);
     assert_eq!(rows[1].oid(), Some(&Oid::new("1a2b3c4")));
 }

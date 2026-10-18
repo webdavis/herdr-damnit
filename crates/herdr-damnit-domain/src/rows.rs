@@ -1,5 +1,9 @@
 use crate::{Date, DueState, IconSet, Mark, Object, Oid, Slot, due_state, short};
 
+mod done;
+
+pub use done::done_rows;
+
 const NO_PATH_HEADING: &str = "(no path)";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -42,7 +46,7 @@ pub struct RowStyle {
     pub today: Date,
 }
 
-pub fn rows(objects: &[Object], marks: &dyn StagingMarks, style: RowStyle) -> Vec<Row> {
+pub fn list_rows(objects: &[Object], marks: &dyn StagingMarks, style: RowStyle) -> Vec<Row> {
     let mut paths: Vec<&str> = objects.iter().map(heading).collect();
     paths.sort_unstable();
     paths.dedup();
