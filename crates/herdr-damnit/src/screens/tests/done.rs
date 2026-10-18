@@ -2,7 +2,7 @@ use super::*;
 
 const NO_COMMITS: &str = r#"{"commits":[]}"#;
 
-const WATERED: &str = r#"{"objects":[
+pub(super) const WATERED: &str = r#"{"objects":[
   {"oid":"9a0b1c2","kind":"task","subject":"water the plants","path":"proj/home",
    "task":{"done":true,"priority":4}}]}"#;
 

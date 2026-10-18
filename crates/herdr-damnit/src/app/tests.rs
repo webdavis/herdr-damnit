@@ -12,7 +12,7 @@ mod pickers;
 mod quit;
 mod staging;
 mod sync;
-mod views;
+pub(crate) mod views;
 
 use std::time::{Duration, Instant};
 

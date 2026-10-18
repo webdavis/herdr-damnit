@@ -1,13 +1,13 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Clear, List, ListItem, ListState, Paragraph, Wrap};
 
 use herdr_damnit_domain::{IconSet, Mark, Slot};
 
 use crate::overlay::{LineBox, Overlay, Picker};
-use crate::theme::{color, ground};
+use crate::theme::{bar, color, ground};
 
 const LINE_BOX_HEIGHT: u16 = 3;
 
@@ -46,7 +46,7 @@ fn picked(frame: &mut Frame<'_>, area: Rect, picker: &Picker, icons: IconSet) {
     frame.render_stateful_widget(
         List::new(items)
             .block(bordered(&picker.title))
-            .highlight_style(Style::new().add_modifier(Modifier::REVERSED)),
+            .highlight_style(bar()),
         area,
         &mut state,
     );
