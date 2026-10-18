@@ -1,6 +1,5 @@
 use std::time::{Duration, Instant};
 
-use herdr_damnit_adapters::state;
 use herdr_damnit_application::{Phase, Request};
 
 use super::{After, App, Screen};
@@ -38,7 +37,7 @@ impl App {
     }
 
     pub(crate) fn reread(&mut self) -> After {
-        self.last_reread = None;
+        self.rereads.forget();
         match self.phase {
             Phase::Ready => {
                 self.read_list();
@@ -66,11 +65,7 @@ impl App {
     }
 
     pub(super) fn take_view_request(&mut self) {
-        let Some(name) = self
-            .view_request
-            .as_deref()
-            .and_then(state::take_requested_view)
-        else {
+        let Some(name) = self.rereads.requested_view() else {
             return;
         };
         if name == crate::pane::STATUS_REQUEST {
@@ -84,17 +79,13 @@ impl App {
     }
 
     pub(super) fn reread_on_the_interval(&mut self, now: Instant) {
-        let Some(since) = self.last_reread else {
-            self.last_reread = Some(now);
-            return;
-        };
         let interval = Duration::from_secs(self.config.refresh_seconds());
         let held_back = interval.is_zero()
             || self.showing.is_layered()
             || self.showing.screen() != Screen::List;
-        if now.saturating_duration_since(since) >= interval && !held_back {
+        if self.rereads.due(now, interval, held_back) {
             self.reread();
-            self.last_reread = Some(now);
+            self.rereads.restart(now);
         }
     }
 

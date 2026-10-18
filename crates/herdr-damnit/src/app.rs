@@ -10,6 +10,8 @@ mod list;
 mod overlay_keys;
 mod pending;
 mod pickers;
+mod reach;
+mod rereads;
 mod screen;
 mod showing;
 mod status;
@@ -21,6 +23,8 @@ pub use done::DoneScreen;
 pub(crate) use handshake::status_refusal;
 pub use list::ListScreen;
 use pending::Pending;
+use reach::AgentReach;
+use rereads::Rereads;
 pub use screen::Screen;
 pub use showing::Showing;
 pub use status::StatusScreen;
@@ -54,13 +58,11 @@ pub struct App {
     list: ListScreen,
     status: StatusScreen,
     done: DoneScreen,
-    pub view_request: Option<PathBuf>,
-    pub message: String,
-    pub config: Config,
-    pub phase: Phase,
-    last_reread: Option<Instant>,
-    agents: Box<dyn AgentPanes>,
-    here: Workspace,
+    message: String,
+    config: Config,
+    phase: Phase,
+    agents: AgentReach,
+    rereads: Rereads,
     work: Work,
 }
 
@@ -81,13 +83,11 @@ impl App {
             list: ListScreen::new(views, clock),
             status: StatusScreen::new(config.icons()),
             done: DoneScreen::new(),
-            view_request: None,
             message: String::new(),
             config,
             phase: Phase::Starting,
-            last_reread: None,
-            agents,
-            here,
+            agents: AgentReach::new(agents, here),
+            rereads: Rereads::new(),
             work: Work::new(jobs),
         }
     }
@@ -106,6 +106,22 @@ impl App {
             Submitted::NotInstalled => self.phase = Phase::Refused(message(&Failure::NotInstalled)),
         }
         None
+    }
+
+    pub fn watch_view_requests(&mut self, path: PathBuf) {
+        self.rereads.watch(path);
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    pub fn say(&mut self, said: String) {
+        self.message = said;
     }
 
     pub fn list(&self) -> &ListScreen {

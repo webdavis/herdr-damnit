@@ -128,7 +128,7 @@ fn run_pane() -> std::process::ExitCode {
         shell.here,
         Box::new(SystemClock),
     );
-    app.view_request = Some(shell.state.view_request_path());
+    app.watch_view_requests(shell.state.view_request_path());
     open::start(&mut app);
     match loop_::run(&mut app) {
         Ok(()) => std::process::ExitCode::SUCCESS,

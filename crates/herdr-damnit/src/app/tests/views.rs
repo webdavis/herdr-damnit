@@ -39,7 +39,7 @@ fn a_number_with_no_view_behind_it_says_how_many_there_are_and_reads_nothing() {
     let before = harness.lines().len();
     harness.press(KeyCode::Char('7'));
 
-    assert_eq!(harness.app.message, "the config has 3 views.");
+    assert_eq!(harness.app.message(), "the config has 3 views.");
     assert_eq!(harness.lines().len(), before);
 }
 
@@ -49,7 +49,7 @@ fn the_number_of_the_showing_view_reads_nothing_and_says_nothing() {
     let before = harness.lines().len();
     harness.press(KeyCode::Char('1'));
 
-    assert!(harness.app.message.is_empty());
+    assert!(harness.app.message().is_empty());
     assert_eq!(harness.lines().len(), before);
 }
 
@@ -124,7 +124,7 @@ fn a_view_request_file_outranks_the_showing_view_and_is_read_once() {
     let mut harness = loaded_with(three_views());
     let path = std::env::temp_dir().join(format!("herdr-damnit-request-{}", std::process::id()));
     std::fs::write(&path, "deep").expect("the request is written");
-    harness.app.view_request = Some(path.clone());
+    harness.app.watch_view_requests(path.clone());
 
     harness.app.tick(Instant::now());
     assert_eq!(harness.app.list().views().current().name, "deep");
@@ -145,7 +145,7 @@ fn a_status_request_shows_the_status_screen_rather_than_a_view() {
     let mut harness = loaded_with(three_views());
     let path = std::env::temp_dir().join(format!("herdr-damnit-status-{}", std::process::id()));
     std::fs::write(&path, crate::pane::STATUS_REQUEST).expect("the request is written");
-    harness.app.view_request = Some(path.clone());
+    harness.app.watch_view_requests(path.clone());
 
     harness.app.tick(Instant::now());
 

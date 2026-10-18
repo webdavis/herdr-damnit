@@ -117,7 +117,7 @@ fn a_refusal_puts_dams_own_sentence_in_the_status_line_and_leaves_the_model_alon
         .submit(Request::Write(herdr_damnit_application::argv::stage_all()));
     harness.answer(0, 2, "", "dam: no object matches \"zzzzzzz\"\n");
 
-    assert_eq!(harness.app.message, "no object matches \"zzzzzzz\"");
+    assert_eq!(harness.app.message(), "no object matches \"zzzzzzz\"");
     assert_eq!(harness.app.list().cursor().object_count(), before);
 }
 
@@ -130,7 +130,7 @@ fn a_held_store_adds_the_retry_sentence() {
     harness.answer(0, 1, "", "dam: database is locked");
 
     assert_eq!(
-        harness.app.message,
+        harness.app.message(),
         "database is locked; another dam is writing, press R to retry."
     );
 }
@@ -142,7 +142,7 @@ fn output_that_will_not_parse_is_reported_without_quoting_it() {
     harness.answer(3, 0, "this is not json", "");
 
     assert_eq!(
-        harness.app.message,
+        harness.app.message(),
         "dam answered with something this pane could not read."
     );
 }

@@ -45,7 +45,7 @@ fn a_refused_label_names_its_agent_while_a_later_hand_off_is_in_flight() {
     harness.answer(3, 2, "", "dam: \"handed-off\" clashes with \"handed-back\"");
 
     assert_eq!(
-        harness.app.message,
+        harness.app.message(),
         "sent to planner, label refused: \"handed-off\" clashes with \"handed-back\"."
     );
 }

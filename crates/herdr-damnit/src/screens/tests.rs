@@ -91,7 +91,7 @@ fn each_screen_keeps_its_own_cursor_across_the_cycle() {
 #[test]
 fn a_message_takes_the_legend_row_until_the_next_key() {
     let mut harness = loaded();
-    harness.app.message = "the config has 1 views.".to_string();
+    harness.app.say("the config has 1 views.".to_string());
     let drawn = render_to_text(&harness.app, 32, 8);
     assert_eq!(drawn.lines().last(), Some("the config has 1 views."));
 

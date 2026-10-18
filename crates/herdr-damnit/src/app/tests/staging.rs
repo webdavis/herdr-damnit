@@ -33,7 +33,7 @@ fn space_with_no_object_under_the_cursor_does_nothing_and_says_nothing() {
     harness.press(KeyCode::Char(' '));
 
     assert!(harness.lines().is_empty());
-    assert!(harness.app.message.is_empty());
+    assert!(harness.app.message().is_empty());
 }
 
 #[test]
@@ -86,7 +86,7 @@ fn a_blank_commit_message_is_refused_in_the_pane_and_nothing_is_spawned() {
     let before = harness.lines().len();
     harness.press(KeyCode::Enter);
 
-    assert_eq!(harness.app.message, "a commit needs a message.");
+    assert_eq!(harness.app.message(), "a commit needs a message.");
     assert_eq!(harness.lines().len(), before);
     assert!(
         harness.app.showing().overlay().is_some(),
@@ -111,7 +111,7 @@ fn c_with_nothing_staged_says_what_to_press_and_opens_no_box() {
     harness.press(KeyCode::Char('c'));
 
     assert_eq!(
-        harness.app.message,
+        harness.app.message(),
         "nothing staged; press <Space> on a row or A to stage everything."
     );
     assert!(harness.app.showing().overlay().is_none());

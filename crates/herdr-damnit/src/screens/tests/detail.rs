@@ -154,7 +154,7 @@ fn enter_with_no_object_under_the_cursor_does_nothing_and_says_nothing() {
     harness.press(KeyCode::Enter);
 
     assert!(harness.lines().is_empty());
-    assert!(harness.app.message.is_empty());
+    assert!(harness.app.message().is_empty());
 }
 
 #[test]
@@ -164,7 +164,7 @@ fn a_show_dam_refuses_leaves_the_screen_where_it_was() {
     harness.answer(3, 2, "", "dam: no object matches \"5d6e7f8\"");
 
     assert_eq!(harness.app.showing().screen(), Screen::List);
-    assert_eq!(harness.app.message, "no object matches \"5d6e7f8\"");
+    assert_eq!(harness.app.message(), "no object matches \"5d6e7f8\"");
 }
 
 #[test]

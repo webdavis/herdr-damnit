@@ -55,7 +55,7 @@ fn control_d_sends_the_brief_with_the_note_and_names_the_agent() {
         .unwrap_or_else(|| panic!("{sent:?}"));
     assert!(paste.contains("ship the pin bump"), "{paste}");
     assert!(paste.contains("note: start here"), "{paste}");
-    assert_eq!(harness.app.message, "sent to planner");
+    assert_eq!(harness.app.message(), "sent to planner");
     assert!(harness.app.showing().overlay().is_none());
 }
 
@@ -77,7 +77,7 @@ fn a_refused_label_does_not_pretend_the_send_failed() {
     harness.answer(3, 2, "", "dam: \"handed-off\" clashes with \"handed-back\"");
 
     assert_eq!(
-        harness.app.message,
+        harness.app.message(),
         "sent to planner, label refused: \"handed-off\" clashes with \"handed-back\"."
     );
 }
@@ -91,7 +91,7 @@ fn an_empty_handoff_label_writes_nothing_and_the_status_line_is_the_whole_record
     send(&mut harness);
 
     assert_eq!(harness.lines().len(), before);
-    assert_eq!(harness.app.message, "sent to planner");
+    assert_eq!(harness.app.message(), "sent to planner");
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn shift_s_refuses_before_the_box_opens_when_the_workspace_has_no_agent_pane() {
         harness.app.showing().overlay().is_none(),
         "the note box opened"
     );
-    assert_eq!(harness.app.message, "no agent pane in this workspace.");
+    assert_eq!(harness.app.message(), "no agent pane in this workspace.");
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn the_box_comes_back_with_the_draft_when_the_agent_pane_went_away() {
         panic!("the draft was thrown away");
     };
     assert_eq!(note.text, "keep me");
-    assert_eq!(harness.app.message, "no agent pane in this workspace.");
+    assert_eq!(harness.app.message(), "no agent pane in this workspace.");
     assert!(
         harness
             .herdr_calls()

@@ -79,7 +79,7 @@ fn a_status_request_while_the_detail_is_open_shows_the_status_screen() {
     harness.answer(3, 0, SHOWN, "");
     let path = std::env::temp_dir().join(format!("herdr-damnit-detail-{}", std::process::id()));
     std::fs::write(&path, crate::pane::STATUS_REQUEST).expect("the request is written");
-    harness.app.view_request = Some(path);
+    harness.app.watch_view_requests(path);
 
     harness.app.tick(Instant::now());
 

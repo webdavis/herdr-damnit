@@ -54,7 +54,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
             frame,
             &Placement::new(body, cursor(app)),
             open,
-            app.config.icons(),
+            app.config().icons(),
         );
     }
     frame.render_widget(bottom_line(app, bottom.width), bottom);
@@ -115,9 +115,9 @@ fn open_counts(app: &App) -> String {
 
 fn bottom_line(app: &App, width: u16) -> Paragraph<'static> {
     let width = width as usize;
-    let (said, colour) = match app.message.is_empty() {
+    let (said, colour) = match app.message().is_empty() {
         true => (legend::fitted(mode(app), width), color(Slot::Dim1)),
-        false => (cut_to(&app.message, width), color(Slot::Text)),
+        false => (cut_to(app.message(), width), color(Slot::Text)),
     };
     Paragraph::new(Line::styled(said, Style::new().fg(colour)))
 }

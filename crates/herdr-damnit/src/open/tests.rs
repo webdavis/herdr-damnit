@@ -71,15 +71,16 @@ fn a_newer_dam_warns_once_rather_than_once_per_read() {
     start(&mut harness.app);
     harness.answer(0, 0, "dam 0.4.0\n", "");
     harness.answer(1, 0, CLEAN, "");
-    let warned = harness.app.message.clone();
+    let warned = harness.app.message().to_string();
     assert!(warned.contains("newer than this pane knows"), "{warned}");
 
-    harness.app.message.clear();
+    harness.app.say(String::new());
     harness.app.submit(Request::Status);
     harness.answer(3, 0, CLEAN, "");
 
     assert_eq!(
-        harness.app.message, "",
+        harness.app.message(),
+        "",
         "the handshake warning came back on a later read"
     );
 }

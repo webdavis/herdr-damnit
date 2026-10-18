@@ -106,7 +106,7 @@ fn a_new_object_is_named_in_the_status_line_by_the_oid_dam_made() {
         "",
     );
 
-    assert_eq!(harness.app.message, "made 7a8b9c0");
+    assert_eq!(harness.app.message(), "made 7a8b9c0");
 }
 
 #[test]
@@ -116,6 +116,6 @@ fn an_empty_new_subject_is_refused_in_the_pane_and_nothing_is_spawned() {
     let before = harness.lines().len();
     harness.press(KeyCode::Enter);
 
-    assert_eq!(harness.app.message, "a new task needs a subject.");
+    assert_eq!(harness.app.message(), "a new task needs a subject.");
     assert_eq!(harness.lines().len(), before);
 }

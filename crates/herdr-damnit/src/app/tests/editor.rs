@@ -61,7 +61,7 @@ fn a_dam_that_could_not_be_started_still_leaves_the_pane_reading_again() {
     crate::editor::run_and_reread(&mut harness.app, &argv(&["edit", "x", "-e"]));
 
     assert_eq!(
-        harness.app.message,
+        harness.app.message(),
         "dam is not on PATH; install it with cargo install damnit, then press R."
     );
     assert!(harness.lines().len() > before, "the pane did not re-read");

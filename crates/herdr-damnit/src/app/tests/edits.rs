@@ -35,7 +35,7 @@ fn a_refused_completion_says_dams_own_sentence_and_changes_nothing() {
     let said = "5d6e7f8 has 2 open children; use --force to complete them too";
     harness.answer(3, 4, "", &refusal("blocked", said));
 
-    assert_eq!(harness.app.message, said);
+    assert_eq!(harness.app.message(), said);
     assert_eq!(harness.app.list().cursor().object_count(), before);
 }
 
@@ -45,7 +45,7 @@ fn x_with_no_object_under_the_cursor_does_nothing_and_says_nothing() {
     harness.press(KeyCode::Char('x'));
 
     assert!(harness.lines().is_empty());
-    assert!(harness.app.message.is_empty());
+    assert!(harness.app.message().is_empty());
 }
 
 #[test]
@@ -159,7 +159,7 @@ fn a_date_dam_cannot_read_comes_back_with_the_line_still_in_the_box() {
         &format!(r#"{{"error":{{"kind":"parse","rule":null,"message":"{said}","oids":[]}}}}"#),
     );
 
-    assert_eq!(harness.app.message, "cannot read \"next mon\" as a date");
+    assert_eq!(harness.app.message(), "cannot read \"next mon\" as a date");
     assert_eq!(line_text(&harness).as_deref(), Some("next mon"));
 }
 

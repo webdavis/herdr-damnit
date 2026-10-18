@@ -35,7 +35,7 @@ fn o_on_a_row_that_is_not_a_conflict_does_nothing() {
     harness.press(KeyCode::Char('o'));
 
     assert_eq!(harness.lines().len(), before);
-    assert!(harness.app.message.is_empty());
+    assert!(harness.app.message().is_empty());
 }
 
 #[test]
