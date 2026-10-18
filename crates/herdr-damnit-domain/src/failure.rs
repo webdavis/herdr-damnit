@@ -63,8 +63,13 @@ pub fn classify(code: Option<i32>, error: Option<ErrorDocument>, fallback: &str)
 pub fn message(failure: &Failure) -> String {
     match failure {
         Failure::Other(said) if said.is_empty() => "dam was killed before it answered.".to_string(),
-        Failure::Refused { said, .. } | Failure::Other(said) => said.clone(),
-        Failure::Store(said) => format!("{said}; another dam is writing, press R to retry."),
+        Failure::Refused { said, .. } | Failure::Other(said) => one_line(said),
+        Failure::Store(said) => {
+            format!(
+                "{}; another dam is writing, press R to retry.",
+                one_line(said)
+            )
+        }
         Failure::Cancelled { killed: false } => "cancelled".to_string(),
         Failure::Cancelled { killed: true } => "cancelled (killed)".to_string(),
         Failure::Unreadable => "dam answered with something this pane could not read.".to_string(),
@@ -82,6 +87,19 @@ pub fn leaves_model_and_prompt_untouched(failure: &Failure) -> bool {
         failure,
         Failure::Refused { .. } | Failure::Cancelled { .. } | Failure::Deadline(_)
     )
+}
+
+fn one_line(said: &str) -> String {
+    let mut folded = String::new();
+    for line in said.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        if folded.ends_with(':') {
+            folded.push(' ');
+        } else if !folded.is_empty() {
+            folded.push_str("; ");
+        }
+        folded.push_str(line);
+    }
+    folded
 }
 
 fn first_line(stderr: &str) -> String {
