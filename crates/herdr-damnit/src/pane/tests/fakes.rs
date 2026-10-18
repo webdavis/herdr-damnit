@@ -97,10 +97,27 @@ fn refused_when(refused: bool) -> Result<(), String> {
     }
 }
 
-#[derive(Default)]
 pub(super) struct FakeMemory {
     pub(super) log: Log,
     pub(super) panes: RefCell<HashMap<String, String>>,
+}
+
+impl FakeMemory {
+    pub(super) fn sharing(log: &Log) -> Self {
+        Self {
+            log: Rc::clone(log),
+            panes: RefCell::default(),
+        }
+    }
+
+    pub(super) fn remembering(log: &Log, workspace: &str, pane: &str) -> Self {
+        let memory = Self::sharing(log);
+        memory
+            .panes
+            .borrow_mut()
+            .insert(workspace.to_string(), pane.to_string());
+        memory
+    }
 }
 
 impl PaneMemory for FakeMemory {

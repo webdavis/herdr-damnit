@@ -3,6 +3,7 @@ use super::*;
 use fakes::{FakeMemory, FakePanes, Log, here, requested, scratch_state};
 
 mod fakes;
+mod placing;
 
 fn default_config() -> Config {
     Config::parse("").expect("the default config")
@@ -10,12 +11,6 @@ fn default_config() -> Config {
 
 fn panes(ids: &[&str]) -> Vec<String> {
     ids.iter().map(|id| id.to_string()).collect()
-}
-
-#[test]
-fn the_calling_panes_share_is_the_rest_of_the_tab() {
-    assert_eq!(calling_panes_share_after(0.3), 0.7);
-    assert_eq!(calling_panes_share_after(0.7), 0.3);
 }
 
 #[test]
@@ -64,18 +59,10 @@ fn auto_open_opens_a_closed_pane_and_leaves_an_open_one_alone() {
 }
 
 #[test]
-fn an_auto_open_never_takes_the_focus_and_every_other_action_does() {
-    assert_eq!(focus_of(Mode::AutoOpen), PaneFocus::Leave);
-    assert_eq!(focus_of(Mode::Open), PaneFocus::Take);
-    assert_eq!(focus_of(Mode::Toggle), PaneFocus::Take);
-    assert_eq!(focus_of(Mode::Focus), PaneFocus::Take);
-}
-
-#[test]
 fn auto_open_does_nothing_at_all_when_the_config_has_not_asked_for_it() {
     let log = Log::default();
     let herdr = FakePanes::showing(&log, &["w:p1"]);
-    let memory = FakeMemory::default();
+    let memory = FakeMemory::sharing(&log);
 
     let outcome = auto_open(&here(), &herdr, &memory, &default_config()).expect("no call at all");
 
@@ -101,26 +88,6 @@ fn focus_never_opens_a_pane() {
         decide(Mode::Focus, None, &panes(&["w:p1"])),
         Decision::NothingToFocus
     );
-}
-
-#[test]
-fn a_failed_focus_or_close_retries_as_open_except_in_focus_mode() {
-    assert!(matches!(
-        recovery_from_a_rejected_pane(Mode::Open),
-        Recovery::RetryOpen
-    ));
-    assert!(matches!(
-        recovery_from_a_rejected_pane(Mode::Toggle),
-        Recovery::RetryOpen
-    ));
-    assert!(matches!(
-        recovery_from_a_rejected_pane(Mode::AutoOpen),
-        Recovery::RetryOpen
-    ));
-    assert!(matches!(
-        recovery_from_a_rejected_pane(Mode::Focus),
-        Recovery::ReportGone
-    ));
 }
 
 #[test]
