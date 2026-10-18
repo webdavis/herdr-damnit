@@ -1,7 +1,7 @@
 use herdr_damnit_application::{Request, SyncKind, argv};
 use herdr_damnit_domain::Oid;
 
-use super::{After, App, Pending};
+use super::{After, App, Message, Pending};
 use crate::overlay::{LineBox, LinePurpose, Overlay};
 
 const DATE_WORDS: &str = "today, tomorrow, YYYY-MM-DD or YYYY-MM-DDTHH:MM";
@@ -10,8 +10,7 @@ impl App {
     pub(super) fn open_commit_box(&mut self) -> After {
         let staged = self.status.stage().staged_count();
         if staged == 0 {
-            self.message =
-                "nothing staged; press <Space> on a row or A to stage everything.".to_string();
+            self.message = Message::nothing_staged();
             return After::Stay;
         }
         let plural = if staged == 1 { "" } else { "s" };
@@ -70,7 +69,7 @@ impl App {
     }
 
     fn refuse_blank(&mut self, line: LineBox, said: &str) -> After {
-        self.message = said.to_string();
+        self.message = Message::said(said.to_string());
         self.reopen(Overlay::Line(line))
     }
 }

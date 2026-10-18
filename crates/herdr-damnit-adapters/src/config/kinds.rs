@@ -11,36 +11,12 @@ pub enum Placement {
     Zoomed,
 }
 
-impl Placement {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Overlay => "overlay",
-            Self::Split => "split",
-            Self::Tab => "tab",
-            Self::Zoomed => "zoomed",
-        }
-    }
-
-    pub fn attaches_to_a_pane_rather_than_the_workspace(self) -> bool {
-        matches!(self, Self::Split | Self::Zoomed)
-    }
-}
-
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Side {
     #[default]
     Right,
     Down,
-}
-
-impl Side {
-    pub fn split_direction(self) -> &'static str {
-        match self {
-            Self::Right => "right",
-            Self::Down => "down",
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]

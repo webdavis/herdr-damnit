@@ -132,6 +132,11 @@ impl Harness {
             .any(|call| call.starts_with("send_text"))
     }
 
+    pub(crate) fn hang_up(&mut self) {
+        self.dam.hang_up();
+        self.app.tick(Instant::now());
+    }
+
     pub(crate) fn cancels(&self) -> usize {
         self.dam.cancelled().len()
     }

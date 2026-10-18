@@ -84,18 +84,21 @@ impl Jobs {
         let mut completions = Vec::new();
         let mut finished = Vec::new();
         for running in &self.running {
-            match running.job.results.try_recv() {
-                Ok(result) => {
-                    finished.push(running.id);
-                    completions.push(Completion {
-                        id: running.id,
-                        request: running.request.clone(),
-                        finished: result,
-                    });
-                }
-                Err(TryRecvError::Empty) => {}
-                Err(TryRecvError::Disconnected) => finished.push(running.id),
-            }
+            let result = match running.job.results.try_recv() {
+                Ok(result) => result,
+                Err(TryRecvError::Empty) => continue,
+                Err(TryRecvError::Disconnected) => Finished {
+                    code: None,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                },
+            };
+            finished.push(running.id);
+            completions.push(Completion {
+                id: running.id,
+                request: running.request.clone(),
+                finished: result,
+            });
         }
         self.running.retain(|job| !finished.contains(&job.id));
         completions

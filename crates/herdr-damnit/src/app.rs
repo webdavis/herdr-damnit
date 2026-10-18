@@ -7,6 +7,7 @@ mod handshake;
 mod header;
 mod keys;
 mod list;
+mod message;
 mod overlay_keys;
 mod pending;
 mod pickers;
@@ -22,6 +23,7 @@ pub use crate::overlay::Overlay;
 pub use done::DoneScreen;
 pub(crate) use handshake::status_refusal;
 pub use list::ListScreen;
+use message::Message;
 use pending::Pending;
 use reach::AgentReach;
 use rereads::Rereads;
@@ -58,7 +60,7 @@ pub struct App {
     list: ListScreen,
     status: StatusScreen,
     done: DoneScreen,
-    message: String,
+    message: Message,
     config: Config,
     phase: Phase,
     agents: AgentReach,
@@ -83,7 +85,7 @@ impl App {
             list: ListScreen::new(views, clock),
             status: StatusScreen::new(config.icons()),
             done: DoneScreen::new(),
-            message: String::new(),
+            message: Message::none(),
             config,
             phase: Phase::Starting,
             agents: AgentReach::new(agents, here),
@@ -102,7 +104,9 @@ impl App {
     pub fn submit(&mut self, request: Request) -> Option<JobId> {
         match self.work.submit(request) {
             Submitted::Started(id) => return Some(id),
-            Submitted::Refused(said) | Submitted::Failed(said) => self.message = said,
+            Submitted::Refused(said) | Submitted::Failed(said) => {
+                self.message = Message::said(said)
+            }
             Submitted::NotInstalled => self.phase = Phase::Refused(message(&Failure::NotInstalled)),
         }
         None
@@ -112,16 +116,20 @@ impl App {
         self.rereads.watch(path);
     }
 
+    pub fn watch_config(&mut self, path: PathBuf) {
+        self.rereads.watch_config(path);
+    }
+
     pub fn config(&self) -> &Config {
         &self.config
     }
 
     pub fn message(&self) -> &str {
-        &self.message
+        self.message.as_str()
     }
 
     pub fn say(&mut self, said: String) {
-        self.message = said;
+        self.message = Message::said(said);
     }
 
     pub fn list(&self) -> &ListScreen {

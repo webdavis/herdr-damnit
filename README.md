@@ -119,7 +119,9 @@ it carries a spinner, the verb and the elapsed time: `dam  today  ⠙ push 3.2s`
 shows a few keys for the screen, or the latest message until the next key.
 
 The pane reads `dam` again every `refresh_seconds`, after every write, and on `R`. The interval
-waits while a picker, a box or the Detail is open, or while Status or Done is showing.
+waits while a picker, a box or the Detail is open, or while Status or Done is showing. `R` also
+reads the config again: the views, icons and label change in place, and a config error goes on
+the bottom line. A changed `dam` argv takes effect when the pane next opens.
 
 ## Marks
 
@@ -157,7 +159,7 @@ and `S` with no agent pane each say so on the bottom line.
 | `<Tab>`         | the next screen; `<S-Tab>` the one before                            |
 | `v`             | the view picker, on List or Done                                     |
 | `1` to `9`      | the List on that view                                                |
-| `R`, `r`        | read `dam` again                                                     |
+| `R`, `r`        | read the config and `dam` again                                      |
 | `<CR>`          | the object's detail                                                  |
 | `<Space>`       | stage the object, or unstage it when it is staged                    |
 | `A`, `U`        | stage everything, unstage everything                                 |
@@ -182,8 +184,8 @@ and `S` with no agent pane each say so on the bottom line.
 In a picker, `j` and `k` move, `<CR>` takes the entry and `<Esc>` cancels. In a one-line box,
 `<CR>` sends and `<Esc>` cancels. A confirm takes its own key again; any other key cancels.
 
-`q` while a push, pull or commit runs asks once; a second `q` closes the pane and leaves `dam` to
-finish. `<C-c>` stops it.
+`q` or `<Esc>` while a push, pull or commit runs asks once; `q` then closes the pane and leaves
+`dam` to finish. `<C-c>` stops it.
 
 - A blank commit message or new subject is refused in the pane.
 - The `l` picker offers every label in the showing view with the object's own marked, and stays

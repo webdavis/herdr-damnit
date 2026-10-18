@@ -98,8 +98,7 @@ fn a_view_number_past_the_end_names_how_many_views_there_are() {
 
     let error = view("4", &here(), &herdr, &state, &default_config()).expect_err("refuses");
 
-    assert!(error.contains("no view 4"), "{error}");
-    assert!(error.contains("1 views"), "{error}");
+    assert_eq!(error, "no view 4: this config has 1 views, 1 being open");
 }
 
 #[test]

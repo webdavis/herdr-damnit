@@ -63,6 +63,22 @@ fn q_mid_push_asks_once_and_quits_on_the_second_press_without_cancelling() {
 }
 
 #[test]
+fn escape_mid_push_asks_the_same_confirm_as_q_and_keeps_the_pane_open() {
+    let mut harness = harness();
+    harness.press(KeyCode::Char('P'));
+
+    assert_eq!(harness.press(KeyCode::Esc), After::Stay);
+    let Some(Overlay::Confirm(confirm)) = harness.app.showing().overlay() else {
+        panic!("expected a confirm");
+    };
+    assert_eq!(
+        confirm.question,
+        "a push is running; quit and let it finish?"
+    );
+    assert_eq!(confirm.key, 'q');
+}
+
+#[test]
 fn q_mid_read_closes_without_asking() {
     let mut harness = harness();
     harness.app.submit(Request::Status);

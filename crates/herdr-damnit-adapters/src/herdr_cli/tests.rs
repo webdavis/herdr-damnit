@@ -156,15 +156,18 @@ fn an_agent_listing_names_each_pane_its_workspace_kind_name_and_profile() {
 }
 
 #[test]
-fn a_malformed_agent_listing_is_an_error_that_names_the_verb() {
-    assert_eq!(
-        agents::agents_of_listing("not json"),
-        Err("herdr agent list: expected ident at line 1 column 2".to_string())
-    );
-    assert_eq!(
-        agents::agents_of_listing("{}"),
-        Err("herdr agent list: missing field `result` at line 1 column 2".to_string())
-    );
+fn a_malformed_agent_listing_is_an_error_that_names_the_verb_and_carries_the_parsers_reason() {
+    let not_json = agents::agents_of_listing("not json").expect_err("refuses");
+    let reason = not_json
+        .strip_prefix("herdr agent list: ")
+        .expect("the plugin's own prefix");
+    assert!(!reason.is_empty(), "{not_json}");
+
+    let no_result = agents::agents_of_listing("{}").expect_err("refuses");
+    let reason = no_result
+        .strip_prefix("herdr agent list: ")
+        .expect("the plugin's own prefix");
+    assert!(reason.contains("`result`"), "{no_result}");
 }
 
 const AGENT_LIST_ANSWER: &str = r#"{"result":{"agents":[

@@ -1,8 +1,10 @@
 use std::time::{Duration, Instant};
 
+use herdr_damnit_adapters::Config;
 use herdr_damnit_application::{Phase, Request};
+use herdr_damnit_domain::Views;
 
-use super::{After, App, Screen};
+use super::{After, App, Message, Screen};
 use crate::overlay::{Overlay, Picker, PickerEntry};
 
 impl App {
@@ -10,7 +12,7 @@ impl App {
         match self.list.views().name_of_number(number) {
             Some(_) => self.show_view(number - 1),
             None => {
-                self.message = format!("the config has {} views.", self.list.views().count());
+                self.message = Message::no_such_view(self.list.views().count());
                 After::Stay
             }
         }
@@ -36,13 +38,27 @@ impl App {
         }))
     }
 
+    pub(super) fn reread_config_and_dam(&mut self) -> After {
+        match self.rereads.config() {
+            Some(Ok(config)) => self.take_config(config),
+            Some(Err(said)) => self.message = Message::said(said),
+            None => {}
+        }
+        self.reread()
+    }
+
+    fn take_config(&mut self, config: Config) {
+        self.list.take_views(Views::new(&config.views()));
+        self.config = config;
+    }
+
     pub(crate) fn reread(&mut self) -> After {
         self.rereads.forget();
         match self.phase {
             Phase::Ready => {
                 self.read_list();
                 self.submit(Request::Status);
-                if self.done.opened() {
+                if self.done.kept_fresh() {
                     self.read_done();
                 }
             }
@@ -91,7 +107,7 @@ impl App {
 
     pub(super) fn show(&mut self, screen: Screen) -> After {
         self.showing.show(screen);
-        if screen == Screen::Done && self.phase == Phase::Ready && self.done.open_the_first_time() {
+        if screen == Screen::Done && self.phase == Phase::Ready && self.done.start_keeping_fresh() {
             self.read_done();
         }
         After::Stay

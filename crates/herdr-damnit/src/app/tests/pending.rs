@@ -15,7 +15,8 @@ fn set_due(harness: &mut Harness, oid: &str, when: &str) {
     harness.press(KeyCode::Enter);
 }
 
-fn hand_off(harness: &mut Harness) {
+fn hand_off(harness: &mut Harness, oid: &str) {
+    harness.select(oid);
     harness.press(KeyCode::Char('S'));
     harness
         .app
@@ -39,11 +40,11 @@ fn a_refused_date_brings_back_its_own_box_while_a_later_one_is_in_flight() {
 #[test]
 fn a_refused_label_names_its_agent_while_a_later_hand_off_is_in_flight() {
     let mut harness = loaded();
-    hand_off(&mut harness);
-    hand_off(&mut harness);
+    hand_off(&mut harness, "1a2b3c4");
+    hand_off(&mut harness, "5d6e7f8");
 
     harness.answer(
-        &["edit"],
+        &["edit", "1a2b3c4"],
         2,
         "",
         "dam: \"handed-off\" clashes with \"handed-back\"",
@@ -53,4 +54,22 @@ fn a_refused_label_names_its_agent_while_a_later_hand_off_is_in_flight() {
         harness.app.message(),
         "sent to planner, label refused: \"handed-off\" clashes with \"handed-back\"."
     );
+}
+
+#[test]
+fn a_job_that_dies_unanswered_is_settled_and_its_failure_line_is_shown_once() {
+    let mut harness = loaded();
+    set_due(&mut harness, "1a2b3c4", "next mon");
+    harness.hang_up();
+
+    assert_eq!(harness.app.work.pending_count(), 0);
+    assert_eq!(harness.app.message(), "dam was killed before it answered.");
+    let Some(Overlay::Line(line)) = harness.app.showing().overlay() else {
+        panic!("the box did not come back");
+    };
+    assert_eq!(line.text, "next mon");
+
+    harness.app.tick(Instant::now());
+    assert_eq!(harness.app.message(), "dam was killed before it answered.");
+    assert_eq!(harness.lines().len(), 4);
 }

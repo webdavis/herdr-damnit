@@ -2,17 +2,17 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use herdr_damnit_application::{Request, SyncKind, Toward, argv};
 use herdr_damnit_domain::{Cursor, Oid};
 
-use super::{After, App, Screen};
+use super::{After, App, Message, Screen};
 use crate::overlay::LinePurpose;
 
 impl App {
     pub fn key(&mut self, key: KeyEvent) -> After {
-        self.message.clear();
+        self.message = Message::none();
 
         if self.refusal().is_some() {
             return match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => After::Quit,
-                KeyCode::Char('R' | 'r') => self.reread(),
+                KeyCode::Char('R' | 'r') => self.reread_config_and_dam(),
                 _ => After::Stay,
             };
         }
@@ -37,7 +37,7 @@ impl App {
             KeyCode::Char('v') if matches!(self.showing.screen(), Screen::List | Screen::Done) => {
                 self.open_view_picker()
             }
-            KeyCode::Char('R' | 'r') => self.reread(),
+            KeyCode::Char('R' | 'r') => self.reread_config_and_dam(),
             KeyCode::Char(' ') => self.toggle_staged(),
             KeyCode::Char('A') => self.write(argv::stage_all()),
             KeyCode::Char('U') => self.write(argv::unstage_all()),
@@ -58,8 +58,7 @@ impl App {
             KeyCode::Char('e') => self.edit_in_editor(),
             KeyCode::Char('o') => self.resolve(Toward::Ours),
             KeyCode::Char('t') => self.resolve(Toward::Theirs),
-            KeyCode::Char('q') => self.quit(),
-            KeyCode::Esc => After::Quit,
+            KeyCode::Char('q') | KeyCode::Esc => self.quit(),
             KeyCode::Enter => self.read_detail(),
             _ => After::Stay,
         }

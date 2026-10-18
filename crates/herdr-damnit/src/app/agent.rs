@@ -1,6 +1,6 @@
 use herdr_damnit_application::{HandOff, Request};
 
-use super::{After, App, Pending};
+use super::{After, App, Message, Pending};
 use crate::overlay::{NoteBox, Overlay};
 
 impl App {
@@ -14,7 +14,7 @@ impl App {
                 text: String::new(),
             })),
             Err(said) => {
-                self.message = said;
+                self.message = Message::said(said);
                 After::Stay
             }
         }
@@ -27,11 +27,11 @@ impl App {
         let label = self.config.handoff_label.clone();
         match self.agents.hand_off(&object, note.text.trim(), &label) {
             HandOff::Refused(said) => {
-                self.message = said;
+                self.message = Message::said(said);
                 return self.reopen(Overlay::Note(note));
             }
             HandOff::Sent { agent, label_write } => {
-                self.message = format!("sent to {}", agent.name);
+                self.message = Message::sent_to(&agent.name);
                 if let Some(write) = label_write
                     && let Some(id) = self.submit(Request::Write(write))
                 {

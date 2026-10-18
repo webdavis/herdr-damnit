@@ -2,7 +2,7 @@ use herdr_damnit_adapters::wire;
 use herdr_damnit_application::{Completion, Phase, Request, SyncKind};
 use herdr_damnit_domain::{Failure, Stage, classify, message};
 
-use super::{App, Pending};
+use super::{App, Message, Pending};
 use crate::overlay::{LineBox, LinePurpose, Overlay};
 
 impl App {
@@ -14,10 +14,10 @@ impl App {
                 wire::error_document(&completion.finished.stderr),
                 &completion.finished.stderr,
             );
-            self.message = message(&failure);
+            self.message = Message::failed(&failure);
             match pending {
                 Some(Pending::Label { agent }) => {
-                    self.message = format!("sent to {agent}, label refused: {}.", self.message);
+                    self.message = Message::label_refused(&agent, &failure);
                 }
                 Some(Pending::Box(line)) => self.bring_the_box_back(line, &failure),
                 None => {}
@@ -32,7 +32,7 @@ impl App {
             self.name_what_dam_made(&completion.finished.stdout);
         }
         if let Err(said) = self.read_into_model(&completion) {
-            self.message = said;
+            self.message = Message::said(said);
             return;
         }
         if completion.request.rereads_after() {
@@ -68,12 +68,14 @@ impl App {
                 );
             }
             (_, Request::Sync(SyncKind::Push, _)) => {
-                self.message =
-                    wire::push_summary(&completion.finished.stdout).map_err(|_| unreadable())?;
+                self.message = Message::said(
+                    wire::push_summary(&completion.finished.stdout).map_err(|_| unreadable())?,
+                );
             }
             (_, Request::Sync(SyncKind::Pull, _)) => {
-                self.message =
-                    wire::pull_summary(&completion.finished.stdout).map_err(|_| unreadable())?;
+                self.message = Message::said(
+                    wire::pull_summary(&completion.finished.stdout).map_err(|_| unreadable())?,
+                );
             }
             _ => {}
         }
@@ -88,7 +90,7 @@ impl App {
 
     fn name_what_dam_made(&mut self, stdout: &str) {
         if let Ok(made) = wire::object(stdout) {
-            self.message = format!("made {}", made.oid.short());
+            self.message = Message::made(&made.oid);
         }
     }
 

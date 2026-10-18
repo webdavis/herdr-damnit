@@ -36,6 +36,11 @@ impl Work {
         self.pending.remove(id)
     }
 
+    #[cfg(test)]
+    pub(super) fn pending_count(&self) -> usize {
+        self.pending.len()
+    }
+
     pub(super) fn in_flight(&self) -> usize {
         self.jobs.in_flight()
     }
