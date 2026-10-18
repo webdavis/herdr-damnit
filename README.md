@@ -1,8 +1,7 @@
 # herdr-damnit
 
 A task pane for the [herdr](https://herdr.dev) terminal multiplexer over
-[`dam`](https://github.com/webdavis/damnit), the local task store. Every `dam` command runs on a
-worker thread, so the pane keeps drawing and reading keys while a push or a pull is out.
+[`dam`](https://github.com/webdavis/damnit), the local task store.
 
 The pane lists the objects of a view grouped by path, shows `dam`'s staging model on a second
 screen and the completed tasks on a third, and stages, commits, pushes and pulls the way `dam` does
@@ -25,8 +24,6 @@ cargo build --release --locked -p herdr-damnit
 mkdir -p bin && cp target/release/herdr-damnit bin/
 herdr plugin link .
 ```
-
-The plugin holds no credential. A remote's token is `dam`'s.
 
 ## Actions
 
@@ -117,9 +114,9 @@ query `dam` refuses leaves the rows on screen and puts `dam`'s message on the bo
 - **Done** is `dam ls done`, newest completion first with the date from `dam log` leading. A
   completion not yet committed sorts to the top under `not committed`.
 
-The header names the screen or the view, then the counts. While a `dam` command is out it carries a
-spinner, the verb and the elapsed time: `dam  today  ⠙ push 3.2s`. The bottom line shows the keys
-that work, or the latest message until the next key.
+The header names the screen or the view, with the counts at the right. While a `dam` command is out
+it carries a spinner, the verb and the elapsed time: `dam  today  ⠙ push 3.2s`. The bottom line
+shows a few keys for the screen, or the latest message until the next key.
 
 The pane reads `dam` again every `refresh_seconds`, after every write, and on `R`. The interval
 waits while a picker, a box or the Detail is open, or while Status or Done is showing.
@@ -150,8 +147,8 @@ the plain marks; set `icons = "ascii"` when they come out as boxes. Every color 
 
 ## Keys
 
-A key acts on the object under the cursor. Pressed where there is nothing to act on, it does
-nothing.
+A key acts on the object under the cursor. `c` with nothing staged, `1` to `9` with no such view
+and `S` with no agent pane each say so on the bottom line.
 
 | Key             | What it does                                                         |
 | --------------- | -------------------------------------------------------------------- |
@@ -188,28 +185,7 @@ In a picker, `j` and `k` move, `<CR>` takes the entry and `<Esc>` cancels. In a 
 `q` while a push, pull or commit runs asks once; a second `q` closes the pane and leaves `dam` to
 finish. `<C-c>` stops it.
 
-Each edit is one `dam` command followed by a read of the status and the showing view:
-
-| Key       | The `dam` command                                                        |
-| --------- | ------------------------------------------------------------------------ |
-| `<Space>` | `dam add <oid>`, or `dam reset <oid>` when it is staged                  |
-| `A`, `U`  | `dam add -A`, `dam reset`                                                |
-| `c`       | `dam commit -m "<line>"`                                                 |
-| `x`, `X`  | `dam done <oid>`, `dam done <oid> --force`                               |
-| `dd`      | `dam rm <oid>`                                                           |
-| `!`       | `dam restore <oid>`                                                      |
-| `p`       | `dam edit <oid> -p <next>`                                               |
-| `s`       | `dam edit <oid> --due <line>`, or `--no-due` for an empty line           |
-| `D`       | `dam edit <oid> --deadline <line>`, or `--no-deadline` for an empty line |
-| `l`       | `dam edit <oid> --label <name>` or `--unlabel <name>`                    |
-| `m`       | `dam mv <oid> <path>`                                                    |
-| `a`       | `dam new "<line>" --path <path>`                                         |
-| `o`, `t`  | `dam resolve <oid> --ours`, `--theirs`                                   |
-| `e`       | `dam edit <oid> -e`, on the pane's own terminal                          |
-| `P`, `L`  | `dam push`, `dam pull`                                                   |
-
-- `c` with nothing staged says what to press instead. A blank commit message or new subject is
-  refused in the pane.
+- A blank commit message or new subject is refused in the pane.
 - The `l` picker offers every label in the showing view with the object's own marked, and stays
   open so several labels go on or off at once.
 - The `m` picker offers every path in the showing view and its parents.
@@ -225,33 +201,13 @@ below, or the one above when it was the last.
 `<CR>` draws the object from `dam show`: the subject, its path, kind, priority, due date, deadline,
 attached event, recurrence, labels, dependencies with their subjects, and its body as markdown. An
 event adds its start, end, time zone, location, status, transparency and attendees. A field with
-nothing in it is left out. `<Esc>` goes back.
-
-The body renders headings, bullet and numbered lists, blockquotes, thematic breaks, bold, italics,
-inline code and links as text followed by `<target>`. Tables and fenced code show as written. Every
-line wraps.
+nothing in it is left out. The detail does not scroll. `<Esc>` goes back.
 
 ## Sending a task to the agent
 
 `S` opens a note box: `<CR>` starts a new line, `<C-d>` sends and `<Esc>` drops the draft. The
-agent pane is the first pane `herdr agent list` names an agent for in this workspace, other than
-this one. The pane pastes a plain-text brief into it without a return, then focuses it:
-
-```
-dam task: file taxes
-oid: 1a2b3c4d5e6f
-path: home/admin/
-due: 2026-09-20
-priority: p1
-labels: home, slow
-
-receipts are in the drawer
-
-note: start with the receipts
-```
-
-A field with nothing in it is left out. After a send, `dam edit <oid> --label <handoff_label>`
-records the hand-off as a working change. A refused label says
+send pastes the task and the note into the workspace's agent pane and focuses it, then writes
+`handoff_label` on the task as a working change. A refused label says
 `sent to <name>, label refused: <dam's message>.`
 
 ## Development
@@ -273,15 +229,6 @@ The workspace is four crates whose dependencies point inward only:
   directory, the clock and the parsing of `dam`'s JSON.
 - `herdr-damnit`: the binary, with the pane actions, `doctor`, the draw loop, the screens, the
   keys, the legend and the theme.
-
-No test runs a real `dam`, herdr or editor. The adapters crate builds `fake-dam`, which logs its
-arguments and replays a fixture named by its subcommand; `FAKE_DAM_*` variables, or the same
-`NAME=value` words before its arguments, make it sleep, fail or ignore an interrupt.
-
-The fixtures in `crates/herdr-damnit-adapters/tests/fixtures` come from a real `dam`.
-`capture.sh [<dam revision>]` regenerates them from `dam` built at that revision, `main` by
-default, and `DAM_BIN=/path/to/dam ./capture.sh` uses a `dam` already built. The four push and pull
-fixtures are captured by hand.
 
 ## License
 
