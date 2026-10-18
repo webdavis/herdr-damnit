@@ -12,7 +12,7 @@ impl App {
         match self.views.name_of_number(number) {
             Some(_) => self.show_view(number - 1),
             None => {
-                self.message = format!("the config has {} views.", self.views.len());
+                self.message = format!("the config has {} views.", self.views.count());
                 After::Stay
             }
         }

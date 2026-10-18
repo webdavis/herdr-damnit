@@ -4,8 +4,6 @@ pub const OPEN_QUERY: &str = "!done";
 
 pub const DONE_QUERY: &str = "done";
 
-pub const MAX_NUMBERED_VIEW: usize = 9;
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct View {
     pub name: String,
@@ -36,12 +34,8 @@ impl Views {
         self.views.iter().map(|view| view.name.as_str())
     }
 
-    pub fn len(&self) -> usize {
+    pub fn count(&self) -> usize {
         self.views.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        false
     }
 
     pub fn showing(&self) -> usize {
@@ -86,8 +80,7 @@ mod tests {
     #[test]
     fn view_one_is_the_open_list_because_dam_ls_with_no_query_includes_done_objects() {
         let views = Views::new(&[]);
-        assert_eq!(views.len(), 1);
-        assert!(!views.is_empty());
+        assert_eq!(views.count(), 1);
         assert_eq!(views.current().name, OPEN);
         assert_eq!(views.current().query, OPEN_QUERY);
     }

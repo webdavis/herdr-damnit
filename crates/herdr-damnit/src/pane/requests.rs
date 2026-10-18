@@ -19,7 +19,7 @@ pub fn view(argument: &str, config: &Config) -> Result<String, String> {
     let name = views.name_of_number(number).ok_or_else(|| {
         format!(
             "no view {number}: this config has {} views, 1 being the unfiltered list",
-            views.len()
+            views.count()
         )
     })?;
     note_then_open(name, &state::view_request_path(), || {
