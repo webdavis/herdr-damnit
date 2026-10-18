@@ -1,6 +1,6 @@
 use herdr_damnit_adapters::wire;
 use herdr_damnit_application::{Completion, Phase, Request, SyncKind};
-use herdr_damnit_domain::{Failure, Row, RowStyle, Stage, StatusRow, classify, message, rows};
+use herdr_damnit_domain::{Failure, RowStyle, Stage, classify, message, rows, status_rows};
 
 use super::{App, Pending};
 use crate::overlay::{LineBox, LinePurpose, Overlay};
@@ -98,7 +98,8 @@ impl App {
 
     pub(super) fn take_stage(&mut self, stage: Stage) {
         self.stage = stage;
-        self.status.replace(cursor_targets(&self.stage.rows()));
+        self.status
+            .replace(status_rows(&self.stage, self.config.icons()));
         self.redraw_list();
     }
 
@@ -109,15 +110,4 @@ impl App {
         };
         self.list.replace(rows(&self.objects, &self.stage, style));
     }
-}
-
-fn cursor_targets(status: &[StatusRow]) -> Vec<Row> {
-    let target = |row: &StatusRow| match row {
-        StatusRow::Change { oid, .. } => Row::Line {
-            oid: Some(oid.clone()),
-            segments: Vec::new(),
-        },
-        StatusRow::Heading(text) | StatusRow::Line { text, .. } => Row::Heading(text.clone()),
-    };
-    status.iter().map(target).collect()
 }

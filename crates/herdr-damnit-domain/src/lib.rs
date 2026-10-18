@@ -24,6 +24,6 @@ pub use oid::Oid;
 pub use priority::Priority;
 pub use rows::{Row, RowStyle, Segment, StagingMarks, rows};
 pub use slot::Slot;
-pub use stage::{Change, Conflict, Notice, Op, Stage, StatusRow, Unpushed};
+pub use stage::{Change, Conflict, Notice, Op, Stage, Unpushed, status_rows};
 pub use version::{DAM_HIGHEST_TESTED, DAM_MINIMUM, DamVersion, Verdict, parse_version, verdict};
 pub use views::{DONE_QUERY, OPEN, OPEN_QUERY, View, Views};

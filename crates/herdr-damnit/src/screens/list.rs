@@ -32,7 +32,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
     );
 }
 
-fn item(row: &Row, width: u16) -> ListItem<'static> {
+pub(super) fn item(row: &Row, width: u16) -> ListItem<'static> {
     match row {
         Row::Heading(text) => ListItem::new(Line::styled(
             text.clone(),
