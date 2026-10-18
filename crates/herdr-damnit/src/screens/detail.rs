@@ -11,10 +11,7 @@ use crate::theme::color;
 
 const INDENT: &str = "  ";
 
-pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
-    let Some(object) = &app.detail else {
-        return;
-    };
+pub fn draw(frame: &mut Frame<'_>, area: Rect, object: &Object, app: &App) {
     frame.render_widget(
         Paragraph::new(lines(object, app)).wrap(Wrap { trim: false }),
         area,

@@ -23,8 +23,8 @@ fn enter_on_a_row_reads_that_object_and_opens_the_detail() {
 
     harness.answer(3, 0, SHOW_WITH_EVERY_FIELD, "");
 
-    assert_eq!(harness.app.screen, Screen::Detail);
     let drawn = render_to_text(&harness.app, 32, 20);
+    assert!(drawn.starts_with("dam  detail"), "{drawn}");
     for expected in [
         "refresh the roster row",
         "path: proj/dotfiles",

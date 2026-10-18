@@ -61,15 +61,30 @@ fn on(screen: Screen) -> crate::app::tests::Harness {
     harness
 }
 
+fn over_a_detail() -> crate::app::tests::Harness {
+    let mut harness = loaded();
+    harness.press(KeyCode::Enter);
+    harness.answer(
+        3,
+        0,
+        r#"{"oid":"5d6e7f8","kind":"task","subject":"x","task":{"done":false,"priority":4}}"#,
+        "",
+    );
+    harness
+}
+
 #[test]
 fn the_bottom_row_on_each_screen_is_that_screens_legend() {
-    for (screen, expected) in [
-        (Screen::List, "j/k move  space stage  x done  q close"),
-        (Screen::Status, "j/k move  space stage  c commit  q close"),
-        (Screen::Done, "j/k move  enter open  v view  q close"),
-        (Screen::Detail, "esc back  q close"),
+    for (harness, expected) in [
+        (on(Screen::List), "j/k move  space stage  x done  q close"),
+        (
+            on(Screen::Status),
+            "j/k move  space stage  c commit  q close",
+        ),
+        (on(Screen::Done), "j/k move  enter open  v view  q close"),
+        (over_a_detail(), "esc back  q close"),
     ] {
-        assert_eq!(bottom_row(&on(screen)), expected, "{screen:?}");
+        assert_eq!(bottom_row(&harness), expected);
     }
 }
 

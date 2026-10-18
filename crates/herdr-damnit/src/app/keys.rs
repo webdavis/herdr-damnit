@@ -23,7 +23,7 @@ impl App {
         if let Some(overlay) = self.overlay.take() {
             return self.overlay_key(overlay, key);
         }
-        if self.screen == Screen::Detail {
+        if self.detail.is_some() {
             return self.detail_key(key);
         }
         match key.code {
@@ -68,7 +68,6 @@ impl App {
     fn detail_key(&mut self, key: KeyEvent) -> After {
         match key.code {
             KeyCode::Esc => {
-                self.screen = self.under_detail;
                 self.detail = None;
                 After::Stay
             }
@@ -111,7 +110,7 @@ impl App {
         match self.screen {
             Screen::Status => &mut self.status,
             Screen::Done => &mut self.done,
-            Screen::List | Screen::Detail => &mut self.list,
+            Screen::List => &mut self.list,
         }
     }
 
@@ -120,7 +119,6 @@ impl App {
             Screen::List => self.list.selected_oid(),
             Screen::Status => self.status.selected_oid(),
             Screen::Done => self.done.selected_oid(),
-            Screen::Detail => None,
         }
     }
 }

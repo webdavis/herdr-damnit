@@ -9,10 +9,11 @@ const PLAIN_SPINNER: [&str; 4] = ["|", "/", "-", "\\"];
 
 impl App {
     pub fn header(&self, now: Instant) -> String {
-        let showing = self
-            .screen
-            .label()
-            .unwrap_or_else(|| self.views.current().name.as_str());
+        let showing = match (&self.detail, self.screen.label()) {
+            (Some(_), _) => "detail",
+            (None, Some(label)) => label,
+            (None, None) => self.views.current().name.as_str(),
+        };
         let Some(elapsed) = self.jobs.elapsed_of_current(now) else {
             return format!("dam  {showing}");
         };

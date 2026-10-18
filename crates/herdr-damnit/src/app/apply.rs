@@ -4,7 +4,7 @@ use herdr_damnit_domain::{
     Failure, ObjectRow, Row, RowStyle, Stage, StatusRow, classify, message, rows,
 };
 
-use super::{App, Pending, Screen};
+use super::{App, Pending};
 use crate::overlay::{LineBox, LinePurpose, Overlay};
 
 impl App {
@@ -61,10 +61,6 @@ impl App {
             (_, Request::Show(_)) => {
                 self.detail =
                     Some(wire::object(&completion.finished.stdout).map_err(|_| unreadable())?);
-                if self.screen != Screen::Detail {
-                    self.under_detail = self.screen;
-                    self.screen = Screen::Detail;
-                }
             }
             (_, Request::Log) => {
                 self.completion_days =

@@ -89,7 +89,10 @@ impl App {
             return;
         };
         let interval = Duration::from_secs(self.config.refresh_seconds());
-        let held_back = interval.is_zero() || self.overlay.is_some() || self.screen != Screen::List;
+        let held_back = interval.is_zero()
+            || self.overlay.is_some()
+            || self.detail.is_some()
+            || self.screen != Screen::List;
         if now.saturating_duration_since(since) >= interval && !held_back {
             self.reread();
             self.last_reread = Some(now);
@@ -98,6 +101,7 @@ impl App {
 
     pub(super) fn show(&mut self, screen: Screen) -> After {
         self.screen = screen;
+        self.detail = None;
         if screen == Screen::Done && self.phase == Phase::Ready && !self.done_opened {
             self.done_opened = true;
             self.read_done();
