@@ -58,8 +58,7 @@ impl App {
             KeyCode::Char('e') => self.edit_in_editor(),
             KeyCode::Char('o') => self.resolve(Toward::Ours),
             KeyCode::Char('t') => self.resolve(Toward::Theirs),
-            KeyCode::Char('q') => self.quit(),
-            KeyCode::Esc => After::Quit,
+            KeyCode::Char('q') | KeyCode::Esc => self.quit(),
             KeyCode::Enter => self.read_detail(),
             _ => After::Stay,
         }

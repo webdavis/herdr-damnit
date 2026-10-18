@@ -184,8 +184,8 @@ and `S` with no agent pane each say so on the bottom line.
 In a picker, `j` and `k` move, `<CR>` takes the entry and `<Esc>` cancels. In a one-line box,
 `<CR>` sends and `<Esc>` cancels. A confirm takes its own key again; any other key cancels.
 
-`q` while a push, pull or commit runs asks once; a second `q` closes the pane and leaves `dam` to
-finish. `<C-c>` stops it.
+`q` or `<Esc>` while a push, pull or commit runs asks once; `q` then closes the pane and leaves
+`dam` to finish. `<C-c>` stops it.
 
 - A blank commit message or new subject is refused in the pane.
 - The `l` picker offers every label in the showing view with the object's own marked, and stays
