@@ -7,7 +7,8 @@ use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::{App, Screen};
+use crate::app::{App, Overlay, Screen};
+use crate::legend::{self, Mode};
 use crate::theme::{color, ground};
 use herdr_damnit_domain::Slot;
 
@@ -22,8 +23,6 @@ use list::cut_to;
 
 pub const ELLIPSIS: &str = "\u{2026}";
 
-const HINTS: &str = "x X dd p s D l m a S e <CR> <Space> c P L v Tab";
-
 pub fn draw(frame: &mut Frame<'_>, app: &App) {
     let area = frame.area();
     frame.buffer_mut().set_style(area, ground());
@@ -31,7 +30,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
         refusal::draw(frame, frame.area(), said);
         return;
     }
-    let [header, body, hints] = Layout::vertical([
+    let [header, body, bottom] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Min(1),
         Constraint::Length(1),
@@ -48,7 +47,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     if let Some(open) = &app.overlay {
         overlay::draw(frame, body, open, app.config.icons());
     }
-    frame.render_widget(hint_line(app, hints.width), hints);
+    frame.render_widget(bottom_line(app, bottom.width), bottom);
 }
 
 #[cfg(test)]
@@ -103,15 +102,26 @@ fn open_counts(app: &App) -> String {
     counts.join("  ")
 }
 
-fn hint_line(app: &App, width: u16) -> Paragraph<'static> {
+fn bottom_line(app: &App, width: u16) -> Paragraph<'static> {
+    let width = width as usize;
     let (said, colour) = match app.message.is_empty() {
-        true => (HINTS, color(Slot::Dim1)),
-        false => (app.message.as_str(), color(Slot::Text)),
+        true => (legend::fitted(mode(app), width), color(Slot::Dim1)),
+        false => (cut_to(&app.message, width), color(Slot::Text)),
     };
-    Paragraph::new(Line::styled(
-        cut_to(said, width as usize),
-        Style::new().fg(colour),
-    ))
+    Paragraph::new(Line::styled(said, Style::new().fg(colour)))
+}
+
+fn mode(app: &App) -> Mode {
+    match (&app.overlay, app.screen) {
+        (Some(Overlay::View(_) | Overlay::Label(..) | Overlay::Path(..)), _) => Mode::Picker,
+        (Some(Overlay::Line(_)), _) => Mode::LineBox,
+        (Some(Overlay::Note(_)), _) => Mode::NoteBox,
+        (Some(Overlay::Confirm(confirm)), _) => Mode::Confirm(confirm.key),
+        (None, Screen::List) => Mode::List,
+        (None, Screen::Status) => Mode::Status,
+        (None, Screen::Done) => Mode::Done,
+        (None, Screen::Detail) => Mode::Detail,
+    }
 }
 
 #[cfg(test)]

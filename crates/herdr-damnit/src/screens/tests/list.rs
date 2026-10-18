@@ -3,7 +3,7 @@ use super::*;
 const PLAIN_FRAMES: [&str; 4] = ["|", "/", "-", "\\"];
 
 #[test]
-fn the_list_screen_draws_its_headings_marks_and_hint_line() {
+fn the_list_screen_draws_its_headings_marks_and_legend() {
     let harness = loaded();
     assert_eq!(
         render_to_text(&harness.app, 32, 8),
@@ -15,7 +15,7 @@ proj
     ! < 09-18 ship the pin bump…
   home
     > 10-02 water the plants
-x X dd p s D l m a S e <CR> <Sp…"
+j/k move  space stage  q close"
     );
 }
 
