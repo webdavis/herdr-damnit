@@ -11,7 +11,7 @@ const FAKE_DAM_KNOBS: [&str; 7] = [
 ];
 
 pub struct FakeEnv {
-    _held_for_the_whole_test: std::sync::MutexGuard<'static, ()>,
+    held_for_the_whole_test: EnvLock,
 }
 
 impl FakeEnv {
@@ -20,18 +20,24 @@ impl FakeEnv {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         for knob in FAKE_DAM_KNOBS {
-            // SAFETY: this test now holds the lock every change to the environment here takes, so
-            // no other test thread can be reading these settings while they are removed.
-            unsafe { std::env::remove_var(knob) };
+            remove_while_holding_the_env_lock(&held, knob);
         }
         Self {
-            _held_for_the_whole_test: held,
+            held_for_the_whole_test: held,
         }
     }
 
     pub fn set(&self, knob: &str, value: impl AsRef<std::ffi::OsStr>) {
-        // SAFETY: `self` holds the lock every change to the environment here takes, so no other
-        // test thread can be reading these settings while this one changes.
-        unsafe { std::env::set_var(knob, value) };
+        set_while_holding_the_env_lock(&self.held_for_the_whole_test, knob, value);
     }
+}
+
+type EnvLock = std::sync::MutexGuard<'static, ()>;
+
+fn remove_while_holding_the_env_lock(_: &EnvLock, knob: &str) {
+    unsafe { std::env::remove_var(knob) };
+}
+
+fn set_while_holding_the_env_lock(_: &EnvLock, knob: &str, value: impl AsRef<std::ffi::OsStr>) {
+    unsafe { std::env::set_var(knob, value) };
 }
