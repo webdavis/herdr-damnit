@@ -45,9 +45,8 @@ fn done_row(object: &Object, day: Option<Date>) -> Row {
             slot: Slot::Text,
         },
     };
-    Row::Object(herdr_damnit_domain::ObjectRow {
-        oid: object.oid.clone(),
-        subject: object.subject.clone(),
+    Row::Line {
+        oid: Some(object.oid.clone()),
         segments: vec![
             lead,
             Segment {
@@ -55,5 +54,5 @@ fn done_row(object: &Object, day: Option<Date>) -> Row {
                 slot: Slot::Text,
             },
         ],
-    })
+    }
 }

@@ -1,8 +1,6 @@
 use herdr_damnit_adapters::wire;
 use herdr_damnit_application::{Completion, Phase, Request, SyncKind};
-use herdr_damnit_domain::{
-    Failure, ObjectRow, Row, RowStyle, Stage, StatusRow, classify, message, rows,
-};
+use herdr_damnit_domain::{Failure, Row, RowStyle, Stage, StatusRow, classify, message, rows};
 
 use super::{App, Pending};
 use crate::overlay::{LineBox, LinePurpose, Overlay};
@@ -115,11 +113,10 @@ impl App {
 
 fn cursor_targets(status: &[StatusRow]) -> Vec<Row> {
     let target = |row: &StatusRow| match row {
-        StatusRow::Change { oid, text, .. } => Row::Object(ObjectRow {
-            oid: oid.clone(),
-            subject: text.clone(),
+        StatusRow::Change { oid, .. } => Row::Line {
+            oid: Some(oid.clone()),
             segments: Vec::new(),
-        }),
+        },
         StatusRow::Heading(text) | StatusRow::Line { text, .. } => Row::Heading(text.clone()),
     };
     status.iter().map(target).collect()

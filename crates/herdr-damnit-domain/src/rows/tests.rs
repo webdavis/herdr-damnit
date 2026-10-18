@@ -130,11 +130,11 @@ fn a_mark_is_painted_by_what_it_means_and_the_subject_is_plain_text() {
     }
 
     let rows = rows(&[object], &NoMarks, style());
-    let Row::Object(row) = &rows[1] else {
+    let Row::Line { segments, .. } = &rows[1] else {
         panic!("expected an object row");
     };
-    assert_eq!(row.segments[1].slot, Slot::Red);
-    assert_eq!(row.segments.last().expect("a segment").slot, Slot::Text);
+    assert_eq!(segments[1].slot, Slot::Red);
+    assert_eq!(segments.last().expect("a segment").slot, Slot::Text);
 }
 
 #[test]

@@ -40,7 +40,7 @@ fn item(row: &Row, width: u16) -> ListItem<'static> {
                 .fg(color(Slot::Blue))
                 .add_modifier(Modifier::BOLD),
         )),
-        Row::Object(object) => ListItem::new(Line::from(spans(&object.segments, width as usize))),
+        Row::Line { segments, .. } => ListItem::new(Line::from(spans(segments, width as usize))),
     }
 }
 
