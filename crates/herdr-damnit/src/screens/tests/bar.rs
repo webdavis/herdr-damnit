@@ -30,7 +30,7 @@ fn on_status() -> Harness {
     harness
         .app
         .submit(herdr_damnit_application::Request::Status);
-    harness.answer(0, 0, super::status::FULL_STATUS, "");
+    harness.answer(&["status"], 0, super::status::FULL_STATUS, "");
     harness.put_on(Screen::Status);
     harness.select("1a2b3c4");
     harness
@@ -40,8 +40,8 @@ fn on_done() -> Harness {
     let mut harness = loaded();
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Tab);
-    harness.answer(3, 0, super::done::WATERED, "");
-    harness.answer(4, 0, r#"{"commits":[]}"#, "");
+    harness.answer(&["ls", "done"], 0, super::done::WATERED, "");
+    harness.answer(&["log"], 0, r#"{"commits":[]}"#, "");
     harness.select("9a0b1c2");
     harness
 }

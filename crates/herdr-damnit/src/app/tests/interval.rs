@@ -67,8 +67,8 @@ fn a_task_due_today_turns_overdue_when_the_interval_re_reads_past_midnight() {
     let now = Instant::now();
     harness.app.tick(now);
     harness.app.tick(now + Duration::from_secs(300));
-    harness.answer(3, 0, DUE_ON_THE_TWENTIETH, "");
-    harness.answer(4, 0, CLEAN, "");
+    harness.answer(&["ls"], 0, DUE_ON_THE_TWENTIETH, "");
+    harness.answer(&["status"], 0, CLEAN, "");
     assert_eq!(
         render_to_text(&harness.app, 32, 4),
         "\
@@ -80,8 +80,8 @@ j/k move  space stage  q close"
 
     harness.turn_the_day_to("2026-09-21");
     harness.app.tick(now + Duration::from_secs(600));
-    harness.answer(5, 0, DUE_ON_THE_TWENTIETH, "");
-    harness.answer(6, 0, CLEAN, "");
+    harness.answer(&["ls"], 0, DUE_ON_THE_TWENTIETH, "");
+    harness.answer(&["status"], 0, CLEAN, "");
     assert_eq!(
         render_to_text(&harness.app, 32, 4),
         "\

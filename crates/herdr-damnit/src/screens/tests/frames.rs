@@ -62,7 +62,7 @@ fn on_status() -> Harness {
     harness
         .app
         .submit(herdr_damnit_application::Request::Status);
-    harness.answer(3, 0, super::status::FULL_STATUS, "");
+    harness.answer(&["status"], 0, super::status::FULL_STATUS, "");
     harness.put_on(Screen::Status);
     harness.select("9a0b1c2");
     harness
@@ -73,7 +73,7 @@ fn on_done() -> Harness {
     harness.put_on(Screen::Done);
     harness.app.submit(herdr_damnit_application::Request::Done);
     harness.answer(
-        0,
+        &["ls"],
         0,
         r#"{"objects":[
           {"oid":"aaa","kind":"task","subject":"older","task":{"done":true,"priority":4}},
@@ -82,7 +82,7 @@ fn on_done() -> Harness {
     );
     harness.app.submit(herdr_damnit_application::Request::Log);
     harness.answer(
-        1,
+        &["log"],
         0,
         r#"{"commits":[{"id":"c1","at":"2026-09-18T08:00:00Z","message":"one","changes":[
             {"oid":"aaa","op":"update","fields":["done"],"kind":"task","subject":"older",

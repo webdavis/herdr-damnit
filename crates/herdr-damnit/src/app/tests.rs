@@ -51,7 +51,7 @@ fn the_poll_window_narrows_while_a_job_is_in_flight() {
     assert_eq!(harness.app.poll_window(), Duration::from_millis(50));
 
     harness.answer(
-        3,
+        &["status"],
         0,
         r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#,
         "",
@@ -77,7 +77,7 @@ fn a_write_completion_re_reads_the_status_and_the_list_once_each_rather_than_pat
     let mut harness = loaded();
     harness.press(KeyCode::Char('A'));
     let before = harness.lines().len();
-    harness.answer(3, 0, "{}", "");
+    harness.answer(&["add"], 0, "{}", "");
 
     let mut asked = harness.lines()[before..].to_vec();
     asked.sort();
@@ -91,7 +91,7 @@ fn a_write_completion_once_done_was_opened_also_re_reads_the_done_list_and_the_l
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Char('A'));
     let before = harness.lines().len();
-    harness.answer(5, 0, "{}", "");
+    harness.answer(&["add"], 0, "{}", "");
 
     let mut asked = harness.lines()[before..].to_vec();
     asked.sort();
@@ -113,7 +113,7 @@ fn a_refusal_puts_dams_own_sentence_in_the_status_line_and_leaves_the_model_alon
     harness
         .app
         .submit(Request::Write(herdr_damnit_application::argv::stage_all()));
-    harness.answer(0, 2, "", "dam: no object matches \"zzzzzzz\"\n");
+    harness.answer(&["add"], 2, "", "dam: no object matches \"zzzzzzz\"\n");
 
     assert_eq!(harness.app.message(), "no object matches \"zzzzzzz\"");
     assert_eq!(harness.app.list().cursor().object_count(), before);
@@ -125,7 +125,7 @@ fn a_held_store_adds_the_retry_sentence() {
     harness
         .app
         .submit(Request::Write(herdr_damnit_application::argv::stage_all()));
-    harness.answer(0, 1, "", "dam: database is locked");
+    harness.answer(&["add"], 1, "", "dam: database is locked");
 
     assert_eq!(
         harness.app.message(),
@@ -137,7 +137,7 @@ fn a_held_store_adds_the_retry_sentence() {
 fn output_that_will_not_parse_is_reported_without_quoting_it() {
     let mut harness = loaded();
     harness.app.submit(Request::Status);
-    harness.answer(3, 0, "this is not json", "");
+    harness.answer(&["status"], 0, "this is not json", "");
 
     assert_eq!(
         harness.app.message(),

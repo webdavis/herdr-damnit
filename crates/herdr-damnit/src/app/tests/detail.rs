@@ -23,7 +23,7 @@ fn top_row(harness: &Harness) -> String {
 fn the_status_line_over_the_detail_names_it_and_counts_nothing() {
     let mut harness = loaded();
     harness.press(KeyCode::Enter);
-    harness.answer(3, 0, SHOWN, "");
+    harness.answer(&["show"], 0, SHOWN, "");
 
     assert_eq!(top_row(&harness), "dam  detail");
 }
@@ -34,7 +34,7 @@ fn the_interval_is_held_back_while_the_detail_is_open() {
     let now = Instant::now();
     harness.app.tick(now);
     harness.press(KeyCode::Enter);
-    harness.answer(3, 0, SHOWN, "");
+    harness.answer(&["show"], 0, SHOWN, "");
     let before = harness.lines().len();
 
     harness.app.tick(now + Duration::from_secs(900));
@@ -46,11 +46,11 @@ fn the_interval_is_held_back_while_the_detail_is_open() {
 fn escape_from_a_detail_opened_on_the_status_screen_returns_to_its_row() {
     let mut harness = loaded();
     harness.app.submit(Request::Status);
-    harness.answer(3, 0, ONE_STAGED, "");
+    harness.answer(&["status"], 0, ONE_STAGED, "");
     harness.press(KeyCode::Tab);
     harness.select("5d6e7f8");
     harness.press(KeyCode::Enter);
-    harness.answer(4, 0, SHOWN, "");
+    harness.answer(&["show"], 0, SHOWN, "");
     assert_eq!(top_row(&harness), "dam  detail");
 
     harness.press(KeyCode::Esc);
@@ -76,7 +76,7 @@ fn escape_from_a_detail_opened_on_the_status_screen_returns_to_its_row() {
 fn a_status_request_while_the_detail_is_open_shows_the_status_screen() {
     let mut harness = loaded();
     harness.press(KeyCode::Enter);
-    harness.answer(3, 0, SHOWN, "");
+    harness.answer(&["show"], 0, SHOWN, "");
     let path = std::env::temp_dir().join(format!("herdr-damnit-detail-{}", std::process::id()));
     std::fs::write(&path, crate::pane::STATUS_REQUEST).expect("the request is written");
     harness.app.watch_view_requests(path);

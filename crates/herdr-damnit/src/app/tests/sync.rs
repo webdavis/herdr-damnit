@@ -11,7 +11,7 @@ fn p_pushes_and_l_pulls() {
     let mut harness = harness();
     harness.press(KeyCode::Char('P'));
     assert_eq!(harness.last(), "push --json");
-    harness.answer(0, 0, r#"{"remotes":[]}"#, "");
+    harness.answer(&["push"], 0, r#"{"remotes":[]}"#, "");
 
     harness.press(KeyCode::Char('L'));
     assert_eq!(harness.last(), "pull --json");
@@ -36,7 +36,7 @@ fn a_push_with_a_failed_mutation_is_still_a_success_and_names_the_count() {
     let mut harness = harness();
     harness.press(KeyCode::Char('P'));
     harness.answer(
-        0,
+        &["push"],
         0,
         r#"{"remotes":[{"remote":"example","sent":3,"succeeded":2,"skipped":0,
           "failed":[{"oid":"9a0b1c2","why":"the service refused the write"}]}]}"#,
@@ -56,7 +56,7 @@ fn control_c_cancels_the_job_the_header_names() {
     harness.app.key(control('c'));
 
     assert_eq!(harness.cancels(), 1);
-    harness.answer(0, 3, "", "");
+    harness.answer(&["push"], 3, "", "");
     assert_eq!(harness.app.message(), "cancelled");
 }
 

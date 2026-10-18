@@ -8,7 +8,7 @@ const SHOW_WITH_EVERY_FIELD: &str = r##"{"oid":"5d6e7f8","kind":"task",
 fn shown(show: &str) -> crate::app::tests::Harness {
     let mut harness = loaded();
     harness.press(KeyCode::Enter);
-    harness.answer(3, 0, show, "");
+    harness.answer(&["show"], 0, show, "");
     harness
 }
 
@@ -21,7 +21,7 @@ fn enter_on_a_row_reads_that_object_and_opens_the_detail() {
         Some("show 5d6e7f8 --json")
     );
 
-    harness.answer(3, 0, SHOW_WITH_EVERY_FIELD, "");
+    harness.answer(&["show"], 0, SHOW_WITH_EVERY_FIELD, "");
 
     let drawn = render_to_text(&harness.app, 32, 20);
     assert!(drawn.starts_with("dam  detail"), "{drawn}");
@@ -137,7 +137,7 @@ fn escape_leaves_the_detail_for_the_screen_under_it_with_its_cursor_untouched() 
     let under = harness.app.list().cursor().selected_oid().cloned();
     harness.press(KeyCode::Enter);
     harness.answer(
-        3,
+        &["show"],
         0,
         r#"{"oid":"1a2b3c4","kind":"task","subject":"x","task":{"done":false,"priority":4}}"#,
         "",
@@ -161,7 +161,7 @@ fn enter_with_no_object_under_the_cursor_does_nothing_and_says_nothing() {
 fn a_show_dam_refuses_leaves_the_screen_where_it_was() {
     let mut harness = loaded();
     harness.press(KeyCode::Enter);
-    harness.answer(3, 2, "", "dam: no object matches \"5d6e7f8\"");
+    harness.answer(&["show"], 2, "", "dam: no object matches \"5d6e7f8\"");
 
     assert_eq!(harness.app.showing().screen(), Screen::List);
     assert_eq!(harness.app.message(), "no object matches \"5d6e7f8\"");

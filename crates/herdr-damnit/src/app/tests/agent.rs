@@ -74,7 +74,12 @@ fn a_refused_label_does_not_pretend_the_send_failed() {
     let mut harness = loaded();
     harness.press(KeyCode::Char('S'));
     send(&mut harness);
-    harness.answer(3, 2, "", "dam: \"handed-off\" clashes with \"handed-back\"");
+    harness.answer(
+        &["edit"],
+        2,
+        "",
+        "dam: \"handed-off\" clashes with \"handed-back\"",
+    );
 
     assert_eq!(
         harness.app.message(),
@@ -109,9 +114,9 @@ fn escape_throws_the_draft_away_and_sends_nothing() {
 fn shift_s_refuses_before_the_box_opens_when_the_workspace_has_no_agent_pane() {
     let mut harness = harness_with_listing(ascii_config(), Vec::new());
     crate::open::start(&mut harness.app);
-    harness.answer(0, 0, "dam 0.2.0\n", "");
-    harness.answer(1, 0, crate::screens::tests::CLEAN, "");
-    harness.answer(2, 0, crate::screens::tests::LS, "");
+    harness.answer(&["--version"], 0, "dam 0.2.0\n", "");
+    harness.answer(&["status"], 0, crate::screens::tests::CLEAN, "");
+    harness.answer(&["ls"], 0, crate::screens::tests::LS, "");
     harness.press(KeyCode::Char('S'));
 
     assert!(

@@ -100,7 +100,7 @@ fn a_new_object_is_named_in_the_status_line_by_the_oid_dam_made() {
     harness.type_line("file taxes");
     harness.press(KeyCode::Enter);
     harness.answer(
-        3,
+        &["new"],
         0,
         r#"{"oid":"7a8b9c0d1e","kind":"task","subject":"file taxes","task":{"done":false,"priority":4}}"#,
         "",

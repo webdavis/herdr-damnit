@@ -88,7 +88,7 @@ fn the_commit_box_leaves_the_staged_rows_in_sight() {
     harness
         .app
         .submit(herdr_damnit_application::Request::Status);
-    harness.answer(3, 0, STAGED, "");
+    harness.answer(&["status"], 0, STAGED, "");
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Char('c'));
     let drawn = rows(&harness, 20);

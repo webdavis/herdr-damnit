@@ -72,9 +72,9 @@ impl Harness {
         self.clock.started()
     }
 
-    pub(crate) fn answer(&mut self, which: usize, code: i32, stdout: &str, stderr: &str) {
+    pub(crate) fn answer(&mut self, starting_with: &[&str], code: i32, stdout: &str, stderr: &str) {
         self.dam.answer(
-            which,
+            starting_with,
             Finished {
                 code: Some(code),
                 stdout: stdout.to_string(),
