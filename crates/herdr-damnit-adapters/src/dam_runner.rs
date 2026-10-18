@@ -1,7 +1,7 @@
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::channel;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use herdr_damnit_application::{DamRunner, Finished, RunningJob, SpawnError};
 
@@ -49,10 +49,9 @@ impl ProcessDamRunner {
             });
         }
         let (sender, results) = channel();
-        let started = Instant::now();
         std::thread::spawn(move || {
             let _ = sender.send(wait_draining_both_pipes_so_a_full_one_cannot_deadlock(
-                child, started,
+                child,
             ));
         });
 
@@ -65,22 +64,17 @@ impl ProcessDamRunner {
     }
 }
 
-fn wait_draining_both_pipes_so_a_full_one_cannot_deadlock(
-    child: std::process::Child,
-    started: Instant,
-) -> Finished {
+fn wait_draining_both_pipes_so_a_full_one_cannot_deadlock(child: std::process::Child) -> Finished {
     match child.wait_with_output() {
         Ok(output) => Finished {
             code: output.status.code(),
             stdout: String::from_utf8_lossy(&output.stdout).to_string(),
             stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-            elapsed: started.elapsed(),
         },
         Err(error) => Finished {
             code: None,
             stdout: String::new(),
             stderr: error.to_string(),
-            elapsed: started.elapsed(),
         },
     }
 }

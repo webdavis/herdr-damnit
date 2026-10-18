@@ -48,9 +48,7 @@ pub(super) fn full() -> Stage {
             theirs: "theirs".to_string(),
         }],
         notices: vec![Notice {
-            kind: "removed_upstream".to_string(),
             oid: Some(Oid::new("7a8b9c0d1e2")),
-            remote: Some("todoist".to_string()),
             message: "removed on todoist: \"old task\" is kept here".to_string(),
         }],
     }
@@ -96,10 +94,6 @@ fn an_empty_section_is_left_out_entirely() {
         notices: Vec::new(),
         ..full()
     };
-    assert!(
-        !stage.is_clean(),
-        "a stage with staged changes is not clean"
-    );
     let drawn = drawn(&stage);
     assert_eq!(drawn.first().map(String::as_str), Some("Staged"));
     assert!(!drawn.iter().any(|line| line == "Working"), "{drawn:?}");
@@ -115,8 +109,6 @@ fn an_empty_stage_says_so_in_dams_own_words() {
         conflicts: Vec::new(),
         notices: Vec::new(),
     };
-    assert!(stage.is_clean());
-    assert!(!full().is_clean());
     assert_eq!(
         stage.rows(),
         vec![StatusRow::Line {
@@ -143,9 +135,7 @@ fn every_row_naming_an_oid_is_a_cursor_target() {
 fn the_unpushed_row_carries_its_mark_as_a_field_and_no_other_plain_row_carries_one() {
     let mut stage = full();
     stage.notices.push(Notice {
-        kind: "pull_failed".to_string(),
         oid: None,
-        remote: Some("todoist".to_string()),
         message: "pull failed on todoist: the service did not answer".to_string(),
     });
 
@@ -169,9 +159,7 @@ fn the_unpushed_row_carries_its_mark_as_a_field_and_no_other_plain_row_carries_o
 fn a_notice_about_no_object_in_particular_draws_its_message_alone() {
     let stage = Stage {
         notices: vec![Notice {
-            kind: "pull_failed".to_string(),
             oid: None,
-            remote: Some("todoist".to_string()),
             message: "pull failed on todoist: the service did not answer".to_string(),
         }],
         ..full()

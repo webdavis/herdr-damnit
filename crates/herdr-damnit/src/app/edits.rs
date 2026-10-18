@@ -1,5 +1,5 @@
 use herdr_damnit_application::{Side, argv};
-use herdr_damnit_domain::{DAM_RESTORE, Kind, Object, Oid};
+use herdr_damnit_domain::{Kind, Object, Oid};
 
 use super::{After, App};
 use crate::overlay::{Confirm, ConfirmPurpose, Overlay};
@@ -45,12 +45,7 @@ impl App {
         }
     }
 
-    /// The one key gated on a dam version: a confirm followed by a refusal is the worst shape a
-    /// destructive key can have, so without `restore` the key is simply not bound.
     pub(super) fn ask_discard(&mut self) -> After {
-        if !self.version.is_some_and(|found| found >= DAM_RESTORE) {
-            return After::Stay;
-        }
         let Some(change) = self
             .selected_oid()
             .and_then(|oid| self.stage.unstaged.iter().find(|change| &change.oid == oid))

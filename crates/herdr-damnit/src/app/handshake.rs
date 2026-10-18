@@ -8,8 +8,7 @@ impl App {
             JobKind::Version => {
                 match check_version(&completion.finished.stdout) {
                     Handshake::Refuse(said) => self.refusal = Some(said),
-                    Handshake::Ready { version, warning } => {
-                        self.version = Some(version);
+                    Handshake::Ready { warning, .. } => {
                         if let (Some(warning), false) = (warning, self.newer_dam_warning_shown) {
                             self.message = warning;
                             self.newer_dam_warning_shown = true;
