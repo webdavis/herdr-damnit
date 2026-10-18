@@ -9,6 +9,7 @@ mod header;
 mod interval;
 mod keys;
 mod non_blocking;
+mod pending;
 mod pickers;
 mod quit;
 mod staging;

@@ -7,7 +7,7 @@ mod request;
 
 pub use request::{Request, SyncKind};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct JobId(u64);
 
 #[derive(Debug)]

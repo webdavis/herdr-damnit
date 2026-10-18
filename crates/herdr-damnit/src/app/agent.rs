@@ -1,6 +1,6 @@
 use herdr_damnit_application::{HandOff, Request, agent_pane, hand_off};
 
-use super::{After, App};
+use super::{After, App, Pending};
 use crate::overlay::{NoteBox, Overlay};
 
 impl App {
@@ -35,7 +35,8 @@ impl App {
                 if let Some(write) = label_write
                     && let Some(id) = self.submit(Request::Write(write))
                 {
-                    self.labelled = Some((id, agent.name));
+                    self.pending
+                        .insert(id, Pending::Label { agent: agent.name });
                 }
             }
         }
