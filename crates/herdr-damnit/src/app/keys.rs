@@ -9,13 +9,10 @@ impl App {
     pub fn key(&mut self, key: KeyEvent) -> After {
         self.message.clear();
 
-        if self.refusal.is_some() {
+        if self.refusal().is_some() {
             return match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => After::Quit,
-                KeyCode::Char('R' | 'r') => {
-                    crate::open::start(self);
-                    After::Stay
-                }
+                KeyCode::Char('R' | 'r') => self.reread(),
                 _ => After::Stay,
             };
         }

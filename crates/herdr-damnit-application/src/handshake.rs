@@ -1,6 +1,11 @@
 use herdr_damnit_domain::{DamVersion, Verdict, parse_version, verdict};
 
-const STATUS_KEYS: [&str; 5] = ["staged", "unstaged", "conflicts", "notices", "unpushed"];
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Phase {
+    Starting,
+    Refused(String),
+    Ready,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Handshake {
@@ -32,34 +37,15 @@ pub fn check_version(version_output: &str) -> Handshake {
     }
 }
 
-pub fn check_status(status_output: &str) -> Result<(), String> {
-    let Ok(document) = serde_json::from_str::<serde_json::Value>(status_output) else {
-        return Err(herdr_damnit_domain::message(
-            &herdr_damnit_domain::Failure::Unreadable,
-        ));
-    };
-    for key in STATUS_KEYS {
-        if document.get(key).is_none() {
-            return Err(format!(
-                "dam status answered without {key:?}; this pane needs a dam built from upstream."
-            ));
-        }
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const STATUS: &str = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#;
-
     #[test]
-    fn a_dam_at_the_floor_with_the_five_keys_is_ready_and_quiet() {
+    fn a_dam_at_the_floor_is_ready_and_quiet() {
         let Handshake::Ready { version, warning } = check_version("dam 0.2.0\n") else {
             panic!("expected ready");
         };
-        assert_eq!(check_status(STATUS), Ok(()));
         assert_eq!(version.to_string(), "0.2.0");
         assert_eq!(warning, None);
     }
@@ -94,25 +80,6 @@ mod tests {
         assert_eq!(
             message,
             "dam did not print a version this pane could read; run cargo install damnit to update it."
-        );
-    }
-
-    #[test]
-    fn a_status_document_missing_a_key_names_it() {
-        let missing = r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[]}"#;
-        let message = check_status(missing).expect_err("expected a refusal");
-        assert_eq!(
-            message,
-            "dam status answered without \"unpushed\"; this pane needs a dam built from upstream."
-        );
-    }
-
-    #[test]
-    fn a_status_document_that_is_not_json_is_refused() {
-        let message = check_status("not json").expect_err("expected a refusal");
-        assert_eq!(
-            message,
-            "dam answered with something this pane could not read."
         );
     }
 }

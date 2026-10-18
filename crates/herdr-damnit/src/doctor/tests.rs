@@ -58,7 +58,7 @@ fn a_status_missing_a_key_is_reported_by_name() {
     )
     .expect_err("it refuses");
 
-    assert!(error.contains("\"unpushed\""), "{error}");
+    assert!(error.contains("missing field `unpushed`"), "{error}");
 }
 
 #[test]

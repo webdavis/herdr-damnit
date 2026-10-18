@@ -1,41 +1,35 @@
-use herdr_damnit_application::{Completion, Handshake, Request, check_status, check_version};
+use herdr_damnit_adapters::wire;
+use herdr_damnit_application::{Handshake, Phase, Request, check_version};
 
 use super::App;
 
 impl App {
-    pub(super) fn applied_as_handshake(&mut self, completion: &Completion) -> bool {
-        match completion.request {
-            Request::Version => {
-                match check_version(&completion.finished.stdout) {
-                    Handshake::Refuse(said) => self.refusal = Some(said),
-                    Handshake::Ready { warning, .. } => {
-                        if let (Some(warning), false) = (warning, self.newer_dam_warning_shown) {
-                            self.message = warning;
-                            self.newer_dam_warning_shown = true;
-                        }
-                        self.submit(Request::Status);
-                    }
+    pub(super) fn take_version(&mut self, stdout: &str) {
+        match check_version(stdout) {
+            Handshake::Refuse(said) => self.phase = Phase::Refused(said),
+            Handshake::Ready { warning, .. } => {
+                if let Some(warning) = warning {
+                    self.message = warning;
                 }
-                true
+                self.submit(Request::Status);
             }
-            Request::Status if !self.handshake_accepted => {
-                match check_status(&completion.finished.stdout) {
-                    Err(said) => self.refusal = Some(said),
-                    Ok(()) => {
-                        if let Err(said) = self.read_status(&completion.finished.stdout) {
-                            self.message = said;
-                            return true;
-                        }
-                        self.refusal = None;
-                        self.handshake_accepted = true;
-                        let query = self.views.current().query.clone();
-                        self.submit(Request::List(query));
-                        self.show(self.screen);
-                    }
-                }
-                true
-            }
-            _ => false,
         }
     }
+
+    pub(super) fn take_first_status(&mut self, stdout: &str) {
+        match wire::stage(stdout) {
+            Err(error) => self.phase = Phase::Refused(status_refusal(&error)),
+            Ok(stage) => {
+                self.take_stage(stage);
+                self.phase = Phase::Ready;
+                let query = self.views.current().query.clone();
+                self.submit(Request::List(query));
+                self.show(self.screen);
+            }
+        }
+    }
+}
+
+pub(crate) fn status_refusal(error: &str) -> String {
+    format!("dam status is missing what this pane reads: {error}")
 }

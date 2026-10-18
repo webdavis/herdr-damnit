@@ -57,7 +57,7 @@ fn a_dam_below_the_floor_draws_the_refusal_and_makes_no_further_call() {
     harness.answer(0, 0, "dam 0.0.9\n", "");
 
     assert_eq!(harness.lines(), vec!["--version".to_string()]);
-    assert!(harness.app.refusal.is_some());
+    assert!(harness.app.refusal().is_some());
     let drawn = crate::screens::render_to_text(&harness.app, 80, 6);
     assert!(
         drawn.contains("is older than the 0.2 this pane needs"),
@@ -96,7 +96,11 @@ fn a_status_document_missing_a_key_refuses_to_draw() {
         "",
     );
 
-    assert!(harness.app.refusal.is_some());
+    let refusal = harness.app.refusal().expect("a refusal");
+    assert!(
+        refusal.starts_with("dam status is missing what this pane reads: missing field `unpushed`"),
+        "{refusal}"
+    );
     assert_eq!(
         harness.lines().len(),
         2,

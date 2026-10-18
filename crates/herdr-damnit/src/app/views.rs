@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use herdr_damnit_adapters::state;
-use herdr_damnit_application::Request;
+use herdr_damnit_application::{Phase, Request};
 
 use super::{After, App, Screen};
 use crate::overlay::{Overlay, Picker, PickerEntry};
@@ -39,20 +39,21 @@ impl App {
 
     pub(crate) fn reread(&mut self) -> After {
         self.last_reread = None;
-        if !self.handshake_accepted {
-            crate::open::start(self);
-            return After::Stay;
-        }
-        self.read_list();
-        self.submit(Request::Status);
-        if self.done_opened {
-            self.read_done();
+        match self.phase {
+            Phase::Ready => {
+                self.read_list();
+                self.submit(Request::Status);
+                if self.done_opened {
+                    self.read_done();
+                }
+            }
+            _ => crate::open::start(self),
         }
         After::Stay
     }
 
     fn read_list(&mut self) {
-        if self.handshake_accepted {
+        if self.phase == Phase::Ready {
             let query = self.views.current().query.clone();
             self.submit(Request::List(query));
         }
@@ -96,7 +97,7 @@ impl App {
 
     pub(super) fn show(&mut self, screen: Screen) -> After {
         self.screen = screen;
-        if screen == Screen::Done && self.handshake_accepted && !self.done_opened {
+        if screen == Screen::Done && self.phase == Phase::Ready && !self.done_opened {
             self.done_opened = true;
             self.read_done();
         }
