@@ -62,7 +62,9 @@ pub fn classify(code: Option<i32>, error: Option<ErrorDocument>, fallback: &str)
 
 pub fn message(failure: &Failure) -> String {
     match failure {
-        Failure::Other(said) if said.is_empty() => "dam was killed before it answered.".to_string(),
+        Failure::Other(said) if one_line(said).is_empty() => {
+            "dam was killed before it answered.".to_string()
+        }
         Failure::Refused { said, .. } | Failure::Other(said) => one_line(said),
         Failure::Store(said) => {
             format!(
