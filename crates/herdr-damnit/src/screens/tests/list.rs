@@ -139,3 +139,34 @@ fn every_cell_outside_the_selected_row_is_painted_the_catppuccin_mocha_base() {
         }
     }
 }
+
+const FIVE_OPEN: &str = r#"{"objects":[
+  {"oid":"1a2b3c4","kind":"task","subject":"one","path":"p","task":{"done":false,"priority":4}},
+  {"oid":"2a2b3c4","kind":"task","subject":"two","path":"p","task":{"done":false,"priority":4}},
+  {"oid":"3a2b3c4","kind":"task","subject":"three","path":"p","task":{"done":false,"priority":4}},
+  {"oid":"4a2b3c4","kind":"task","subject":"four","path":"p","task":{"done":false,"priority":4}},
+  {"oid":"5a2b3c4","kind":"task","subject":"five","path":"p","task":{"done":false,"priority":4}}
+]}"#;
+
+const THREE_STAGED: &str = r#"{"staged":[
+  {"oid":"1a2b3c4","op":"update","subject":"one","fields":["subject"]},
+  {"oid":"2a2b3c4","op":"update","subject":"two","fields":["subject"]},
+  {"oid":"3a2b3c4","op":"update","subject":"three","fields":["subject"]}],
+  "unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#;
+
+#[test]
+fn the_list_header_counts_without_sigils_and_leaves_out_zeros() {
+    let mut harness = harness_with(ascii_config());
+    harness.app.submit(
+        herdr_damnit_application::JobKind::ReadStatus,
+        herdr_damnit_application::argv::status(),
+    );
+    harness.answer(0, 0, THREE_STAGED, "");
+    harness.app.submit(
+        herdr_damnit_application::JobKind::ReadList,
+        herdr_damnit_application::argv::list("!done"),
+    );
+    harness.answer(1, 0, FIVE_OPEN, "");
+
+    assert_eq!(counts(&harness.app), "5 open  3 staged");
+}

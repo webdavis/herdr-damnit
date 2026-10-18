@@ -10,7 +10,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::app::{App, Overlay, Screen};
 use crate::legend::{self, Mode};
 use crate::theme::{color, ground};
-use herdr_damnit_domain::Slot;
+use herdr_damnit_domain::{Slot, counted};
 
 mod detail;
 mod done;
@@ -92,14 +92,11 @@ fn counts(app: &App) -> String {
 }
 
 fn open_counts(app: &App) -> String {
-    let mut counts = vec![format!("{} open", app.list.object_count())];
-    if app.stage.staged_count() > 0 {
-        counts.push(format!("+{} staged", app.stage.staged_count()));
-    }
-    if app.stage.unpushed_commits() > 0 {
-        counts.push(format!("^{} unpushed", app.stage.unpushed_commits()));
-    }
-    counts.join("  ")
+    counted(&[
+        (app.list.object_count() as u64, "open"),
+        (app.stage.staged_count() as u64, "staged"),
+        (app.stage.unpushed_commits(), "unpushed"),
+    ])
 }
 
 fn bottom_line(app: &App, width: u16) -> Paragraph<'static> {

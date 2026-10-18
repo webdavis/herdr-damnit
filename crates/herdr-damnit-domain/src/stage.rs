@@ -82,14 +82,17 @@ impl Stage {
     }
 
     pub fn summary(&self) -> String {
-        format!(
-            "{} staged  {} changed  {} unpushed  {} notice{}",
-            self.staged.len(),
-            self.unstaged.len(),
-            self.unpushed_commits(),
-            self.notices.len(),
-            if self.notices.len() == 1 { "" } else { "s" }
-        )
+        let notices = if self.notices.len() == 1 {
+            "notice"
+        } else {
+            "notices"
+        };
+        counted(&[
+            (self.staged.len() as u64, "staged"),
+            (self.unstaged.len() as u64, "changed"),
+            (self.unpushed_commits(), "unpushed"),
+            (self.notices.len() as u64, notices),
+        ])
     }
 
     pub fn rows(&self) -> Vec<StatusRow> {
@@ -135,6 +138,15 @@ impl Stage {
         }
         rows
     }
+}
+
+pub fn counted(counts: &[(u64, &str)]) -> String {
+    counts
+        .iter()
+        .filter(|(count, _)| *count > 0)
+        .map(|(count, what)| format!("{count} {what}"))
+        .collect::<Vec<_>>()
+        .join("  ")
 }
 
 fn newlines_as_spaces(value: &str) -> String {

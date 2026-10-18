@@ -126,7 +126,7 @@ a box is open, or a screen other than the List is showing, so a half-typed line 
 away.
 
 A write made with the network down is an ordinary `dam` commit: it waits as an unpushed commit,
-counted on the status line as `^1 unpushed`, until a push reaches the remote. A failed mutation in
+counted on the status line as `1 unpushed`, until a push reaches the remote. A failed mutation in
 a push stays in the Notices section of the Status screen with `dam`'s reason until it is dealt with.
 
 Every message the pane has for the operator, `dam`'s own refusals included, takes the bottom line

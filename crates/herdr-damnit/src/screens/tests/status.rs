@@ -86,3 +86,16 @@ fn a_clean_status_screen_says_so_in_dams_own_words() {
         render_to_text(&harness.app, 32, 6)
     );
 }
+
+#[test]
+fn a_clean_status_header_shows_no_counts() {
+    let mut harness = harness_with(ascii_config());
+    harness.app.submit(
+        herdr_damnit_application::JobKind::ReadStatus,
+        herdr_damnit_application::argv::status(),
+    );
+    harness.answer(0, 0, CLEAN, "");
+    harness.app.screen = Screen::Status;
+
+    assert_eq!(counts(&harness.app), "");
+}
