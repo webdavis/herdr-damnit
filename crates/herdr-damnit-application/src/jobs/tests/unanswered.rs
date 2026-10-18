@@ -16,13 +16,15 @@ fn cancelling_reaches_the_exclusive_job_before_any_read_that_started_earlier() {
 }
 
 #[test]
-fn a_job_whose_thread_died_without_answering_leaves_the_table_rather_than_blocking_later_ones() {
+fn a_job_whose_thread_died_without_answering_completes_with_no_code_and_leaves_the_table() {
     let dam = FakeDam::default();
     let mut jobs = jobs_over(&dam);
     jobs.submit(Request::Sync(SyncKind::Push, argv::push()));
     dam.hang_up();
 
-    assert!(jobs.drain().is_empty());
+    let completions = jobs.drain();
+    assert_eq!(completions.len(), 1);
+    assert_eq!(completions[0].finished.code, None);
     assert_eq!(jobs.in_flight(), 0);
     assert_eq!(jobs.exclusive(), None);
 }
