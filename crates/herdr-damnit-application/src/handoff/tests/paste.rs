@@ -2,10 +2,10 @@ use super::*;
 
 #[test]
 fn the_brief_is_one_bracketed_paste_and_carries_no_return_so_the_operator_submits_it() {
-    let herdr = FakeHerdr::new();
-    hand_off(&herdr, &here(), &object(), "start here", "");
+    let agents = FakeAgents::new();
+    hand_off(&agents, &here(), &object(), "start here", "");
 
-    let sent = herdr.sent_text();
+    let sent = agents.sent_text();
     assert!(sent.starts_with("\u{1b}[200~"), "{sent:?}");
     assert!(sent.ends_with("\u{1b}[201~"), "{sent:?}");
     assert!(sent.contains("dam task: file taxes"), "{sent:?}");

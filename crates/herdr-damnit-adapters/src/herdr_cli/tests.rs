@@ -1,3 +1,5 @@
+use herdr_damnit_application::ListedAgent;
+
 use super::*;
 
 fn opening(placement: PanePlacement, neighbor: &str) -> PaneOpen {
@@ -71,3 +73,58 @@ fn the_resize_outcome_is_read_from_its_own_changed_flag() {
     assert!(!resize_changed(unchanged));
     assert!(!resize_changed("{}"));
 }
+
+#[test]
+fn the_agent_verbs_list_send_the_text_as_one_word_and_focus_the_pane() {
+    assert_eq!(agents::AGENT_LIST.join(" "), "agent list");
+    assert_eq!(
+        agents::send_text_args("w1:p2", "a brief\nnote: two words"),
+        ["pane", "send-text", "w1:p2", "a brief\nnote: two words"]
+    );
+    assert_eq!(
+        agents::focus_agent_args("w1:p2"),
+        ["agent", "focus", "w1:p2"]
+    );
+}
+
+#[test]
+fn an_agent_listing_names_each_pane_its_workspace_kind_name_and_profile() {
+    let listed = agents::agents_of_listing(AGENT_LIST_ANSWER).expect("a listing");
+
+    assert_eq!(
+        listed,
+        vec![
+            ListedAgent {
+                pane: "w1:p1".to_string(),
+                workspace: "w1".to_string(),
+                kind: None,
+                name: None,
+                profile: None,
+            },
+            ListedAgent {
+                pane: "w1:p2".to_string(),
+                workspace: "w1".to_string(),
+                kind: Some("claude".to_string()),
+                name: Some("planner".to_string()),
+                profile: Some("work".to_string()),
+            },
+        ]
+    );
+}
+
+#[test]
+fn a_malformed_agent_listing_is_an_error_that_names_the_verb() {
+    assert_eq!(
+        agents::agents_of_listing("not json"),
+        Err("herdr agent list: expected ident at line 1 column 2".to_string())
+    );
+    assert_eq!(
+        agents::agents_of_listing("{}"),
+        Err("herdr agent list: missing field `result` at line 1 column 2".to_string())
+    );
+}
+
+const AGENT_LIST_ANSWER: &str = r#"{"result":{"agents":[
+  {"pane_id":"w1:p1","workspace_id":"w1","agent":null},
+  {"pane_id":"w1:p2","workspace_id":"w1","agent":"claude","name":"planner","display_agent":"work"}
+]}}"#;

@@ -3,6 +3,8 @@ use std::process::Command;
 
 use herdr_damnit_application::{PaneFocus, PaneOpen, PanePlacement, PluginPanes, SplitSide};
 
+mod agents;
+
 pub struct CliHerdr {
     binary: String,
     plugin: String,
@@ -39,12 +41,6 @@ impl CliHerdr {
         let output = self.run(&["pane", "layout", "--pane", pane])?;
         ratio_of_layout(&output)
             .ok_or_else(|| format!("herdr pane layout named no ratio for {pane}"))
-    }
-}
-
-impl herdr_damnit_application::Herdr for CliHerdr {
-    fn call(&self, args: &[&str]) -> Result<String, String> {
-        self.run(args)
     }
 }
 

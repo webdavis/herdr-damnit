@@ -1,8 +1,6 @@
-use herdr_damnit_domain::{Object, brief};
-use serde::Deserialize;
-
-use crate::Herdr;
 use crate::argv;
+use crate::{AgentPanes, ListedAgent};
+use herdr_damnit_domain::{Object, brief};
 
 const PASTE_START: &str = "\x1b[200~";
 const PASTE_END: &str = "\x1b[201~";
@@ -28,82 +26,52 @@ pub enum HandOff {
     Refused(String),
 }
 
-#[derive(Deserialize)]
-struct Listed {
-    pane_id: String,
-    workspace_id: String,
-    #[serde(default)]
-    agent: Option<String>,
-    #[serde(default)]
-    name: Option<String>,
-    #[serde(default)]
-    display_agent: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct Listing {
-    result: Agents,
-}
-
-#[derive(Deserialize)]
-struct Agents {
-    agents: Vec<Listed>,
-}
-
 pub fn hand_off(
-    herdr: &dyn Herdr,
+    panes: &dyn AgentPanes,
     here: &Workspace,
     object: &Object,
     note: &str,
     handoff_label: &str,
 ) -> HandOff {
-    let agent = match agent_pane(herdr, here) {
+    let agent = match agent_pane(panes, here) {
         Ok(agent) => agent,
         Err(error) => return HandOff::Refused(error),
     };
     let text = as_one_bracketed_paste(&brief(object, note));
-    if herdr
-        .call(&["pane", "send-text", &agent.pane, &text])
-        .is_err()
-    {
+    if panes.send_text(&agent.pane, &text).is_err() {
         return HandOff::Refused(format!("herdr refused the send to {}.", agent.pane));
     }
-    let _ = herdr.call(&["agent", "focus", &agent.pane]);
+    let _ = panes.focus_agent(&agent.pane);
     let label_write =
         (!handoff_label.trim().is_empty()).then(|| argv::label(&object.oid, handoff_label.trim()));
     HandOff::Sent { agent, label_write }
 }
 
-pub fn agent_pane(herdr: &dyn Herdr, here: &Workspace) -> Result<Agent, String> {
+pub fn agent_pane(panes: &dyn AgentPanes, here: &Workspace) -> Result<Agent, String> {
     let Some(workspace) = here.workspace.as_deref() else {
         return Err("no workspace context: run this pane inside herdr.".to_string());
     };
-    let listing = herdr.call(&["agent", "list"])?;
-    first_listed_agent_pane_in(&listing, workspace, &here.me)
+    first_listed_agent_pane_in(&panes.agents()?, workspace, &here.me)
 }
 
-fn first_listed_agent_pane_in(listing: &str, workspace: &str, me: &str) -> Result<Agent, String> {
-    let listing: Listing =
-        serde_json::from_str(listing).map_err(|error| format!("herdr agent list: {error}"))?;
-    listing
-        .agents()
-        .filter(|listed| listed.agent.is_some() && listed.pane_id != me)
-        .find(|listed| listed.workspace_id == workspace)
+fn first_listed_agent_pane_in(
+    agents: &[ListedAgent],
+    workspace: &str,
+    me: &str,
+) -> Result<Agent, String> {
+    agents
+        .iter()
+        .filter(|listed| listed.kind.is_some() && listed.pane != me)
+        .find(|listed| listed.workspace == workspace)
         .map(|listed| Agent {
             name: name_then_agent_kind_then_auth_profile(listed),
-            pane: listed.pane_id.clone(),
+            pane: listed.pane.clone(),
         })
         .ok_or_else(|| "no agent pane in this workspace.".to_string())
 }
 
-impl Listing {
-    fn agents(&self) -> impl Iterator<Item = &Listed> {
-        self.result.agents.iter()
-    }
-}
-
-fn name_then_agent_kind_then_auth_profile(listed: &Listed) -> String {
-    [&listed.name, &listed.agent, &listed.display_agent]
+fn name_then_agent_kind_then_auth_profile(listed: &ListedAgent) -> String {
+    [&listed.name, &listed.kind, &listed.profile]
         .into_iter()
         .flatten()
         .find(|name| !name.is_empty())

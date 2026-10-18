@@ -20,8 +20,19 @@ pub trait DamRunner: Send + Sync {
     fn spawn(&self, argv: &[String]) -> Result<RunningJob, SpawnError>;
 }
 
-pub trait Herdr: Send + Sync {
-    fn call(&self, args: &[&str]) -> Result<String, String>;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ListedAgent {
+    pub pane: String,
+    pub workspace: String,
+    pub kind: Option<String>,
+    pub name: Option<String>,
+    pub profile: Option<String>,
+}
+
+pub trait AgentPanes {
+    fn agents(&self) -> Result<Vec<ListedAgent>, String>;
+    fn send_text(&self, pane: &str, text: &str) -> Result<(), String>;
+    fn focus_agent(&self, pane: &str) -> Result<(), String>;
 }
 
 pub trait Clock: Send + Sync {
