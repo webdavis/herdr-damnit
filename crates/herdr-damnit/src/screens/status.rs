@@ -6,7 +6,7 @@ use ratatui::widgets::{ListItem, ListState};
 
 use crate::app::App;
 use crate::screens::list::spans;
-use crate::theme::color;
+use crate::theme::{bar, color};
 use herdr_damnit_domain::{Mark, Segment, Slot, StatusRow};
 
 const MARKED_ROW_INDENT: &str = "  ";
@@ -21,7 +21,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
                 .iter()
                 .map(|row| item(row, app.config.icons(), area.width)),
         )
-        .highlight_style(Style::new().add_modifier(Modifier::REVERSED)),
+        .highlight_style(bar()),
         area,
         &mut state,
     );

@@ -7,7 +7,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::app::App;
 use crate::screens::ELLIPSIS;
-use crate::theme::color;
+use crate::theme::{bar, color};
 use herdr_damnit_domain::{Row, Segment, Slot};
 
 const EMPTY: &str = "nothing in this view";
@@ -26,7 +26,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let mut state = ListState::default().with_selected(Some(app.list.selected()));
     frame.render_stateful_widget(
         ratatui::widgets::List::new(app.list.rows().iter().map(|row| item(row, area.width)))
-            .highlight_style(Style::new().add_modifier(Modifier::REVERSED)),
+            .highlight_style(bar()),
         area,
         &mut state,
     );

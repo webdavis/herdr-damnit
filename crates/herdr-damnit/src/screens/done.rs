@@ -6,7 +6,7 @@ use ratatui::widgets::{ListItem, ListState, Paragraph};
 
 use crate::app::App;
 use crate::screens::list::spans;
-use crate::theme::color;
+use crate::theme::{bar, color};
 use herdr_damnit_domain::{Row, Slot};
 
 const EMPTY: &str = "nothing completed yet";
@@ -23,7 +23,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let mut state = ListState::default().with_selected(Some(app.done.selected()));
     frame.render_stateful_widget(
         ratatui::widgets::List::new(rows.iter().map(|row| item(row, area.width)))
-            .highlight_style(Style::new().add_modifier(Modifier::REVERSED)),
+            .highlight_style(bar()),
         area,
         &mut state,
     );

@@ -1,3 +1,4 @@
+mod bar;
 mod detail;
 mod done;
 mod list;

@@ -1,6 +1,6 @@
 use super::*;
 
-const FULL_STATUS: &str = r#"{
+pub(super) const FULL_STATUS: &str = r#"{
   "staged":[
     {"oid":"1a2b3c4","op":"create","before":null,
      "after":{"oid":"1a2b3c4","kind":"task","subject":"ship the pin bump"}}],

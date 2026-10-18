@@ -20,3 +20,7 @@ pub const fn color(slot: Slot) -> Color {
 pub fn ground() -> Style {
     Style::new().fg(color(Slot::Text)).bg(BASE)
 }
+
+pub fn bar() -> Style {
+    Style::new().bg(Color::Rgb(0x36, 0x36, 0x46))
+}
