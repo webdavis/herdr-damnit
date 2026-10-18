@@ -50,11 +50,54 @@ fn the_opened_pane_id_is_read_from_the_open_envelope() {
     assert_eq!(pane_id_of_open("{}"), None);
 }
 
+const FAKE_HERDR_AT_A_HALF_SPLIT: &str = r#"#!/bin/sh
+case "$2" in
+  layout) echo '{"result":{"layout":{"splits":[{"ratio":0.5}]}}}' ;;
+  resize) echo "$*" >> "$0.log"; echo '{"result":{"resize":{"changed":true}}}' ;;
+esac
+"#;
+
+fn resize_argv_sent_for_width(name: &str, side: SplitSide, width: f32) -> String {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!("herdr-damnit-{name}-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("a scratch dir");
+    let script = dir.join("herdr");
+    std::fs::write(&script, FAKE_HERDR_AT_A_HALF_SPLIT).expect("the fake herdr");
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).expect("executable");
+    let herdr = CliHerdr::new(
+        script.to_string_lossy().to_string(),
+        "herdr-damnit".to_string(),
+    );
+
+    let changed = herdr.resize("w:p1", side, 1.0 - width);
+
+    let sent = std::fs::read_to_string(dir.join("herdr.log")).expect("one resize call");
+    std::fs::remove_dir_all(&dir).expect("the scratch dir removed");
+    assert_eq!(changed, Ok(true));
+    sent.trim().to_string()
+}
+
 #[test]
-fn a_resize_carries_the_pane_the_direction_and_the_rendered_amount() {
+fn a_width_above_half_moves_the_divider_toward_the_calling_pane() {
     assert_eq!(
-        resize_args("w:p1", "right", 0.2).join(" "),
-        "pane resize --pane w:p1 --direction right --amount 0.2"
+        resize_argv_sent_for_width("wide-right", SplitSide::Right, 0.7),
+        "pane resize --pane w:p1 --direction left --amount 0.19999999"
+    );
+    assert_eq!(
+        resize_argv_sent_for_width("wide-down", SplitSide::Down, 0.7),
+        "pane resize --pane w:p1 --direction up --amount 0.19999999"
+    );
+}
+
+#[test]
+fn a_width_below_half_moves_the_divider_away_from_the_calling_pane() {
+    assert_eq!(
+        resize_argv_sent_for_width("narrow-right", SplitSide::Right, 0.3),
+        "pane resize --pane w:p1 --direction right --amount 0.19999999"
+    );
+    assert_eq!(
+        resize_argv_sent_for_width("narrow-down", SplitSide::Down, 0.3),
+        "pane resize --pane w:p1 --direction down --amount 0.19999999"
     );
 }
 
