@@ -33,7 +33,7 @@ fn a_refused_completion_says_dams_own_sentence_and_changes_nothing() {
     let before = harness.app.list().cursor().object_count();
     harness.press(KeyCode::Char('x'));
     let said = "5d6e7f8 has 2 open children; use --force to complete them too";
-    harness.answer(3, 4, "", &refusal("blocked", said));
+    harness.answer(&["done"], 4, "", &refusal("blocked", said));
 
     assert_eq!(harness.app.message(), said);
     assert_eq!(harness.app.list().cursor().object_count(), before);
@@ -153,7 +153,7 @@ fn a_date_dam_cannot_read_comes_back_with_the_line_still_in_the_box() {
     harness.press(KeyCode::Enter);
     let said = "cannot read \\\"next mon\\\" as a date";
     harness.answer(
-        3,
+        &["edit"],
         1,
         "",
         &format!(r#"{{"error":{{"kind":"parse","rule":null,"message":"{said}","oids":[]}}}}"#),
@@ -169,7 +169,7 @@ fn a_held_store_does_not_bring_the_box_back_so_r_reaches_the_retry() {
     harness.press(KeyCode::Char('s'));
     harness.type_line("today");
     harness.press(KeyCode::Enter);
-    harness.answer(3, 1, "", "dam: database is locked");
+    harness.answer(&["edit"], 1, "", "dam: database is locked");
 
     assert!(harness.app.showing().overlay().is_none());
 }
@@ -179,7 +179,7 @@ fn a_refused_commit_brings_the_box_back_with_its_message() {
     let mut harness = loaded();
     harness.app.submit(Request::Status);
     harness.answer(
-        3,
+        &["status"],
         0,
         r#"{"staged":[{"oid":"5d6e7f8","op":"update","subject":"x","fields":[]}],
           "unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#,
@@ -188,7 +188,12 @@ fn a_refused_commit_brings_the_box_back_with_its_message() {
     harness.press(KeyCode::Char('c'));
     harness.type_line("ship it");
     harness.press(KeyCode::Enter);
-    harness.answer(4, 4, "", &refusal("nothing_to_commit", "nothing to commit"));
+    harness.answer(
+        &["commit"],
+        4,
+        "",
+        &refusal("nothing_to_commit", "nothing to commit"),
+    );
 
     assert_eq!(line_text(&harness).as_deref(), Some("ship it"));
 }

@@ -28,7 +28,7 @@ fn a_refused_date_brings_back_its_own_box_while_a_later_one_is_in_flight() {
     set_due(&mut harness, "1a2b3c4", "next mon");
     set_due(&mut harness, "5d6e7f8", "today");
 
-    harness.answer(3, 1, "", UNREADABLE_DATE);
+    harness.answer(&["edit", "1a2b3c4"], 1, "", UNREADABLE_DATE);
 
     let Some(Overlay::Line(line)) = harness.app.showing().overlay() else {
         panic!("the refused box did not come back");
@@ -42,7 +42,12 @@ fn a_refused_label_names_its_agent_while_a_later_hand_off_is_in_flight() {
     hand_off(&mut harness);
     hand_off(&mut harness);
 
-    harness.answer(3, 2, "", "dam: \"handed-off\" clashes with \"handed-back\"");
+    harness.answer(
+        &["edit"],
+        2,
+        "",
+        "dam: \"handed-off\" clashes with \"handed-back\"",
+    );
 
     assert_eq!(
         harness.app.message(),

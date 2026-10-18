@@ -3,7 +3,7 @@ use herdr_damnit_domain::{Oid, Priority};
 pub const JSON: &str = "--json";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Side {
+pub enum Toward {
     Ours,
     Theirs,
 }
@@ -119,10 +119,10 @@ pub fn edit_in_editor(oid: &Oid) -> Vec<String> {
     words(&["edit", oid.as_str(), "-e"])
 }
 
-pub fn resolve(oid: &Oid, side: Side) -> Vec<String> {
-    let word = match side {
-        Side::Ours => "--ours",
-        Side::Theirs => "--theirs",
+pub fn resolve(oid: &Oid, toward: Toward) -> Vec<String> {
+    let word = match toward {
+        Toward::Ours => "--ours",
+        Toward::Theirs => "--theirs",
     };
     words(&["resolve", oid.as_str(), word, JSON])
 }

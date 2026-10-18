@@ -14,7 +14,7 @@ fn working(fields: &str) -> String {
 fn with_working_change(fields: &str) -> Harness {
     let mut harness = loaded();
     harness.app.submit(Request::Status);
-    harness.answer(3, 0, &working(fields), "");
+    harness.answer(&["status"], 0, &working(fields), "");
     harness.select("1a2b3c4");
     harness
 }

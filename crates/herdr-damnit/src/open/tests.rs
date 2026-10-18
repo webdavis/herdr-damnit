@@ -17,8 +17,8 @@ fn unwrapped(drawn: &str) -> String {
 fn opening_asks_for_the_version_and_the_status_before_anything_else() {
     let mut harness = harness();
     start(&mut harness.app);
-    harness.answer(0, 0, "dam 0.2.0\n", "");
-    harness.answer(1, 0, CLEAN, "");
+    harness.answer(&["--version"], 0, "dam 0.2.0\n", "");
+    harness.answer(&["status"], 0, CLEAN, "");
 
     let lines = harness.lines();
     assert_eq!(lines[0], "--version");
@@ -35,8 +35,8 @@ fn changing_screens_during_the_handshake_defers_their_reads_until_acceptance() {
 
     assert_eq!(harness.lines(), vec!["--version".to_string()]);
 
-    harness.answer(0, 0, "dam 0.2.0\n", "");
-    harness.answer(1, 0, CLEAN, "");
+    harness.answer(&["--version"], 0, "dam 0.2.0\n", "");
+    harness.answer(&["status"], 0, CLEAN, "");
 
     assert_eq!(
         harness.lines(),
@@ -54,7 +54,7 @@ fn changing_screens_during_the_handshake_defers_their_reads_until_acceptance() {
 fn a_dam_below_the_floor_draws_the_refusal_and_makes_no_further_call() {
     let mut harness = harness();
     start(&mut harness.app);
-    harness.answer(0, 0, "dam 0.0.9\n", "");
+    harness.answer(&["--version"], 0, "dam 0.0.9\n", "");
 
     assert_eq!(harness.lines(), vec!["--version".to_string()]);
     assert!(harness.app.refusal().is_some());
@@ -69,14 +69,14 @@ fn a_dam_below_the_floor_draws_the_refusal_and_makes_no_further_call() {
 fn a_newer_dam_warns_once_rather_than_once_per_read() {
     let mut harness = harness();
     start(&mut harness.app);
-    harness.answer(0, 0, "dam 0.4.0\n", "");
-    harness.answer(1, 0, CLEAN, "");
+    harness.answer(&["--version"], 0, "dam 0.4.0\n", "");
+    harness.answer(&["status"], 0, CLEAN, "");
     let warned = harness.app.message().to_string();
     assert!(warned.contains("newer than this pane knows"), "{warned}");
 
     harness.app.say(String::new());
     harness.app.submit(Request::Status);
-    harness.answer(3, 0, CLEAN, "");
+    harness.answer(&["status"], 0, CLEAN, "");
 
     assert_eq!(
         harness.app.message(),
@@ -89,9 +89,9 @@ fn a_newer_dam_warns_once_rather_than_once_per_read() {
 fn a_status_document_missing_a_key_refuses_to_draw() {
     let mut harness = harness();
     start(&mut harness.app);
-    harness.answer(0, 0, "dam 0.2.0\n", "");
+    harness.answer(&["--version"], 0, "dam 0.2.0\n", "");
     harness.answer(
-        1,
+        &["status"],
         0,
         r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[]}"#,
         "",
@@ -112,8 +112,8 @@ fn a_status_document_missing_a_key_refuses_to_draw() {
 fn a_status_document_that_is_not_json_is_refused_in_plain_words() {
     let mut harness = harness();
     start(&mut harness.app);
-    harness.answer(0, 0, "dam 0.2.0\n", "");
-    harness.answer(1, 0, "not json", "");
+    harness.answer(&["--version"], 0, "dam 0.2.0\n", "");
+    harness.answer(&["status"], 0, "not json", "");
 
     assert_eq!(
         harness.app.refusal(),
@@ -147,9 +147,9 @@ fn r_on_the_missing_dam_refusal_asks_for_the_version_again_and_a_dam_found_now_l
     harness.press(KeyCode::Char('R'));
     assert_eq!(harness.lines(), vec!["--version".to_string()]);
 
-    harness.answer(0, 0, "dam 0.2.0\n", "");
-    harness.answer(1, 0, CLEAN, "");
-    harness.answer(2, 0, LS, "");
+    harness.answer(&["--version"], 0, "dam 0.2.0\n", "");
+    harness.answer(&["status"], 0, CLEAN, "");
+    harness.answer(&["ls"], 0, LS, "");
 
     let drawn = crate::screens::render_to_text(&harness.app, 80, 6);
     assert!(drawn.contains("3 open"), "{drawn}");

@@ -31,8 +31,8 @@ impl Harness {
         self.jobs.submit(request)
     }
 
-    pub(super) fn answer(&self, which: usize, finished: Finished) {
-        self.dam.answer(which, finished);
+    pub(super) fn answer(&self, starting_with: &[&str], finished: Finished) {
+        self.dam.answer(starting_with, finished);
     }
 
     pub(super) fn lines(&self) -> Vec<String> {

@@ -25,7 +25,7 @@ fn an_empty_list_says_so_rather_than_drawing_nothing() {
     harness
         .app
         .submit(herdr_damnit_application::Request::List("!done".to_string()));
-    harness.answer(0, 0, r#"{"objects":[]}"#, "");
+    harness.answer(&["ls"], 0, r#"{"objects":[]}"#, "");
 
     assert!(
         render_to_text(&harness.app, 32, 6).contains("nothing in this view"),
@@ -41,7 +41,7 @@ fn every_mark_at_once_still_fits_one_line_and_cuts_the_subject() {
         .app
         .submit(herdr_damnit_application::Request::Status);
     harness.answer(
-        3,
+        &["status"],
         0,
         r#"{"staged":[{"oid":"1a2b3c4","op":"update","subject":"x","fields":["subject"]}],
           "unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#,
@@ -51,7 +51,7 @@ fn every_mark_at_once_still_fits_one_line_and_cuts_the_subject() {
         .app
         .submit(herdr_damnit_application::Request::List("!done".to_string()));
     harness.answer(
-        4,
+        &["ls"],
         0,
         r#"{"objects":[{"oid":"1a2b3c4","kind":"task",
           "subject":"a subject long enough to need cutting","path":"p",
@@ -157,11 +157,11 @@ fn the_list_header_counts_without_sigils_and_leaves_out_zeros() {
     harness
         .app
         .submit(herdr_damnit_application::Request::Status);
-    harness.answer(3, 0, THREE_STAGED, "");
+    harness.answer(&["status"], 0, THREE_STAGED, "");
     harness
         .app
         .submit(herdr_damnit_application::Request::List("!done".to_string()));
-    harness.answer(4, 0, FIVE_OPEN, "");
+    harness.answer(&["ls"], 0, FIVE_OPEN, "");
 
     assert_eq!(counts(&harness.app), "5 open  3 staged");
 }

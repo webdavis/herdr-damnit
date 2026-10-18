@@ -3,10 +3,12 @@ use std::sync::{Arc, Mutex};
 
 use crate::{DamRunner, Finished, RunningJob, SpawnError};
 
+type UnansweredJob = (Vec<String>, Sender<Finished>);
+
 #[derive(Clone, Default)]
 pub struct FakeDam {
     spawned: Arc<Mutex<Vec<Vec<String>>>>,
-    answers: Arc<Mutex<Vec<Sender<Finished>>>>,
+    unanswered: Arc<Mutex<Vec<UnansweredJob>>>,
     cancelled: Arc<Mutex<Vec<usize>>>,
     refusal: Arc<Mutex<Option<SpawnError>>>,
 }
@@ -20,12 +22,20 @@ impl FakeDam {
         *self.refusal.lock().expect("the refusal") = None;
     }
 
-    pub fn answer(&self, which: usize, finished: Finished) {
-        let _ = self.answers.lock().expect("the answers")[which].send(finished);
+    pub fn answer(&self, starting_with: &[&str], finished: Finished) {
+        let mut unanswered = self.unanswered.lock().expect("the unanswered");
+        let latest = unanswered
+            .iter()
+            .rposition(|(argv, _)| {
+                let leading = argv.iter().map(String::as_str).take(starting_with.len());
+                leading.eq(starting_with.iter().copied())
+            })
+            .unwrap_or_else(|| panic!("no unanswered job starts with {starting_with:?}"));
+        let _ = unanswered.remove(latest).1.send(finished);
     }
 
     pub fn hang_up(&self) {
-        self.answers.lock().expect("the answers").clear();
+        self.unanswered.lock().expect("the unanswered").clear();
     }
 
     pub fn spawned(&self) -> Vec<Vec<String>> {
@@ -50,7 +60,10 @@ impl DamRunner for FakeDam {
         let which = spawned.len();
         spawned.push(argv.to_vec());
         let (sender, results) = channel();
-        self.answers.lock().expect("the answers").push(sender);
+        self.unanswered
+            .lock()
+            .expect("the unanswered")
+            .push((argv.to_vec(), sender));
         let cancelled = Arc::clone(&self.cancelled);
         Ok(RunningJob {
             cancel: Box::new(move || cancelled.lock().expect("the cancelled").push(which)),

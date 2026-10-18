@@ -1,4 +1,4 @@
-use herdr_damnit_application::{Side, argv};
+use herdr_damnit_application::{Toward, argv};
 use herdr_damnit_domain::{Kind, Object, Oid};
 
 use super::{After, App};
@@ -83,7 +83,7 @@ impl App {
         }))
     }
 
-    pub(super) fn resolve(&mut self, side: Side) -> After {
+    pub(super) fn resolve(&mut self, toward: Toward) -> After {
         let conflicted = self.selected_oid().filter(|oid| {
             self.status
                 .stage()
@@ -91,7 +91,7 @@ impl App {
                 .iter()
                 .any(|conflict| &conflict.oid == *oid)
         });
-        match conflicted.map(|oid| argv::resolve(oid, side)) {
+        match conflicted.map(|oid| argv::resolve(oid, toward)) {
             Some(write) => self.write(write),
             None => After::Stay,
         }

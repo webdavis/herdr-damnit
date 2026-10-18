@@ -17,8 +17,8 @@ fn on_done() -> crate::app::tests::Harness {
     let mut harness = loaded();
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Tab);
-    harness.answer(3, 0, r#"{"objects":[]}"#, "");
-    harness.answer(4, 0, NO_COMMITS, "");
+    harness.answer(&["ls", "done"], 0, r#"{"objects":[]}"#, "");
+    harness.answer(&["log"], 0, NO_COMMITS, "");
     harness
 }
 
@@ -50,11 +50,11 @@ fn a_task_completed_after_done_was_opened_is_drawn_on_done() {
     harness.press(KeyCode::Tab);
     harness.select("9a0b1c2");
     harness.press(KeyCode::Char('X'));
-    harness.answer(5, 0, "{}", "");
-    harness.answer(6, 0, LS, "");
-    harness.answer(7, 0, CLEAN, "");
-    harness.answer(8, 0, WATERED, "");
-    harness.answer(9, 0, NO_COMMITS, "");
+    harness.answer(&["done"], 0, "{}", "");
+    harness.answer(&["ls", "!done"], 0, LS, "");
+    harness.answer(&["status"], 0, CLEAN, "");
+    harness.answer(&["ls", "done"], 0, WATERED, "");
+    harness.answer(&["log"], 0, NO_COMMITS, "");
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Tab);
 
@@ -85,7 +85,7 @@ fn a_write_once_done_was_opened_refreshes_done_too_and_reads_nothing_twice() {
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Char('A'));
     let before = harness.lines().len();
-    harness.answer(5, 0, "{}", "");
+    harness.answer(&["add"], 0, "{}", "");
 
     assert_eq!(asked_since(&harness, before), EVERYTHING_SHOWN);
 }
@@ -96,7 +96,7 @@ fn the_done_screen_draws_the_date_first_newest_first_with_the_uncommitted_ones_o
     harness.put_on(Screen::Done);
     harness.app.submit(herdr_damnit_application::Request::Done);
     harness.answer(
-        0,
+        &["ls"],
         0,
         r#"{"objects":[
           {"oid":"aaa","kind":"task","subject":"older","task":{"done":true,"priority":4}},
@@ -106,7 +106,7 @@ fn the_done_screen_draws_the_date_first_newest_first_with_the_uncommitted_ones_o
     );
     harness.app.submit(herdr_damnit_application::Request::Log);
     harness.answer(
-        1,
+        &["log"],
         0,
         r#"{"commits":[
           {"id":"c1","at":"2026-09-18T08:00:00Z","message":"one","changes":[
@@ -143,13 +143,13 @@ fn escape_from_a_detail_opened_on_the_done_screen_returns_to_its_row() {
     let mut harness = loaded();
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Tab);
-    harness.answer(3, 0, WATERED, "");
-    harness.answer(4, 0, NO_COMMITS, "");
+    harness.answer(&["ls", "done"], 0, WATERED, "");
+    harness.answer(&["log"], 0, NO_COMMITS, "");
     harness.select("9a0b1c2");
     harness.press(KeyCode::Enter);
     assert_eq!(harness.last(), "show 9a0b1c2 --json");
     harness.answer(
-        5,
+        &["show"],
         0,
         r#"{"oid":"9a0b1c2","kind":"task","subject":"water the plants","task":{"done":true,"priority":4}}"#,
         "",

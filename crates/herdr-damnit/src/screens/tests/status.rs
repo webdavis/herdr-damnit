@@ -19,7 +19,7 @@ fn on_status() -> crate::app::tests::Harness {
     harness
         .app
         .submit(herdr_damnit_application::Request::Status);
-    harness.answer(3, 0, FULL_STATUS, "");
+    harness.answer(&["status"], 0, FULL_STATUS, "");
     harness.put_on(Screen::Status);
     harness
 }
@@ -75,7 +75,7 @@ fn a_clean_status_screen_says_so_in_dams_own_words() {
     harness
         .app
         .submit(herdr_damnit_application::Request::Status);
-    harness.answer(0, 0, CLEAN, "");
+    harness.answer(&["status"], 0, CLEAN, "");
     harness.put_on(Screen::Status);
 
     assert!(
@@ -91,7 +91,7 @@ fn a_clean_status_header_shows_no_counts() {
     harness
         .app
         .submit(herdr_damnit_application::Request::Status);
-    harness.answer(0, 0, CLEAN, "");
+    harness.answer(&["status"], 0, CLEAN, "");
     harness.put_on(Screen::Status);
 
     assert_eq!(counts(&harness.app), "");

@@ -65,7 +65,7 @@ fn over_a_detail() -> crate::app::tests::Harness {
     let mut harness = loaded();
     harness.press(KeyCode::Enter);
     harness.answer(
-        3,
+        &["show"],
         0,
         r#"{"oid":"5d6e7f8","kind":"task","subject":"x","task":{"done":false,"priority":4}}"#,
         "",

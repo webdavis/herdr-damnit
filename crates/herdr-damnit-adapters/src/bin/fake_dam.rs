@@ -92,22 +92,22 @@ fn append(line: &str) {
 
 fn install_interrupt_handler() {
     if knob("FAKE_DAM_IGNORE_SIGINT").is_some() {
-        // SAFETY: this only tells the system to ignore interrupts for this test program. It hands
-        // over no code and no memory, so there is nothing for the call to break.
-        unsafe { libc::signal(libc::SIGINT, libc::SIG_IGN) };
+        ignore_interrupts_which_hands_over_no_code();
         return;
     }
+    log_and_exit_on_interrupt_which_the_tests_send_only_while_asleep();
+}
 
-    extern "C" fn record_the_interrupt_and_exit_cancelled(_: libc::c_int) {
-        append(r#"{"signal":"SIGINT"}"#);
-        std::process::exit(DAMS_EXIT_WHEN_CANCELLED);
-    }
-    // SAFETY: the handler writes one log line and ends the program. The tests interrupt this fake
-    // once it is asleep, so the handler never cuts into work that holds something it needs.
-    unsafe {
-        libc::signal(
-            libc::SIGINT,
-            record_the_interrupt_and_exit_cancelled as *const () as libc::sighandler_t,
-        );
-    }
+extern "C" fn record_the_interrupt_and_exit_cancelled(_: libc::c_int) {
+    append(r#"{"signal":"SIGINT"}"#);
+    std::process::exit(DAMS_EXIT_WHEN_CANCELLED);
+}
+
+fn ignore_interrupts_which_hands_over_no_code() {
+    unsafe { libc::signal(libc::SIGINT, libc::SIG_IGN) };
+}
+
+fn log_and_exit_on_interrupt_which_the_tests_send_only_while_asleep() {
+    let handler = record_the_interrupt_and_exit_cancelled as *const () as libc::sighandler_t;
+    unsafe { libc::signal(libc::SIGINT, handler) };
 }

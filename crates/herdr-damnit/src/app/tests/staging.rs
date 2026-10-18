@@ -11,7 +11,7 @@ const ONE_STAGED: &str = r#"{"staged":[
 fn staged() -> Harness {
     let mut harness = loaded();
     harness.app.submit(Request::Status);
-    harness.answer(3, 0, ONE_STAGED, "");
+    harness.answer(&["status"], 0, ONE_STAGED, "");
     harness
 }
 

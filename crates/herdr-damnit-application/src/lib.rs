@@ -6,7 +6,7 @@ mod handshake;
 mod jobs;
 mod ports;
 
-pub use argv::Side;
+pub use argv::Toward;
 pub use handoff::{Agent, HandOff, Workspace, agent_pane, hand_off};
 pub use handshake::{Handshake, Phase, check_version};
 pub use jobs::{Completion, JobId, Jobs, Request, Submitted, SyncKind};

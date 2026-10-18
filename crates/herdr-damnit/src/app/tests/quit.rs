@@ -12,7 +12,7 @@ const CONFLICTED: &str = r#"{"staged":[],"unstaged":[],"unpushed":[],
 fn conflicted() -> Harness {
     let mut harness = loaded();
     harness.app.submit(Request::Status);
-    harness.answer(3, 0, CONFLICTED, "");
+    harness.answer(&["status"], 0, CONFLICTED, "");
     harness.press(KeyCode::Tab);
     harness.select("3d4e5f6");
     harness
@@ -84,7 +84,7 @@ fn q_leaves_the_detail_screen_too() {
     let mut harness = loaded();
     harness.press(KeyCode::Enter);
     harness.answer(
-        3,
+        &["show"],
         0,
         r#"{"oid":"5d6e7f8","kind":"task","subject":"x","task":{"done":false,"priority":4}}"#,
         "",
@@ -96,7 +96,7 @@ fn q_leaves_the_detail_screen_too() {
 fn q_and_escape_still_quit_while_the_refusal_is_drawn() {
     let mut harness = harness();
     crate::open::start(&mut harness.app);
-    harness.answer(0, 0, "dam 0.0.9\n", "");
+    harness.answer(&["--version"], 0, "dam 0.0.9\n", "");
 
     assert_eq!(harness.press(KeyCode::Char('q')), After::Quit);
     assert_eq!(harness.press(KeyCode::Esc), After::Quit);

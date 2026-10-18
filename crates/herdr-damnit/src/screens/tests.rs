@@ -73,9 +73,9 @@ pub(crate) fn loaded() -> crate::app::tests::Harness {
 pub(crate) fn loaded_with(config: Config) -> crate::app::tests::Harness {
     let mut harness = harness_with(config);
     crate::open::start(&mut harness.app);
-    harness.answer(0, 0, "dam 0.2.0\n", "");
-    harness.answer(1, 0, CLEAN, "");
-    harness.answer(2, 0, LS, "");
+    harness.answer(&["--version"], 0, "dam 0.2.0\n", "");
+    harness.answer(&["status"], 0, CLEAN, "");
+    harness.answer(&["ls"], 0, LS, "");
     harness
 }
 

@@ -55,8 +55,8 @@ fn a_newer_read_of_a_kind_supersedes_the_older_one_and_its_result_is_dropped() {
     harness.submit(Request::List("!done".to_string()));
     harness.submit(Request::List("done".to_string()));
 
-    harness.answer(0, ok(r#"{"objects":[]}"#));
-    harness.answer(1, ok(r#"{"objects":[{"oid":"1"}]}"#));
+    harness.answer(&["ls", "!done"], ok(r#"{"objects":[]}"#));
+    harness.answer(&["ls", "done"], ok(r#"{"objects":[{"oid":"1"}]}"#));
 
     let completions = harness.jobs.drain();
     assert_eq!(completions.len(), 1, "a superseded read reached the model");
@@ -80,7 +80,7 @@ fn one_job_answering_never_clears_another_that_is_still_running() {
     let mut harness = harness();
     harness.submit(Request::Write(crate::argv::stage_all()));
     harness.submit(Request::Write(crate::argv::unstage_all()));
-    harness.answer(0, ok("the first"));
+    harness.answer(&["add"], ok("the first"));
 
     let completions = harness.jobs.drain();
     assert_eq!(completions.len(), 1);
@@ -101,7 +101,7 @@ fn draining_does_not_block_on_a_job_that_has_not_answered() {
 fn a_finished_job_leaves_the_table() {
     let mut harness = harness();
     harness.submit(Request::Status);
-    harness.answer(0, ok("{}"));
+    harness.answer(&["status"], ok("{}"));
     harness.jobs.drain();
 
     assert_eq!(harness.jobs.in_flight(), 0);
@@ -157,7 +157,7 @@ fn a_push_names_itself_while_it_runs_and_nothing_once_it_is_drained() {
     harness.submit(Request::Sync(SyncKind::Pull, crate::argv::pull()));
     assert_eq!(harness.jobs.exclusive(), Some(SyncKind::Pull));
 
-    harness.answer(0, ok("{}"));
+    harness.answer(&["pull"], ok("{}"));
     harness.jobs.drain();
     assert_eq!(harness.jobs.exclusive(), None);
 }
@@ -172,8 +172,8 @@ fn a_completion_carries_the_id_its_submit_answered() {
     else {
         panic!("expected a start");
     };
-    harness.answer(1, ok("{}"));
-    harness.answer(0, ok("{}"));
+    harness.answer(&["reset"], ok("{}"));
+    harness.answer(&["add"], ok("{}"));
 
     let ids: Vec<JobId> = harness.jobs.drain().iter().map(|done| done.id).collect();
     assert_eq!(ids, vec![first, second]);

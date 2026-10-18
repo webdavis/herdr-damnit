@@ -141,7 +141,7 @@ fn every_command_that_reports_a_failure_asks_for_the_document() {
         unlabel(&oid(), "home"),
         move_to(&oid(), "home/"),
         create("s", ""),
-        resolve(&oid(), Side::Ours),
+        resolve(&oid(), Toward::Ours),
         restore(&oid()),
     ] {
         assert!(argv.contains(&JSON.to_string()), "{argv:?}");
@@ -151,11 +151,11 @@ fn every_command_that_reports_a_failure_asks_for_the_document() {
 #[test]
 fn a_conflict_is_resolved_toward_one_side_by_name() {
     assert_eq!(
-        line(resolve(&oid(), Side::Ours)),
+        line(resolve(&oid(), Toward::Ours)),
         "resolve 1a2b3c4 --ours --json"
     );
     assert_eq!(
-        line(resolve(&oid(), Side::Theirs)),
+        line(resolve(&oid(), Toward::Theirs)),
         "resolve 1a2b3c4 --theirs --json"
     );
 }
