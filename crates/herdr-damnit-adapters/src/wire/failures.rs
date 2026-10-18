@@ -1,4 +1,4 @@
-use herdr_damnit_domain::{ErrorDocument, ErrorKind, Oid, Rule};
+use herdr_damnit_domain::ErrorDocument;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -9,20 +9,14 @@ struct WireEnvelope {
 #[derive(Deserialize)]
 struct WireError {
     kind: String,
-    #[serde(default)]
-    rule: Option<String>,
     message: String,
-    #[serde(default)]
-    oids: Vec<String>,
 }
 
 pub fn error_document(stderr: &str) -> Option<ErrorDocument> {
     let envelope: WireEnvelope = serde_json::from_str(stderr.trim()).ok()?;
     Some(ErrorDocument {
-        kind: ErrorKind::named(&envelope.error.kind),
+        store: envelope.error.kind == "store",
         message: envelope.error.message,
-        rule: envelope.error.rule.as_deref().map(Rule::named),
-        oids: envelope.error.oids.into_iter().map(Oid::new).collect(),
     })
 }
 

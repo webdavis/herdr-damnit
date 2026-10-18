@@ -1,41 +1,22 @@
 use super::*;
 
 #[test]
-fn an_error_document_carries_its_kind_its_rule_and_the_objects_it_names() {
+fn an_error_document_carries_dams_message_and_whether_the_store_failed() {
     let stderr = r#"{"error":{"kind":"refused","rule":"blocked","message":"1a2b3c4 waits on 5d6e7f8","oids":["1a2b3c4","5d6e7f8"]}}"#;
-    let document = error_document(stderr).expect("it parsed");
-
-    assert_eq!(document.kind, herdr_damnit_domain::ErrorKind::Refused);
-    assert_eq!(document.rule, Some(herdr_damnit_domain::Rule::Blocked));
-    assert_eq!(document.message, "1a2b3c4 waits on 5d6e7f8");
     assert_eq!(
-        document.oids,
-        vec![
-            herdr_damnit_domain::Oid::new("1a2b3c4"),
-            herdr_damnit_domain::Oid::new("5d6e7f8"),
-        ]
+        error_document(stderr).expect("it parsed"),
+        herdr_damnit_domain::ErrorDocument {
+            store: false,
+            message: "1a2b3c4 waits on 5d6e7f8".to_string(),
+        }
     );
 }
 
 #[test]
-fn a_rule_this_pane_has_not_heard_of_keeps_its_word() {
-    let stderr =
-        r#"{"error":{"kind":"refused","rule":"invented_tomorrow","message":"no","oids":[]}}"#;
-    assert_eq!(
-        error_document(stderr).expect("it parsed").rule,
-        Some(herdr_damnit_domain::Rule::Unknown(
-            "invented_tomorrow".to_string()
-        ))
-    );
-}
-
-#[test]
-fn a_failure_that_is_not_a_refusal_names_no_rule() {
+fn a_store_failure_is_marked_as_the_store() {
     let stderr =
         r#"{"error":{"kind":"store","rule":null,"message":"database is locked","oids":[]}}"#;
-    let document = error_document(stderr).expect("it parsed");
-    assert_eq!(document.kind, herdr_damnit_domain::ErrorKind::Store);
-    assert_eq!(document.rule, None);
+    assert!(error_document(stderr).expect("it parsed").store);
 }
 
 #[test]

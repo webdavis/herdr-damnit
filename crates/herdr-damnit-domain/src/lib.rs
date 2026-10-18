@@ -17,10 +17,7 @@ pub use brief::brief;
 pub use counts::counted;
 pub use cursor::Cursor;
 pub use dates::{Date, DueState, due_state, long, parse_date, short};
-pub use failure::{
-    ErrorDocument, ErrorKind, Failure, READ_DEADLINE_SECONDS, Rule, classify,
-    leaves_model_and_prompt_untouched, message,
-};
+pub use failure::{ErrorDocument, Failure, READ_DEADLINE_SECONDS, classify, message};
 pub use marks::{IconSet, Mark};
 pub use object::{Attendee, EventFields, Kind, Object, TaskFields};
 pub use oid::Oid;

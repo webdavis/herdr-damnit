@@ -1,66 +1,47 @@
 mod one_line;
-mod rules;
 
 use super::*;
 
-fn refusal(rule: &str, message: &str, oids: &[&str]) -> ErrorDocument {
+fn refusal(message: &str) -> ErrorDocument {
+    failed(false, message)
+}
+
+fn failed(store: bool, message: &str) -> ErrorDocument {
     ErrorDocument {
-        kind: ErrorKind::Refused,
+        store,
         message: message.to_string(),
-        rule: Some(Rule::named(rule)),
-        oids: oids.iter().map(|oid| Oid::new(*oid)).collect(),
     }
 }
 
 #[test]
-fn a_refusal_carries_dams_own_sentence_its_rule_and_its_oids() {
+fn a_refusal_carries_dams_own_sentence() {
     let failure = classify(
         Some(4),
         Some(refusal(
-            "blocked",
             "98d8780 cannot be completed: child a9db854 is open",
-            &["98d8780", "a9db854"],
         )),
         "",
     );
     assert_eq!(
         failure,
-        Failure::Refused {
-            rule: Rule::Blocked,
-            said: "98d8780 cannot be completed: child a9db854 is open".to_string(),
-            oids: vec![Oid::new("98d8780"), Oid::new("a9db854")],
-        }
+        Failure::Refused("98d8780 cannot be completed: child a9db854 is open".to_string())
     );
     assert_eq!(
         message(&failure),
         "98d8780 cannot be completed: child a9db854 is open"
     );
-    assert!(leaves_model_and_prompt_untouched(&failure));
 }
 
 #[test]
 fn an_empty_stage_is_a_refusal_now_rather_than_an_ordinary_failure() {
-    let failure = classify(
-        Some(4),
-        Some(refusal("nothing_to_commit", "nothing to commit", &[])),
-        "",
-    );
-    assert!(leaves_model_and_prompt_untouched(&failure));
+    let failure = classify(Some(4), Some(refusal("nothing to commit")), "");
+    assert_eq!(failure, Failure::Refused("nothing to commit".to_string()));
     assert_eq!(message(&failure), "nothing to commit");
 }
 
 #[test]
 fn a_held_store_says_who_is_holding_it_and_what_to_press() {
-    let failure = classify(
-        Some(1),
-        Some(ErrorDocument {
-            kind: ErrorKind::Store,
-            message: "database is locked".to_string(),
-            rule: None,
-            oids: Vec::new(),
-        }),
-        "",
-    );
+    let failure = classify(Some(1), Some(failed(true, "database is locked")), "");
     assert_eq!(
         message(&failure),
         "database is locked; another dam is writing, press R to retry."
@@ -76,12 +57,10 @@ fn a_held_store_says_who_is_holding_it_and_what_to_press() {
 fn a_failure_whose_own_kind_is_not_the_store_takes_no_retry_advice_even_naming_a_lock() {
     let failure = classify(
         Some(1),
-        Some(ErrorDocument {
-            kind: ErrorKind::Helper,
-            message: "the todoist helper says the database is locked".to_string(),
-            rule: None,
-            oids: Vec::new(),
-        }),
+        Some(failed(
+            false,
+            "the todoist helper says the database is locked",
+        )),
         "",
     );
     assert_eq!(
@@ -92,16 +71,7 @@ fn a_failure_whose_own_kind_is_not_the_store_takes_no_retry_advice_even_naming_a
 
 #[test]
 fn a_store_failure_that_is_not_the_busy_timeout_takes_no_retry_advice() {
-    let failure = classify(
-        Some(1),
-        Some(ErrorDocument {
-            kind: ErrorKind::Store,
-            message: "disk I/O error".to_string(),
-            rule: None,
-            oids: Vec::new(),
-        }),
-        "",
-    );
+    let failure = classify(Some(1), Some(failed(true, "disk I/O error")), "");
     assert_eq!(message(&failure), "disk I/O error");
 }
 
@@ -114,7 +84,7 @@ fn a_command_line_dam_would_not_read_falls_back_to_its_first_line() {
     );
     assert_eq!(message(&failure), "error: unexpected argument '--nope'");
     assert!(
-        !leaves_model_and_prompt_untouched(&failure),
+        matches!(failure, Failure::Other(_)),
         "a bad command line is this pane's own bug, not a rule dam kept"
     );
 }
@@ -127,23 +97,8 @@ fn a_dam_too_old_to_print_a_document_still_reaches_the_status_line() {
 
 #[test]
 fn a_cancelled_run_is_never_an_error_banner() {
-    assert_eq!(
-        classify(Some(3), None, ""),
-        Failure::Cancelled { killed: false }
-    );
-    assert!(leaves_model_and_prompt_untouched(&classify(
-        Some(3),
-        None,
-        ""
-    )));
+    assert_eq!(classify(Some(3), None, ""), Failure::Cancelled);
     assert_eq!(message(&classify(Some(3), None, "")), "cancelled");
-    assert_eq!(
-        message(&Failure::Cancelled { killed: true }),
-        "cancelled (killed)"
-    );
-    assert!(leaves_model_and_prompt_untouched(&Failure::Cancelled {
-        killed: false
-    }));
 }
 
 #[test]
@@ -159,14 +114,6 @@ fn output_that_will_not_parse_says_so_without_quoting_it() {
     assert_eq!(
         message(&Failure::Unreadable),
         "dam answered with something this pane could not read."
-    );
-}
-
-#[test]
-fn a_read_past_its_deadline_names_the_command_and_the_wait() {
-    assert_eq!(
-        message(&Failure::Deadline("dam ls".to_string())),
-        "dam ls took longer than 30s and was cancelled."
     );
 }
 

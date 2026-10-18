@@ -1,15 +1,9 @@
 use super::*;
 
-const PARENT: &str = "e6126361bc4f118bb16c869005c9b0afa8232247";
-const CHILD: &str = "0cd9bf6459c32dbdb237f895f8dbacef921d782b";
 const BLOCKED_COMPLETION: &str = "e612636 cannot be completed:\n  child 0cd9bf6 is open\nuse --force to complete it anyway, or --force --interactive to decide what happens to them";
 
 fn dam_refused(said: &str) -> Failure {
-    classify(
-        Some(4),
-        Some(refusal("blocked", said, &[PARENT, CHILD])),
-        "",
-    )
+    classify(Some(4), Some(refusal(said)), "")
 }
 
 #[test]
@@ -31,16 +25,7 @@ fn a_message_dam_already_keeps_to_one_line_passes_through_unchanged() {
 }
 
 fn dam_failed(said: &str) -> Failure {
-    classify(
-        Some(1),
-        Some(ErrorDocument {
-            kind: ErrorKind::Helper,
-            message: said.to_string(),
-            rule: None,
-            oids: Vec::new(),
-        }),
-        "",
-    )
+    classify(Some(1), Some(failed(false, said)), "")
 }
 
 #[test]
@@ -68,12 +53,7 @@ fn each_line_is_trimmed_and_blank_lines_are_dropped() {
 fn the_store_advice_follows_the_folded_message() {
     let failure = classify(
         Some(1),
-        Some(ErrorDocument {
-            kind: ErrorKind::Store,
-            message: "write failed:\n  database is locked\n".to_string(),
-            rule: None,
-            oids: Vec::new(),
-        }),
+        Some(failed(true, "write failed:\n  database is locked\n")),
         "",
     );
     assert_eq!(
