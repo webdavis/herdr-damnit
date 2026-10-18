@@ -71,4 +71,4 @@ first="$("$dam" ls "!done" --json |
 event="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["oid"])' "$here/new.json")"
 "$dam" show "$event" --json >"$here/show-event.json"
 
-printf 'capture the four sync documents by hand against a helper: see the header of each\n' >&2
+printf 'not captured here: push-ok, push-partial-failure, pull-ok and pull-conflict need a remote\n' >&2
