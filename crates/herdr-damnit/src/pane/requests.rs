@@ -30,7 +30,7 @@ pub fn view(
     let views = Views::new(&config.views());
     let name = views.name_of_number(number).ok_or_else(|| {
         format!(
-            "no view {number}: this config has {} views, 1 being the unfiltered list",
+            "no view {number}: this config has {} views, 1 being open",
             views.count()
         )
     })?;
