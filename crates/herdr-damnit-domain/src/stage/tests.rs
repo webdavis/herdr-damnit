@@ -1,4 +1,5 @@
 mod marks;
+mod summary;
 
 use super::*;
 
@@ -11,7 +12,7 @@ fn change(oid: &str, op: Op, subject: &str, fields: &[&str]) -> Change {
     }
 }
 
-fn full() -> Stage {
+pub(super) fn full() -> Stage {
     Stage {
         staged: vec![
             change("1a2b3c4", Op::Create, "ship the pin bump", &[]),
@@ -249,19 +250,6 @@ fn a_conflict_value_that_spans_lines_still_draws_as_one_row() {
         ),
         "{:?}",
         drawn(&stage)
-    );
-}
-
-#[test]
-fn the_summary_counts_what_the_status_line_carries() {
-    assert_eq!(
-        full().summary(),
-        "2 staged  1 changed  3 unpushed  1 notice"
-    );
-    assert_eq!(
-        full().unpushed_commits(),
-        3,
-        "two remotes, one and two commits"
     );
 }
 

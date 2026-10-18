@@ -75,7 +75,7 @@ fn a_task_due_today_turns_overdue_when_the_interval_re_reads_past_midnight() {
 dam  open                 1 open
 home
   * water the plants
-x X dd p s D l m a S e <CR> <Sp…"
+j/k move  space stage  q close"
     );
 
     harness.turn_the_day_to("2026-09-21");
@@ -88,6 +88,6 @@ x X dd p s D l m a S e <CR> <Sp…"
 dam  open                 1 open
 home
   < 09-20 water the plants
-x X dd p s D l m a S e <CR> <Sp…"
+j/k move  space stage  q close"
     );
 }

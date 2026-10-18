@@ -1,4 +1,5 @@
 mod brief;
+mod counts;
 mod cursor;
 mod dates;
 mod failure;
@@ -13,6 +14,7 @@ mod version;
 mod views;
 
 pub use brief::brief;
+pub use counts::counted;
 pub use cursor::Cursor;
 pub use dates::{Date, DueState, due_state, long, parse_date, short};
 pub use failure::{
