@@ -4,7 +4,7 @@ use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 
-use super::list::cut_to;
+use super::rows::cut_to;
 use crate::theme::color;
 use herdr_damnit_domain::Slot;
 
