@@ -58,6 +58,7 @@ pub fn resolve(name: Option<&str>) -> Palette {
     name.and_then(build).unwrap_or_else(catppuccin_mocha)
 }
 
+#[cfg(test)]
 pub const NAMES: &[&str] = &[
     "catppuccin",
     "catppuccin-latte",

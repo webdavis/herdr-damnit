@@ -24,7 +24,7 @@ pub const ELLIPSIS: &str = "\u{2026}";
 const HINTS: &str = "x X dd p s D l m a S e <CR> <Space> c P L v Tab";
 
 pub fn draw(frame: &mut Frame<'_>, app: &App) {
-    let palette = crate::theme::resolve(app.config.theme.as_deref());
+    let palette = crate::theme::resolve(None);
     let area = frame.area();
     frame.buffer_mut().set_style(area, palette.ground());
     if let Some(said) = &app.refusal {

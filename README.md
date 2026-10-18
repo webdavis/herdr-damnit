@@ -75,16 +75,16 @@ herdr-damnit` prints it). A missing file is the default configuration.
 | `width`           | none           | a fraction above 0 and below 1        | the share of the tab the pane takes                                             |
 | `default_view`    | none           | a view name                           | the view the pane opens on                                                      |
 | `auto_open`       | `false`        | `true`, `false`                       | whether focusing a workspace opens the pane there                               |
-| `theme`           | `"catppuccin"` | a herdr theme name                    | the palette the pane paints with                                                |
+| `theme`           | `"catppuccin-mocha"` | `catppuccin-mocha`              | the palette the pane paints with                                                |
 | `icons`           | `"nerd-font"`  | `nerd-font`, `ascii`                  | which set of marks a row carries                                                |
 | `refresh_seconds` | `300`          | whole seconds, `0` to turn it off     | how often the pane reads `dam` on its own                                       |
 | `handoff_label`   | `"handed-off"` | any label, `""` for none              | the label a successful hand-off to the agent writes on the object               |
 | `[[views]]`       | none           | `name` and `query`                    | the named views, numbered after the open list in the order they are written     |
 
-An unrecognized `placement` or `side` is a config parse error naming the values above, and so is a
-`width` that is not a share of the tab, a `default_view` no view answers to, or a `theme` name no
-palette answers to. A key the pane does not read is an error too, so a leftover `token_command`,
-`filter` or `editor` from `herdr-todoist` is named rather than ignored.
+An unrecognized `placement`, `side` or `theme` is a config parse error naming the values above, and
+so is a `width` that is not a share of the tab or a `default_view` no view answers to. A key the
+pane does not read is an error too, so a leftover `token_command`, `filter` or `editor` from
+`herdr-todoist` is named rather than ignored.
 
 ## Placement
 
@@ -207,13 +207,8 @@ Priority 4 is `dam`'s default and carries no mark, and neither does an object wi
 
 ## Colors
 
-`theme` takes a theme name the way herdr and reviewr take one, and the names resolve to the same
-palettes, so a workspace's panes match: `catppuccin` (the default), `catppuccin-latte`,
-`catppuccin-frappe`, `catppuccin-macchiato`, `dracula`, `github-light`, `gruvbox`, `gruvbox-light`,
-`monokai`, `nord`, `one-dark`, `one-light`, `rose-pine`, `rose-pine-dawn`, `solarized`,
-`solarized-light`, `tokyo-night` and `tokyo-night-day`. The pane paints foregrounds only: the
-background stays the terminal's own. The staging marks take green, yellow, cyan and red from the
-same palette.
+The pane paints its own background and text in Catppuccin Mocha, whatever the terminal's colors.
+The marks take their colors from the same palette.
 
 `icons = "ascii"` draws the plain set instead of the glyphs. A terminal whose font has no Nerd Font
 glyph draws a replacement box that is often two cells wide, which puts every column in the pane out

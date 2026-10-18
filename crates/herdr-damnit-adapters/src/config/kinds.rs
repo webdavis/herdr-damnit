@@ -45,6 +45,13 @@ impl Side {
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+pub enum ThemeName {
+    #[default]
+    CatppuccinMocha,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub enum Icons {
     #[default]
     NerdFont,

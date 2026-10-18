@@ -59,18 +59,8 @@ fn action(name: &str) -> Option<Action> {
     })
 }
 
-fn load_config_and_check_its_theme() -> Result<Config, String> {
-    load_with_theme_check(Config::load)
-}
-
-fn load_with_theme_check(load: impl FnOnce() -> Result<Config, String>) -> Result<Config, String> {
-    let config = load()?;
-    config.check_theme_against(theme::NAMES)?;
-    Ok(config)
-}
-
 fn run_pane() -> std::process::ExitCode {
-    let config = match load_config_and_check_its_theme() {
+    let config = match Config::load() {
         Ok(config) => config,
         Err(error) => return fail(&error),
     };
@@ -98,7 +88,7 @@ fn run_pane() -> std::process::ExitCode {
 }
 
 fn with_config(run: impl FnOnce(&Config) -> Result<String, String>) -> std::process::ExitCode {
-    report(load_config_and_check_its_theme().and_then(|config| run(&config)))
+    report(Config::load().and_then(|config| run(&config)))
 }
 
 fn report(outcome: Result<String, String>) -> std::process::ExitCode {

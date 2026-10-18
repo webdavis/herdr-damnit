@@ -25,11 +25,3 @@ fn every_command_the_plugin_manifest_runs_is_one_this_binary_knows() {
         );
     }
 }
-
-#[test]
-fn the_config_funnel_rejects_a_theme_the_pane_cannot_draw() {
-    let error = load_with_theme_check(|| Config::parse("theme = 'unknown'"))
-        .expect_err("the theme is unknown");
-
-    assert!(error.contains("unknown theme 'unknown'"), "{error}");
-}
