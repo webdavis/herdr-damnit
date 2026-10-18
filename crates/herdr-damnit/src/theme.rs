@@ -3,7 +3,7 @@
     reason = "a color table, where a six-digit 0xRRGGBB literal reads better as one value"
 )]
 
-use ratatui::style::Color;
+use ratatui::style::{Color, Style};
 
 pub use herdr_damnit_domain::Slot;
 
@@ -22,6 +22,7 @@ enum Appearance {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Palette {
+    pub base: Color,
     pub dim1: Color,
     pub text: Color,
     pub red: Color,
@@ -34,6 +35,10 @@ pub struct Palette {
 }
 
 impl Palette {
+    pub fn ground(&self) -> Style {
+        Style::new().fg(self.text).bg(self.base)
+    }
+
     pub fn color(&self, slot: Slot) -> Color {
         match slot {
             Slot::Text => self.text,
@@ -108,6 +113,7 @@ fn catppuccin_mocha() -> Palette {
     let green = Color::Rgb(0xa6, 0xe3, 0xa1);
     let blue = Color::Rgb(0xb4, 0xbe, 0xfe);
     Palette {
+        base: Color::Rgb(0x1e, 0x1e, 0x2e),
         dim1: Color::Rgb(0x7f, 0x84, 0x9c),
         text: Color::Rgb(0xcd, 0xd6, 0xf4),
         red: Color::Rgb(0xf3, 0x8b, 0xa8),
@@ -126,6 +132,7 @@ fn derive(a: anchors::Anchors, appearance: Appearance) -> Palette {
         Appearance::Light => BLACK,
     };
     Palette {
+        base: a.base,
         dim1: blend(a.base, contrast_pole, DIM_STEP_TOWARD_CONTRAST_POLE),
         text: a.text,
         red: a.red,

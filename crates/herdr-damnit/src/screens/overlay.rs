@@ -32,6 +32,7 @@ pub fn draw(
 
 fn bordered(title: &str, palette: &Palette) -> Block<'static> {
     Block::bordered()
+        .style(palette.ground())
         .title(title.to_string())
         .border_style(Style::new().fg(palette.dim1))
 }

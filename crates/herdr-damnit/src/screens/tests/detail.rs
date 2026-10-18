@@ -166,3 +166,20 @@ fn a_show_dam_refuses_leaves_the_screen_where_it_was() {
     assert_eq!(harness.app.screen, Screen::List);
     assert_eq!(harness.app.message, "no object matches \"5d6e7f8\"");
 }
+
+#[test]
+fn the_markdown_body_is_drawn_in_the_catppuccin_mocha_text_color() {
+    let harness = shown(SHOW_WITH_EVERY_FIELD);
+    let buffer = drawn(&harness.app, 32, 20);
+
+    let row = (0..20)
+        .find(|&row| line_of(&buffer, row).starts_with("the pin moved"))
+        .expect("the body is on screen");
+    for column in 0..13 {
+        assert_eq!(
+            buffer[(column, row)].fg,
+            ratatui::style::Color::Rgb(205, 214, 244),
+            "column {column}"
+        );
+    }
+}

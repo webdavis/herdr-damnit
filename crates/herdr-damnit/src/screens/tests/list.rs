@@ -116,3 +116,24 @@ fn a_mark_takes_its_own_colour_and_the_subject_stays_plain() {
     let priority = &buffer.content()[row * 32 + 4];
     assert_eq!(priority.fg, palette.color(herdr_damnit_domain::Slot::Red));
 }
+
+#[test]
+fn every_cell_outside_the_selected_row_is_painted_the_catppuccin_mocha_base() {
+    let mut harness = loaded();
+    harness.select("5d6e7f8");
+    let buffer = drawn(&harness.app, 32, 12);
+
+    for row in 0..12 {
+        let line = line_of(&buffer, row);
+        if line.contains("refresh the roster row") {
+            continue;
+        }
+        for column in 0..32 {
+            assert_eq!(
+                buffer[(column, row)].bg,
+                ratatui::style::Color::Rgb(30, 30, 46),
+                "row {row}: {line:?}"
+            );
+        }
+    }
+}

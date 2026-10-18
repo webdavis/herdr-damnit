@@ -25,6 +25,19 @@ pub(crate) const LS: &str = r#"{"objects":[
 pub(crate) const CLEAN: &str =
     r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#;
 
+pub(crate) fn drawn(app: &crate::app::App, width: u16, height: u16) -> ratatui::buffer::Buffer {
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height))
+        .expect("a test terminal");
+    terminal.draw(|frame| draw(frame, app)).expect("it drew");
+    terminal.backend().buffer().clone()
+}
+
+pub(crate) fn line_of(buffer: &ratatui::buffer::Buffer, row: u16) -> String {
+    (0..buffer.area.width)
+        .map(|column| buffer[(column, row)].symbol())
+        .collect()
+}
+
 pub(crate) fn ascii_config() -> Config {
     Config::parse("icons = \"ascii\"\n").expect("parses")
 }
