@@ -37,7 +37,7 @@ fn enter_opens_a_line_in_the_note_box_rather_than_sending() {
         panic!("the note box closed on Enter");
     };
     assert_eq!(note.text, "a\nb");
-    assert!(harness.herdr_calls().is_empty(), "it sent on Enter");
+    assert!(!harness.sent_anything(), "it sent on Enter");
 }
 
 #[test]
@@ -102,18 +102,40 @@ fn escape_throws_the_draft_away_and_sends_nothing() {
     harness.press(KeyCode::Esc);
 
     assert!(harness.app.overlay.is_none());
-    assert!(harness.herdr_calls().is_empty());
+    assert!(!harness.sent_anything());
 }
 
 #[test]
-fn a_workspace_with_no_agent_pane_says_so() {
+fn shift_s_refuses_before_the_box_opens_when_the_workspace_has_no_agent_pane() {
     let mut harness = harness_with_listing(ascii_config(), NO_AGENT);
     crate::open::start(&mut harness.app);
     harness.answer(0, 0, "dam 0.2.0\n", "");
     harness.answer(1, 0, crate::screens::tests::CLEAN, "");
     harness.answer(2, 0, crate::screens::tests::LS, "");
     harness.press(KeyCode::Char('S'));
+
+    assert!(harness.app.overlay.is_none(), "the note box opened");
+    assert_eq!(harness.app.message, "no agent pane in this workspace.");
+}
+
+#[test]
+fn the_box_comes_back_with_the_draft_when_the_agent_pane_went_away() {
+    let mut harness = loaded();
+    harness.select("1a2b3c4");
+    harness.press(KeyCode::Char('S'));
+    harness.type_line("keep me");
+    harness.list_agents(NO_AGENT);
     send(&mut harness);
 
+    let Some(Overlay::Note(note)) = harness.app.overlay.as_ref() else {
+        panic!("the draft was thrown away");
+    };
+    assert_eq!(note.text, "keep me");
     assert_eq!(harness.app.message, "no agent pane in this workspace.");
+    assert!(
+        harness
+            .herdr_calls()
+            .iter()
+            .all(|call| !call.starts_with("pane send-text"))
+    );
 }

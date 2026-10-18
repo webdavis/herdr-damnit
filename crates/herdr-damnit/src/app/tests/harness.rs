@@ -20,6 +20,7 @@ pub(crate) struct Harness {
     cancels: Arc<AtomicUsize>,
     missing: Arc<AtomicBool>,
     herdr_calls: Arc<Mutex<Vec<String>>>,
+    agents: Arc<Mutex<String>>,
 }
 
 pub(crate) fn harness() -> Harness {
@@ -38,10 +39,11 @@ pub(crate) fn harness_with_missing_dam() -> Harness {
 
 pub(crate) fn harness_with_listing(config: Config, listing: &str) -> Harness {
     let herdr = RecordingHerdr {
-        listing: listing.to_string(),
+        listing: Arc::new(Mutex::new(listing.to_string())),
         calls: Arc::default(),
     };
     let herdr_calls = Arc::clone(&herdr.calls);
+    let agents = Arc::clone(&herdr.listing);
     let recorder = Recorder::default();
     let log = Arc::clone(&recorder.log);
     let senders = Arc::clone(&recorder.senders);
@@ -68,6 +70,7 @@ pub(crate) fn harness_with_listing(config: Config, listing: &str) -> Harness {
         cancels,
         missing,
         herdr_calls,
+        agents,
     }
 }
 
@@ -108,8 +111,18 @@ impl Harness {
         }
     }
 
+    pub(crate) fn list_agents(&self, listing: &str) {
+        *self.agents.lock().expect("the listing") = listing.to_string();
+    }
+
     pub(crate) fn herdr_calls(&self) -> Vec<String> {
         self.herdr_calls.lock().expect("the calls").clone()
+    }
+
+    pub(crate) fn sent_anything(&self) -> bool {
+        self.herdr_calls()
+            .iter()
+            .any(|call| call.starts_with("pane send-text"))
     }
 
     pub(crate) fn cancels(&self) -> usize {

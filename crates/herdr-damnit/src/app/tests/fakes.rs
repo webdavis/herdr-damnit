@@ -17,7 +17,7 @@ pub(crate) const NO_AGENT: &str = r#"{"result":{"agents":[]}}"#;
 
 #[derive(Default)]
 pub(crate) struct RecordingHerdr {
-    pub(crate) listing: String,
+    pub(crate) listing: Arc<Mutex<String>>,
     pub(crate) calls: Arc<Mutex<Vec<String>>>,
 }
 
@@ -25,7 +25,7 @@ impl Herdr for RecordingHerdr {
     fn call(&self, args: &[&str]) -> Result<String, String> {
         self.calls.lock().expect("the calls").push(args.join(" "));
         match args {
-            ["agent", "list"] => Ok(self.listing.clone()),
+            ["agent", "list"] => Ok(self.listing.lock().expect("the listing").clone()),
             _ => Ok(String::new()),
         }
     }

@@ -1,16 +1,22 @@
-use herdr_damnit_application::{HandOff, JobKind, hand_off};
+use herdr_damnit_application::{HandOff, JobKind, agent_pane, hand_off};
 
 use super::{After, App};
 use crate::overlay::{NoteBox, Overlay};
 
 impl App {
     pub(super) fn open_note_box(&mut self) -> After {
-        match self.selected_object().map(|object| object.oid.clone()) {
-            Some(oid) => self.reopen(Overlay::Note(NoteBox {
+        let Some(oid) = self.selected_object().map(|object| object.oid.clone()) else {
+            return After::Stay;
+        };
+        match agent_pane(&*self.herdr, &self.here) {
+            Ok(_) => self.reopen(Overlay::Note(NoteBox {
                 oid,
                 text: String::new(),
             })),
-            None => After::Stay,
+            Err(said) => {
+                self.message = said;
+                After::Stay
+            }
         }
     }
 
@@ -20,7 +26,10 @@ impl App {
         };
         let label = self.config.handoff_label.clone();
         match hand_off(&*self.herdr, &self.here, &object, note.text.trim(), &label) {
-            HandOff::Refused(said) => self.message = said,
+            HandOff::Refused(said) => {
+                self.message = said;
+                return self.reopen(Overlay::Note(note));
+            }
             HandOff::Sent { agent, label_write } => {
                 self.message = format!("sent to {}", agent.name);
                 if let Some(write) = label_write
