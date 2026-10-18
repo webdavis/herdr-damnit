@@ -119,7 +119,9 @@ it carries a spinner, the verb and the elapsed time: `dam  today  ⠙ push 3.2s`
 shows a few keys for the screen, or the latest message until the next key.
 
 The pane reads `dam` again every `refresh_seconds`, after every write, and on `R`. The interval
-waits while a picker, a box or the Detail is open, or while Status or Done is showing.
+waits while a picker, a box or the Detail is open, or while Status or Done is showing. `R` also
+reads the config again: the views, icons and label change in place, and a config error goes on
+the bottom line. A changed `dam` argv takes effect when the pane next opens.
 
 ## Marks
 
@@ -157,7 +159,7 @@ and `S` with no agent pane each say so on the bottom line.
 | `<Tab>`         | the next screen; `<S-Tab>` the one before                            |
 | `v`             | the view picker, on List or Done                                     |
 | `1` to `9`      | the List on that view                                                |
-| `R`, `r`        | read `dam` again                                                     |
+| `R`, `r`        | read the config and `dam` again                                      |
 | `<CR>`          | the object's detail                                                  |
 | `<Space>`       | stage the object, or unstage it when it is staged                    |
 | `A`, `U`        | stage everything, unstage everything                                 |

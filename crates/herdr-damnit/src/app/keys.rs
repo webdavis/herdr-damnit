@@ -12,7 +12,7 @@ impl App {
         if self.refusal().is_some() {
             return match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => After::Quit,
-                KeyCode::Char('R' | 'r') => self.reread(),
+                KeyCode::Char('R' | 'r') => self.reread_config_and_dam(),
                 _ => After::Stay,
             };
         }
@@ -37,7 +37,7 @@ impl App {
             KeyCode::Char('v') if matches!(self.showing.screen(), Screen::List | Screen::Done) => {
                 self.open_view_picker()
             }
-            KeyCode::Char('R' | 'r') => self.reread(),
+            KeyCode::Char('R' | 'r') => self.reread_config_and_dam(),
             KeyCode::Char(' ') => self.toggle_staged(),
             KeyCode::Char('A') => self.write(argv::stage_all()),
             KeyCode::Char('U') => self.write(argv::unstage_all()),

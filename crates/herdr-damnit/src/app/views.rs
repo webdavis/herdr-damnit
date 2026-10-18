@@ -1,6 +1,8 @@
 use std::time::{Duration, Instant};
 
+use herdr_damnit_adapters::Config;
 use herdr_damnit_application::{Phase, Request};
+use herdr_damnit_domain::Views;
 
 use super::{After, App, Screen};
 use crate::overlay::{Overlay, Picker, PickerEntry};
@@ -34,6 +36,20 @@ impl App {
             entries: entries.collect(),
             selected,
         }))
+    }
+
+    pub(super) fn reread_config_and_dam(&mut self) -> After {
+        match self.rereads.config() {
+            Some(Ok(config)) => self.take_config(config),
+            Some(Err(said)) => self.message = said,
+            None => {}
+        }
+        self.reread()
+    }
+
+    fn take_config(&mut self, config: Config) {
+        self.list.take_views(Views::new(&config.views()));
+        self.config = config;
     }
 
     pub(crate) fn reread(&mut self) -> After {

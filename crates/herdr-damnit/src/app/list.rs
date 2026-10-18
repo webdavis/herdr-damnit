@@ -30,6 +30,11 @@ impl ListScreen {
         &mut self.cursor
     }
 
+    pub(super) fn take_views(&mut self, mut views: Views) {
+        views.select_named(&self.views.current().name);
+        self.views = views;
+    }
+
     pub(super) fn select_view(&mut self, index: usize) -> bool {
         self.views.select(index)
     }

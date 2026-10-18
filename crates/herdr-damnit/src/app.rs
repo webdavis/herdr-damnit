@@ -112,6 +112,10 @@ impl App {
         self.rereads.watch(path);
     }
 
+    pub fn watch_config(&mut self, path: PathBuf) {
+        self.rereads.watch_config(path);
+    }
+
     pub fn config(&self) -> &Config {
         &self.config
     }

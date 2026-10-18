@@ -43,9 +43,17 @@ pub struct ConfigView {
 }
 
 impl Config {
+    pub fn path() -> PathBuf {
+        let given = std::env::var_os("HERDR_PLUGIN_CONFIG_DIR").map(PathBuf::from);
+        config_path_in(given.as_deref(), &base_config_dir())
+    }
+
     pub fn load() -> Result<Self, String> {
-        let path = config_path();
-        match std::fs::read_to_string(&path) {
+        Self::load_from(&Self::path())
+    }
+
+    pub fn load_from(path: &Path) -> Result<Self, String> {
+        match std::fs::read_to_string(path) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::parse("")?),
             Err(error) => Err(format!("{}: {error}", path.display())),
             Ok(text) => Self::parse(&text).map_err(|error| format!("{}: {error}", path.display())),
@@ -139,11 +147,6 @@ fn default_dam() -> Vec<String> {
 
 fn default_handoff_label() -> String {
     DEFAULT_HANDOFF_LABEL.to_string()
-}
-
-fn config_path() -> PathBuf {
-    let given = std::env::var_os("HERDR_PLUGIN_CONFIG_DIR").map(PathBuf::from);
-    config_path_in(given.as_deref(), &base_config_dir())
 }
 
 fn config_path_in(herdr_plugin_config_dir: Option<&Path>, base: &Path) -> PathBuf {
