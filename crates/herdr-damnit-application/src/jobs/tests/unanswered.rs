@@ -47,6 +47,18 @@ fn cancelling_with_nothing_in_flight_says_so() {
     assert!(!jobs.cancel_current());
 }
 
+#[test]
+fn a_read_superseded_by_a_newer_one_of_its_kind_is_cancelled_rather_than_left_running() {
+    let runner = RecordsCancelledIndex::new();
+    let cancelled = Arc::clone(&runner.cancelled);
+    let mut jobs = Jobs::new(Box::new(runner), Box::new(TestClock));
+    jobs.submit(JobKind::ReadList, argv::list("!done"));
+    jobs.submit(JobKind::ReadList, argv::list("done"));
+
+    assert_eq!(*cancelled.lock().expect("the record"), vec![0]);
+    assert_eq!(jobs.in_flight(), 1);
+}
+
 struct RecordsCancelledIndex {
     cancelled: Arc<Mutex<Vec<usize>>>,
     next: Mutex<usize>,
