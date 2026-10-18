@@ -74,8 +74,8 @@ impl PluginPanes for CliHerdr {
     }
 
     fn resize(&self, pane: &str, side: SplitSide, share: f32) -> Result<bool, String> {
-        let amount = share - self.measured_ratio_rather_than_an_assumed_half(pane)?;
-        let output = self.run(&resize_args(pane, direction(side), amount))?;
+        let delta = share - self.measured_ratio_rather_than_an_assumed_half(pane)?;
+        let output = self.run(&resize_args(pane, side, delta))?;
         Ok(resize_changed(&output))
     }
 }
@@ -128,7 +128,19 @@ fn focus_flag(focus: PaneFocus) -> &'static str {
     }
 }
 
-fn resize_args(pane: &str, direction: &str, amount: f32) -> Vec<String> {
+fn direction_toward_the_caller(side: SplitSide) -> &'static str {
+    match side {
+        SplitSide::Right => "left",
+        SplitSide::Down => "up",
+    }
+}
+
+fn resize_args(pane: &str, side: SplitSide, delta: f32) -> Vec<String> {
+    let direction = if delta < 0.0 {
+        direction_toward_the_caller(side)
+    } else {
+        direction(side)
+    };
     [
         "pane",
         "resize",
@@ -140,7 +152,7 @@ fn resize_args(pane: &str, direction: &str, amount: f32) -> Vec<String> {
     ]
     .iter()
     .map(|argument| argument.to_string())
-    .chain(std::iter::once(amount.to_string()))
+    .chain(std::iter::once(delta.abs().to_string()))
     .collect()
 }
 
