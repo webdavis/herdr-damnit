@@ -1,6 +1,6 @@
 use herdr_damnit_adapters::wire;
 use herdr_damnit_application::{Completion, Phase, Request, SyncKind};
-use herdr_damnit_domain::{Failure, Stage, classify, done_rows, message, status_rows};
+use herdr_damnit_domain::{Failure, Stage, classify, done_rows, message};
 
 use super::{App, Pending};
 use crate::overlay::{LineBox, LinePurpose, Overlay};
@@ -49,7 +49,8 @@ impl App {
             (_, Request::List(_)) => {
                 let objects =
                     wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
-                self.list.take(objects, &self.stage, self.config.icons());
+                self.list
+                    .take(objects, self.status.stage(), self.config.icons());
             }
             (_, Request::Done) => {
                 self.done_objects =
@@ -100,9 +101,7 @@ impl App {
     }
 
     pub(super) fn take_stage(&mut self, stage: Stage) {
-        self.stage = stage;
-        self.status
-            .replace(status_rows(&self.stage, self.config.icons()));
-        self.list.redraw(&self.stage, self.config.icons());
+        self.status.take(stage, self.config.icons());
+        self.list.redraw(self.status.stage(), self.config.icons());
     }
 }

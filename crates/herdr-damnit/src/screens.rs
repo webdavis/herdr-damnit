@@ -44,7 +44,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
         (None, None, Screen::List) => {
             rows::draw(frame, body, app.list().cursor(), "nothing in this view")
         }
-        (None, None, Screen::Status) => rows::draw(frame, body, &app.status, ""),
+        (None, None, Screen::Status) => rows::draw(frame, body, app.status().cursor(), ""),
         (None, None, Screen::Done) => rows::draw(frame, body, &app.done, "nothing completed yet"),
     }
     if let (None, Some(open)) = (app.refusal(), app.showing().overlay()) {
@@ -98,7 +98,7 @@ fn counts(app: &App) -> String {
     ) {
         (true, _) => String::new(),
         (false, Screen::List) => open_counts(app),
-        (false, Screen::Status) => app.stage.summary(),
+        (false, Screen::Status) => app.status().stage().summary(),
         (false, Screen::Done) => format!("{} done", app.done.object_count()),
     }
 }
@@ -106,8 +106,8 @@ fn counts(app: &App) -> String {
 fn open_counts(app: &App) -> String {
     counted(&[
         (app.list().cursor().object_count() as u64, "open"),
-        (app.stage.staged_count() as u64, "staged"),
-        (app.stage.unpushed_commits(), "unpushed"),
+        (app.status().stage().staged_count() as u64, "staged"),
+        (app.status().stage().unpushed_commits(), "unpushed"),
     ])
 }
 
@@ -124,7 +124,11 @@ fn cursor(app: &App) -> Option<usize> {
     match (app.showing().detail(), app.showing().screen()) {
         (Some(_), _) => None,
         (None, Screen::List) => Some(app.list().cursor().selected()),
-        (None, Screen::Status) => app.status.selected_oid().map(|_| app.status.selected()),
+        (None, Screen::Status) => app
+            .status()
+            .cursor()
+            .selected_oid()
+            .map(|_| app.status().cursor().selected()),
         (None, Screen::Done) => Some(app.done.selected()),
     }
 }

@@ -57,7 +57,12 @@ fn escape_from_a_detail_opened_on_the_status_screen_returns_to_its_row() {
 
     assert_eq!(harness.app.showing().screen(), Screen::Status);
     assert_eq!(
-        harness.app.status.selected_oid().map(|oid| oid.as_str()),
+        harness
+            .app
+            .status()
+            .cursor()
+            .selected_oid()
+            .map(|oid| oid.as_str()),
         Some("5d6e7f8")
     );
     assert!(

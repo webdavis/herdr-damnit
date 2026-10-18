@@ -11,6 +11,7 @@ mod pending;
 mod pickers;
 mod screen;
 mod showing;
+mod status;
 mod views;
 
 pub use crate::overlay::Overlay;
@@ -19,6 +20,7 @@ pub use list::ListScreen;
 use pending::Pending;
 pub use screen::Screen;
 pub use showing::Showing;
+pub use status::StatusScreen;
 
 #[cfg(test)]
 pub(crate) mod tests;
@@ -31,7 +33,7 @@ use herdr_damnit_adapters::Config;
 use herdr_damnit_application::{
     AgentPanes, Clock, JobId, Jobs, Phase, Request, Submitted, Workspace,
 };
-use herdr_damnit_domain::{Cursor, Date, Failure, Object, Oid, Stage, Views, message, status_rows};
+use herdr_damnit_domain::{Cursor, Date, Failure, Object, Oid, Views, message};
 
 const BUSY_POLL_WINDOW: Duration = Duration::from_millis(50);
 
@@ -47,10 +49,9 @@ pub enum After {
 pub struct App {
     showing: Showing,
     list: ListScreen,
-    pub status: Cursor,
+    status: StatusScreen,
     pub done: Cursor,
     pub view_request: Option<PathBuf>,
-    pub stage: Stage,
     pub message: String,
     pub spinner: usize,
     pub config: Config,
@@ -80,10 +81,9 @@ impl App {
         Self {
             showing: Showing::new(),
             list: ListScreen::new(views, clock),
-            status: Cursor::new(status_rows(&Stage::default(), config.icons())),
+            status: StatusScreen::new(config.icons()),
             done: Cursor::new(Vec::new()),
             view_request: None,
-            stage: Stage::default(),
             message: String::new(),
             spinner: 0,
             config,
@@ -117,6 +117,10 @@ impl App {
 
     pub fn list(&self) -> &ListScreen {
         &self.list
+    }
+
+    pub fn status(&self) -> &StatusScreen {
+        &self.status
     }
 
     pub fn showing(&self) -> &Showing {

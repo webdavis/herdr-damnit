@@ -90,7 +90,7 @@ impl App {
 
     fn toggle_staged(&mut self) -> After {
         match self.selected_oid().cloned() {
-            Some(oid) if self.stage.is_staged(&oid) => self.write(argv::unstage(&oid)),
+            Some(oid) if self.status.stage().is_staged(&oid) => self.write(argv::unstage(&oid)),
             Some(oid) => self.write(argv::stage(&oid)),
             None => After::Stay,
         }
@@ -108,7 +108,7 @@ impl App {
 
     pub(super) fn cursor_mut(&mut self) -> &mut Cursor {
         match self.showing.screen() {
-            Screen::Status => &mut self.status,
+            Screen::Status => self.status.cursor_mut(),
             Screen::Done => &mut self.done,
             Screen::List => self.list.cursor_mut(),
         }
@@ -117,7 +117,7 @@ impl App {
     pub(super) fn selected_oid(&self) -> Option<&Oid> {
         match self.showing.screen() {
             Screen::List => self.list.cursor().selected_oid(),
-            Screen::Status => self.status.selected_oid(),
+            Screen::Status => self.status.cursor().selected_oid(),
             Screen::Done => self.done.selected_oid(),
         }
     }

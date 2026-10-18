@@ -8,7 +8,7 @@ const DATE_WORDS: &str = "today, tomorrow, YYYY-MM-DD or YYYY-MM-DDTHH:MM";
 
 impl App {
     pub(super) fn open_commit_box(&mut self) -> After {
-        let staged = self.stage.staged_count();
+        let staged = self.status.stage().staged_count();
         if staged == 0 {
             self.message =
                 "nothing staged; press <Space> on a row or A to stage everything.".to_string();
