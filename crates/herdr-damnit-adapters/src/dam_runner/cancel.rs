@@ -41,14 +41,10 @@ impl Cancel {
     }
 
     fn signal_group(self, signal: libc::c_int) {
-        // SAFETY: `kill` takes two plain numbers and writes to none of this program's memory, so it
-        // cannot corrupt anything; a group that has already exited just makes the call fail.
         unsafe { libc::kill(-self.group, signal) };
     }
 
     fn alive(self) -> bool {
-        // SAFETY: the same plain-number call as above, and signal 0 sends nothing: it only asks the
-        // system whether the group still exists.
         unsafe { libc::kill(-self.group, 0) == 0 }
     }
 }

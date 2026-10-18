@@ -58,6 +58,7 @@ impl Jobs {
             ));
         }
         if kind.supersedes_its_own_kind() {
+            self.cancel_every(&kind);
             self.running.retain(|job| job.kind != kind);
         }
         let job = match self.runner.spawn(&argv) {
@@ -120,6 +121,12 @@ impl Jobs {
     pub fn elapsed_of_current(&self, now: Instant) -> Option<Duration> {
         self.exclusive_else_oldest()
             .map(|running| now.saturating_duration_since(running.started))
+    }
+
+    fn cancel_every(&self, kind: &JobKind) {
+        for superseded in self.running.iter().filter(|job| job.kind == *kind) {
+            (superseded.job.cancel)();
+        }
     }
 
     fn exclusive_else_oldest(&self) -> Option<&Running> {
