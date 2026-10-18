@@ -1,5 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use herdr_damnit_application::{Request, Side, SyncKind, argv};
+use herdr_damnit_application::{Request, SyncKind, Toward, argv};
 use herdr_damnit_domain::{Cursor, Oid};
 
 use super::{After, App, Screen};
@@ -56,8 +56,8 @@ impl App {
             KeyCode::Char('a') => self.open_new_box(),
             KeyCode::Char('S') => self.open_note_box(),
             KeyCode::Char('e') => self.edit_in_editor(),
-            KeyCode::Char('o') => self.resolve(Side::Ours),
-            KeyCode::Char('t') => self.resolve(Side::Theirs),
+            KeyCode::Char('o') => self.resolve(Toward::Ours),
+            KeyCode::Char('t') => self.resolve(Toward::Theirs),
             KeyCode::Char('q') => self.quit(),
             KeyCode::Esc => After::Quit,
             KeyCode::Enter => self.read_detail(),
