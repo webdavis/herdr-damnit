@@ -95,3 +95,33 @@ fn r_on_the_too_old_refusal_asks_for_the_version_again_and_keeps_the_refusal_up_
         "{drawn}"
     );
 }
+
+#[test]
+fn opening_a_second_task_drops_the_first_tasks_later_answer_and_shows_the_second() {
+    let mut harness = loaded();
+    harness.press(KeyCode::Enter);
+    harness.press(KeyCode::Char('j'));
+    harness.press(KeyCode::Enter);
+    harness.answer(
+        4,
+        0,
+        r#"{"oid":"5d6e7f8","kind":"task","subject":"refresh the roster row","task":{"done":false,"priority":4}}"#,
+        "",
+    );
+    harness.answer(
+        3,
+        0,
+        r#"{"oid":"1a2b3c4","kind":"task","subject":"ship the pin bump","task":{"done":false,"priority":1}}"#,
+        "",
+    );
+
+    assert_eq!(harness.cancels(), 1);
+    assert_eq!(
+        harness
+            .app
+            .detail
+            .as_ref()
+            .map(|shown| shown.subject.as_str()),
+        Some("refresh the roster row")
+    );
+}
