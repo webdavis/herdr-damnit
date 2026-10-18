@@ -51,7 +51,7 @@ fn control_d_sends_the_brief_with_the_note_and_names_the_agent() {
     let sent = harness.herdr_calls();
     let paste = sent
         .iter()
-        .find(|call| call.starts_with("pane send-text w1:p2"))
+        .find(|call| call.starts_with("send_text w1:p2"))
         .unwrap_or_else(|| panic!("{sent:?}"));
     assert!(paste.contains("ship the pin bump"), "{paste}");
     assert!(paste.contains("note: start here"), "{paste}");
@@ -107,7 +107,7 @@ fn escape_throws_the_draft_away_and_sends_nothing() {
 
 #[test]
 fn shift_s_refuses_before_the_box_opens_when_the_workspace_has_no_agent_pane() {
-    let mut harness = harness_with_listing(ascii_config(), NO_AGENT);
+    let mut harness = harness_with_listing(ascii_config(), Vec::new());
     crate::open::start(&mut harness.app);
     harness.answer(0, 0, "dam 0.2.0\n", "");
     harness.answer(1, 0, crate::screens::tests::CLEAN, "");
@@ -124,7 +124,7 @@ fn the_box_comes_back_with_the_draft_when_the_agent_pane_went_away() {
     harness.select("1a2b3c4");
     harness.press(KeyCode::Char('S'));
     harness.type_line("keep me");
-    harness.list_agents(NO_AGENT);
+    harness.list_agents(Vec::new());
     send(&mut harness);
 
     let Some(Overlay::Note(note)) = harness.app.overlay.as_ref() else {
@@ -136,6 +136,6 @@ fn the_box_comes_back_with_the_draft_when_the_agent_pane_went_away() {
         harness
             .herdr_calls()
             .iter()
-            .all(|call| !call.starts_with("pane send-text"))
+            .all(|call| !call.starts_with("send_text"))
     );
 }

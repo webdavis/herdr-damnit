@@ -5,10 +5,10 @@ use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent};
 use herdr_damnit_adapters::Config;
-use herdr_damnit_application::{Finished, Jobs};
+use herdr_damnit_application::{Finished, Jobs, ListedAgent};
 use herdr_damnit_domain::{Date, parse_date};
 
-use super::fakes::{ONE_AGENT, Recorder, RecordingHerdr, StoppedClock, TODAY, here};
+use super::fakes::{Recorder, RecordingHerdr, StoppedClock, TODAY, here, one_agent};
 use crate::app::{After, App};
 
 pub(crate) struct Harness {
@@ -20,7 +20,7 @@ pub(crate) struct Harness {
     cancels: Arc<AtomicUsize>,
     missing: Arc<AtomicBool>,
     herdr_calls: Arc<Mutex<Vec<String>>>,
-    agents: Arc<Mutex<String>>,
+    agents: Arc<Mutex<Vec<ListedAgent>>>,
 }
 
 pub(crate) fn harness() -> Harness {
@@ -28,7 +28,7 @@ pub(crate) fn harness() -> Harness {
 }
 
 pub(crate) fn harness_with(config: Config) -> Harness {
-    harness_with_listing(config, ONE_AGENT)
+    harness_with_listing(config, one_agent())
 }
 
 pub(crate) fn harness_with_missing_dam() -> Harness {
@@ -37,9 +37,9 @@ pub(crate) fn harness_with_missing_dam() -> Harness {
     harness
 }
 
-pub(crate) fn harness_with_listing(config: Config, listing: &str) -> Harness {
+pub(crate) fn harness_with_listing(config: Config, listing: Vec<ListedAgent>) -> Harness {
     let herdr = RecordingHerdr {
-        listing: Arc::new(Mutex::new(listing.to_string())),
+        listing: Arc::new(Mutex::new(listing)),
         calls: Arc::default(),
     };
     let herdr_calls = Arc::clone(&herdr.calls);
@@ -110,8 +110,8 @@ impl Harness {
         }
     }
 
-    pub(crate) fn list_agents(&self, listing: &str) {
-        *self.agents.lock().expect("the listing") = listing.to_string();
+    pub(crate) fn list_agents(&self, listing: Vec<ListedAgent>) {
+        *self.agents.lock().expect("the listing") = listing;
     }
 
     pub(crate) fn herdr_calls(&self) -> Vec<String> {
@@ -121,7 +121,7 @@ impl Harness {
     pub(crate) fn sent_anything(&self) -> bool {
         self.herdr_calls()
             .iter()
-            .any(|call| call.starts_with("pane send-text"))
+            .any(|call| call.starts_with("send_text"))
     }
 
     pub(crate) fn cancels(&self) -> usize {

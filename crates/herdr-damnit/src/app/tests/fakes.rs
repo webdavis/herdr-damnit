@@ -4,30 +4,47 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use herdr_damnit_application::{
-    Clock, DamRunner, Finished, Herdr, RunningJob, SpawnError, Workspace,
+    AgentPanes, Clock, DamRunner, Finished, ListedAgent, RunningJob, SpawnError, Workspace,
 };
 use herdr_damnit_domain::Date;
 
 pub(crate) const TODAY: &str = "2026-09-20";
 
-pub(crate) const ONE_AGENT: &str = r#"{"result":{"agents":[
-  {"pane_id":"w1:p2","workspace_id":"w1","agent":"claude","name":"planner"}]}}"#;
-
-pub(crate) const NO_AGENT: &str = r#"{"result":{"agents":[]}}"#;
+pub(crate) fn one_agent() -> Vec<ListedAgent> {
+    vec![ListedAgent {
+        pane: "w1:p2".to_string(),
+        workspace: "w1".to_string(),
+        kind: Some("claude".to_string()),
+        name: Some("planner".to_string()),
+        profile: None,
+    }]
+}
 
 #[derive(Default)]
 pub(crate) struct RecordingHerdr {
-    pub(crate) listing: Arc<Mutex<String>>,
+    pub(crate) listing: Arc<Mutex<Vec<ListedAgent>>>,
     pub(crate) calls: Arc<Mutex<Vec<String>>>,
 }
 
-impl Herdr for RecordingHerdr {
-    fn call(&self, args: &[&str]) -> Result<String, String> {
-        self.calls.lock().expect("the calls").push(args.join(" "));
-        match args {
-            ["agent", "list"] => Ok(self.listing.lock().expect("the listing").clone()),
-            _ => Ok(String::new()),
-        }
+impl RecordingHerdr {
+    fn record(&self, call: String) -> Result<(), String> {
+        self.calls.lock().expect("the calls").push(call);
+        Ok(())
+    }
+}
+
+impl AgentPanes for RecordingHerdr {
+    fn agents(&self) -> Result<Vec<ListedAgent>, String> {
+        self.record("agents".to_string())?;
+        Ok(self.listing.lock().expect("the listing").clone())
+    }
+
+    fn send_text(&self, pane: &str, text: &str) -> Result<(), String> {
+        self.record(format!("send_text {pane} {text}"))
+    }
+
+    fn focus_agent(&self, pane: &str) -> Result<(), String> {
+        self.record(format!("focus_agent {pane}"))
     }
 }
 

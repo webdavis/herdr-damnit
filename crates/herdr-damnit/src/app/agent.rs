@@ -8,7 +8,7 @@ impl App {
         let Some(oid) = self.selected_object().map(|object| object.oid.clone()) else {
             return After::Stay;
         };
-        match agent_pane(&*self.herdr, &self.here) {
+        match agent_pane(&*self.agents, &self.here) {
             Ok(_) => self.reopen(Overlay::Note(NoteBox {
                 oid,
                 text: String::new(),
@@ -25,7 +25,7 @@ impl App {
             return After::Stay;
         };
         let label = self.config.handoff_label.clone();
-        match hand_off(&*self.herdr, &self.here, &object, note.text.trim(), &label) {
+        match hand_off(&*self.agents, &self.here, &object, note.text.trim(), &label) {
             HandOff::Refused(said) => {
                 self.message = said;
                 return self.reopen(Overlay::Note(note));

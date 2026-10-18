@@ -25,7 +25,9 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use herdr_damnit_adapters::Config;
-use herdr_damnit_application::{Clock, Herdr, JobId, Jobs, Phase, Request, Submitted, Workspace};
+use herdr_damnit_application::{
+    AgentPanes, Clock, JobId, Jobs, Phase, Request, Submitted, Workspace,
+};
 use herdr_damnit_domain::{Cursor, Date, Failure, Object, Oid, Stage, Views, message};
 
 const BUSY_POLL_WINDOW: Duration = Duration::from_millis(50);
@@ -55,7 +57,7 @@ pub struct App {
     pub detail: Option<Object>,
     last_reread: Option<Instant>,
     pending: HashMap<JobId, Pending>,
-    herdr: Box<dyn Herdr>,
+    agents: Box<dyn AgentPanes>,
     here: Workspace,
     clock: Box<dyn Clock>,
     objects: Vec<Object>,
@@ -69,7 +71,7 @@ impl App {
     pub fn new(
         config: Config,
         jobs: Jobs,
-        herdr: Box<dyn Herdr>,
+        agents: Box<dyn AgentPanes>,
         here: Workspace,
         clock: Box<dyn Clock>,
     ) -> Self {
@@ -93,7 +95,7 @@ impl App {
             detail: None,
             last_reread: None,
             pending: HashMap::new(),
-            herdr,
+            agents,
             here,
             clock,
             objects: Vec::new(),
