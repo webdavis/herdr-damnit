@@ -1,5 +1,8 @@
-use herdr_damnit_adapters::config::Placement;
-use herdr_damnit_adapters::{Config, herdr_cli as herdr, state};
+use herdr_damnit_adapters::Config;
+use herdr_damnit_adapters::config::{Placement, Side};
+use herdr_damnit_application::{
+    PaneFocus, PaneMemory, PaneOpen, PanePlacement, PluginPanes, SplitSide, Workspace,
+};
 
 mod requests;
 
@@ -20,21 +23,6 @@ pub enum Decision {
     Focus(String),
     LeaveOpen(String),
     NothingToFocus,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Focus {
-    Take,
-    Leave,
-}
-
-impl Focus {
-    fn as_flag(self) -> &'static str {
-        match self {
-            Self::Take => "--focus",
-            Self::Leave => "--no-focus",
-        }
-    }
 }
 
 pub fn decide(mode: Mode, remembered: Option<&str>, live: &[String]) -> Decision {
@@ -60,25 +48,49 @@ fn recovery_from_a_rejected_pane(mode: Mode) -> Recovery {
     }
 }
 
-fn focus_of(mode: Mode) -> Focus {
+fn focus_of(mode: Mode) -> PaneFocus {
     match mode {
-        Mode::AutoOpen => Focus::Leave,
-        Mode::Open | Mode::Toggle | Mode::Focus => Focus::Take,
+        Mode::AutoOpen => PaneFocus::Leave,
+        Mode::Open | Mode::Toggle | Mode::Focus => PaneFocus::Take,
     }
 }
 
-pub fn run(mode: Mode, config: &Config) -> Result<String, String> {
-    let workspace = std::env::var("HERDR_WORKSPACE_ID")
-        .map_err(|_| "no workspace context: run this action from inside herdr".to_string())?;
-    let live = herdr::live_panes(&workspace)?;
-    let remembered = state::remembered_pane(&workspace);
+fn placement_of(config: &Config) -> PanePlacement {
+    match (config.placement, config.side) {
+        (Placement::Overlay, _) => PanePlacement::Overlay,
+        (Placement::Split, Side::Right) => PanePlacement::Split(SplitSide::Right),
+        (Placement::Split, Side::Down) => PanePlacement::Split(SplitSide::Down),
+        (Placement::Tab, _) => PanePlacement::Tab,
+        (Placement::Zoomed, _) => PanePlacement::Zoomed,
+    }
+}
+
+pub fn run(
+    mode: Mode,
+    here: &Workspace,
+    panes: &dyn PluginPanes,
+    memory: &dyn PaneMemory,
+    config: &Config,
+) -> Result<String, String> {
+    let workspace = here
+        .workspace
+        .as_deref()
+        .ok_or_else(|| "no workspace context: run this action from inside herdr".to_string())?;
+    let live = panes.live(workspace)?;
+    let remembered = memory.remembered(workspace);
+    let opening = PaneOpen {
+        workspace: workspace.to_string(),
+        neighbor: here.me.clone(),
+        placement: placement_of(config),
+        focus: focus_of(mode),
+    };
     match decide(mode, remembered.as_deref(), &live) {
-        Decision::Focus(pane) => match herdr::focus_plugin_pane(&pane) {
-            Ok(_) => Ok(format!("focused {pane}")),
+        Decision::Focus(pane) => match panes.focus(&pane) {
+            Ok(()) => Ok(format!("focused {pane}")),
             Err(_) => {
-                state::forget_pane(&workspace);
+                memory.forget(workspace);
                 match recovery_from_a_rejected_pane(mode) {
-                    Recovery::RetryOpen => open_and_remember(&workspace, config, focus_of(mode)),
+                    Recovery::RetryOpen => open_and_remember(opening, panes, memory, config.width),
                     Recovery::ReportGone => {
                         Ok(format!("no dam pane in {workspace}: {pane} is gone"))
                     }
@@ -86,31 +98,40 @@ pub fn run(mode: Mode, config: &Config) -> Result<String, String> {
             }
         },
         Decision::Close(pane) => {
-            let closed = herdr::close_plugin_pane(&pane);
-            state::forget_pane(&workspace);
+            let closed = panes.close(&pane);
+            memory.forget(workspace);
             match closed {
-                Ok(_) => Ok(format!("closed {pane}")),
-                Err(_) => open_and_remember(&workspace, config, focus_of(mode)),
+                Ok(()) => Ok(format!("closed {pane}")),
+                Err(_) => open_and_remember(opening, panes, memory, config.width),
             }
         }
         Decision::LeaveOpen(pane) => Ok(format!("{pane} is already open")),
         Decision::NothingToFocus => Ok(format!("no dam pane in {workspace}")),
-        Decision::Open => open_and_remember(&workspace, config, focus_of(mode)),
+        Decision::Open => open_and_remember(opening, panes, memory, config.width),
     }
 }
 
-pub fn auto_open(config: &Config) -> Result<String, String> {
+pub fn auto_open(
+    here: &Workspace,
+    panes: &dyn PluginPanes,
+    memory: &dyn PaneMemory,
+    config: &Config,
+) -> Result<String, String> {
     if !config.auto_open {
         return Ok("auto_open is off".to_string());
     }
-    run(Mode::AutoOpen, config)
+    run(Mode::AutoOpen, here, panes, memory, config)
 }
 
-fn open_and_remember(workspace: &str, config: &Config, focus: Focus) -> Result<String, String> {
-    let neighbor = std::env::var("HERDR_PANE_ID").unwrap_or_default();
-    let pane = herdr::open_plugin_pane(workspace, &neighbor, focus.as_flag(), config)?;
-    let note = resize_the_calling_pane_to_leave_the_configured_width(&neighbor, config);
-    state::remember_pane(workspace, &pane);
+fn open_and_remember(
+    opening: PaneOpen,
+    panes: &dyn PluginPanes,
+    memory: &dyn PaneMemory,
+    width: Option<f32>,
+) -> Result<String, String> {
+    let pane = panes.open(&opening)?;
+    let note = resize_the_calling_pane_to_leave_the_configured_width(&opening, panes, width);
+    memory.remember(&opening.workspace, &pane);
     Ok(match note {
         Some(note) => format!("opened {pane}, {note}"),
         None => format!("opened {pane}"),
@@ -122,15 +143,18 @@ fn calling_panes_share_after(width: f32) -> f32 {
 }
 
 fn resize_the_calling_pane_to_leave_the_configured_width(
-    neighbor: &str,
-    config: &Config,
+    opening: &PaneOpen,
+    panes: &dyn PluginPanes,
+    width: Option<f32>,
 ) -> Option<String> {
-    if config.placement != Placement::Split || neighbor.is_empty() {
+    let PanePlacement::Split(side) = opening.placement else {
+        return None;
+    };
+    if opening.neighbor.is_empty() {
         return None;
     }
-    let target_ratio = calling_panes_share_after(config.width?);
-    let direction = config.side.split_direction();
-    match herdr::resize_leading_pane(neighbor, direction, target_ratio) {
+    let share = calling_panes_share_after(width?);
+    match panes.resize(&opening.neighbor, side, share) {
         Ok(true) => None,
         Ok(false) => Some("placement refused: herdr did not resize the pane".to_string()),
         Err(error) => Some(format!("placement refused: {error}")),
