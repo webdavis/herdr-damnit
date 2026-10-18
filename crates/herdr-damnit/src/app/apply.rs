@@ -1,6 +1,6 @@
 use herdr_damnit_adapters::wire;
 use herdr_damnit_application::{Completion, Phase, Request, SyncKind};
-use herdr_damnit_domain::{Failure, Stage, classify, done_rows, message};
+use herdr_damnit_domain::{Failure, Stage, classify, message};
 
 use super::{App, Pending};
 use crate::overlay::{LineBox, LinePurpose, Overlay};
@@ -53,10 +53,9 @@ impl App {
                     .take(objects, self.status.stage(), self.config.icons());
             }
             (_, Request::Done) => {
-                self.done_objects =
-                    wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
-                self.done
-                    .replace(done_rows(&self.done_objects, &self.completion_days));
+                self.done.take_objects(
+                    wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?,
+                );
             }
             (_, Request::Show(_)) => {
                 self.showing.open_detail(
@@ -64,10 +63,9 @@ impl App {
                 );
             }
             (_, Request::Log) => {
-                self.completion_days =
-                    wire::completions(&completion.finished.stdout).map_err(|_| unreadable())?;
-                self.done
-                    .replace(done_rows(&self.done_objects, &self.completion_days));
+                self.done.take_completion_days(
+                    wire::completions(&completion.finished.stdout).map_err(|_| unreadable())?,
+                );
             }
             (_, Request::Sync(SyncKind::Push, _)) => {
                 self.message =

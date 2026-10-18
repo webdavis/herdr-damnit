@@ -160,7 +160,12 @@ fn escape_from_a_detail_opened_on_the_done_screen_returns_to_its_row() {
 
     assert_eq!(harness.app.showing().screen(), Screen::Done);
     assert_eq!(
-        harness.app.done.selected_oid().map(|oid| oid.as_str()),
+        harness
+            .app
+            .done()
+            .cursor()
+            .selected_oid()
+            .map(|oid| oid.as_str()),
         Some("9a0b1c2")
     );
 }

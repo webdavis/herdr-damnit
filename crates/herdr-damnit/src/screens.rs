@@ -45,7 +45,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
             rows::draw(frame, body, app.list().cursor(), "nothing in this view")
         }
         (None, None, Screen::Status) => rows::draw(frame, body, app.status().cursor(), ""),
-        (None, None, Screen::Done) => rows::draw(frame, body, &app.done, "nothing completed yet"),
+        (None, None, Screen::Done) => {
+            rows::draw(frame, body, app.done().cursor(), "nothing completed yet")
+        }
     }
     if let (None, Some(open)) = (app.refusal(), app.showing().overlay()) {
         overlay::draw(
@@ -99,7 +101,7 @@ fn counts(app: &App) -> String {
         (true, _) => String::new(),
         (false, Screen::List) => open_counts(app),
         (false, Screen::Status) => app.status().stage().summary(),
-        (false, Screen::Done) => format!("{} done", app.done.object_count()),
+        (false, Screen::Done) => format!("{} done", app.done().cursor().object_count()),
     }
 }
 
@@ -129,7 +131,7 @@ fn cursor(app: &App) -> Option<usize> {
             .cursor()
             .selected_oid()
             .map(|_| app.status().cursor().selected()),
-        (None, Screen::Done) => Some(app.done.selected()),
+        (None, Screen::Done) => Some(app.done().cursor().selected()),
     }
 }
 

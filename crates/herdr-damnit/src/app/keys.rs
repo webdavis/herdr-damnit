@@ -109,7 +109,7 @@ impl App {
     pub(super) fn cursor_mut(&mut self) -> &mut Cursor {
         match self.showing.screen() {
             Screen::Status => self.status.cursor_mut(),
-            Screen::Done => &mut self.done,
+            Screen::Done => self.done.cursor_mut(),
             Screen::List => self.list.cursor_mut(),
         }
     }
@@ -118,7 +118,7 @@ impl App {
         match self.showing.screen() {
             Screen::List => self.list.cursor().selected_oid(),
             Screen::Status => self.status.cursor().selected_oid(),
-            Screen::Done => self.done.selected_oid(),
+            Screen::Done => self.done.cursor().selected_oid(),
         }
     }
 }

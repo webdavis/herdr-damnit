@@ -109,9 +109,7 @@ impl App {
     }
 
     pub(super) fn object(&self, oid: &Oid) -> Option<&Object> {
-        self.list
-            .object(oid)
-            .or_else(|| self.done_objects.iter().find(|object| &object.oid == oid))
+        self.list.object(oid).or_else(|| self.done.object(oid))
     }
 
     pub(super) fn selected_object(&self) -> Option<&Object> {

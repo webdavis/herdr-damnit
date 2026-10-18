@@ -1,6 +1,7 @@
 mod agent;
 mod apply;
 mod boxes;
+mod done;
 mod edits;
 mod handshake;
 mod header;
@@ -15,6 +16,7 @@ mod status;
 mod views;
 
 pub use crate::overlay::Overlay;
+pub use done::DoneScreen;
 pub(crate) use handshake::status_refusal;
 pub use list::ListScreen;
 use pending::Pending;
@@ -33,7 +35,7 @@ use herdr_damnit_adapters::Config;
 use herdr_damnit_application::{
     AgentPanes, Clock, JobId, Jobs, Phase, Request, Submitted, Workspace,
 };
-use herdr_damnit_domain::{Cursor, Date, Failure, Object, Oid, Views, message};
+use herdr_damnit_domain::{Failure, Views, message};
 
 const BUSY_POLL_WINDOW: Duration = Duration::from_millis(50);
 
@@ -50,7 +52,7 @@ pub struct App {
     showing: Showing,
     list: ListScreen,
     status: StatusScreen,
-    pub done: Cursor,
+    done: DoneScreen,
     pub view_request: Option<PathBuf>,
     pub message: String,
     pub spinner: usize,
@@ -60,9 +62,6 @@ pub struct App {
     pending: HashMap<JobId, Pending>,
     agents: Box<dyn AgentPanes>,
     here: Workspace,
-    done_objects: Vec<Object>,
-    completion_days: HashMap<Oid, Date>,
-    done_opened: bool,
     jobs: Jobs,
 }
 
@@ -82,7 +81,7 @@ impl App {
             showing: Showing::new(),
             list: ListScreen::new(views, clock),
             status: StatusScreen::new(config.icons()),
-            done: Cursor::new(Vec::new()),
+            done: DoneScreen::new(),
             view_request: None,
             message: String::new(),
             spinner: 0,
@@ -92,9 +91,6 @@ impl App {
             pending: HashMap::new(),
             agents,
             here,
-            done_objects: Vec::new(),
-            completion_days: HashMap::new(),
-            done_opened: false,
             jobs,
         }
     }
@@ -121,6 +117,10 @@ impl App {
 
     pub fn status(&self) -> &StatusScreen {
         &self.status
+    }
+
+    pub fn done(&self) -> &DoneScreen {
+        &self.done
     }
 
     pub fn showing(&self) -> &Showing {

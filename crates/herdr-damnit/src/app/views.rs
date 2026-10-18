@@ -43,7 +43,7 @@ impl App {
             Phase::Ready => {
                 self.read_list();
                 self.submit(Request::Status);
-                if self.done_opened {
+                if self.done.opened() {
                     self.read_done();
                 }
             }
@@ -100,8 +100,7 @@ impl App {
 
     pub(super) fn show(&mut self, screen: Screen) -> After {
         self.showing.show(screen);
-        if screen == Screen::Done && self.phase == Phase::Ready && !self.done_opened {
-            self.done_opened = true;
+        if screen == Screen::Done && self.phase == Phase::Ready && self.done.open_the_first_time() {
             self.read_done();
         }
         After::Stay
