@@ -31,7 +31,7 @@ impl App {
         };
         let subject = self.subject_of(&oid).unwrap_or_default();
         self.reopen(Overlay::Confirm(Confirm {
-            question: format!("remove {} {subject}? d removes it", oid.short()),
+            question: format!("remove {} {subject}?", oid.short()),
             key: 'd',
             purpose: ConfirmPurpose::Delete(oid),
         }))
@@ -62,7 +62,7 @@ impl App {
             false => change.fields.join(", "),
         };
         let question = format!(
-            "discard {} {} ({lost})? ! discards it",
+            "discard {} {} ({lost})?",
             change.oid.short(),
             change.subject
         );
@@ -79,10 +79,7 @@ impl App {
             return After::Quit;
         };
         self.reopen(Overlay::Confirm(Confirm {
-            question: format!(
-                "a {} is running; q again quits and lets it finish",
-                sync.verb()
-            ),
+            question: format!("a {} is running; quit and let it finish?", sync.verb()),
             key: 'q',
             purpose: ConfirmPurpose::QuitMidJob,
         }))

@@ -58,7 +58,7 @@ fn q_mid_push_asks_once_and_quits_on_the_second_press_without_cancelling() {
     };
     assert_eq!(
         confirm.question,
-        "a push is running; q again quits and lets it finish"
+        "a push is running; quit and let it finish?"
     );
 
     assert_eq!(harness.press(KeyCode::Char('q')), After::Quit);

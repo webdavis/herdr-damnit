@@ -3,6 +3,7 @@ mod detail;
 mod done;
 mod legend;
 mod list;
+mod overlay;
 mod palette;
 mod status;
 

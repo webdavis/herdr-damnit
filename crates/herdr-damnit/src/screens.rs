@@ -16,10 +16,12 @@ mod detail;
 mod done;
 mod list;
 mod overlay;
+mod placement;
 mod refusal;
 mod status;
 
 use list::cut_to;
+use placement::Placement;
 
 pub const ELLIPSIS: &str = "\u{2026}";
 
@@ -45,7 +47,12 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
         Screen::Detail => detail::draw(frame, body, app),
     }
     if let Some(open) = &app.overlay {
-        overlay::draw(frame, body, open, app.config.icons());
+        overlay::draw(
+            frame,
+            &Placement::new(body, cursor(app)),
+            open,
+            app.config.icons(),
+        );
     }
     frame.render_widget(bottom_line(app, bottom.width), bottom);
 }
@@ -106,6 +113,15 @@ fn bottom_line(app: &App, width: u16) -> Paragraph<'static> {
         false => (cut_to(&app.message, width), color(Slot::Text)),
     };
     Paragraph::new(Line::styled(said, Style::new().fg(colour)))
+}
+
+fn cursor(app: &App) -> Option<usize> {
+    match app.screen {
+        Screen::List => Some(app.list.selected()),
+        Screen::Status => app.status.selected_oid().map(|_| app.status.selected()),
+        Screen::Done => Some(app.done.selected()),
+        Screen::Detail => None,
+    }
 }
 
 fn mode(app: &App) -> Mode {

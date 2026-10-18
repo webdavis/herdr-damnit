@@ -15,7 +15,7 @@ herdr-damnit-adapters.workspace = true
 herdr-damnit-application.workspace = true
 herdr-damnit-domain.workspace = true
 crossterm = "0.29"
-ratatui = "0.30"
+ratatui = { version = "0.30", features = ["unstable-rendered-line-info"] }
 serde.workspace = true
 serde_json.workspace = true
 unicode-width = "0.2"
