@@ -15,7 +15,8 @@ fn set_due(harness: &mut Harness, oid: &str, when: &str) {
     harness.press(KeyCode::Enter);
 }
 
-fn hand_off(harness: &mut Harness) {
+fn hand_off(harness: &mut Harness, oid: &str) {
+    harness.select(oid);
     harness.press(KeyCode::Char('S'));
     harness
         .app
@@ -39,11 +40,11 @@ fn a_refused_date_brings_back_its_own_box_while_a_later_one_is_in_flight() {
 #[test]
 fn a_refused_label_names_its_agent_while_a_later_hand_off_is_in_flight() {
     let mut harness = loaded();
-    hand_off(&mut harness);
-    hand_off(&mut harness);
+    hand_off(&mut harness, "1a2b3c4");
+    hand_off(&mut harness, "5d6e7f8");
 
     harness.answer(
-        &["edit"],
+        &["edit", "1a2b3c4"],
         2,
         "",
         "dam: \"handed-off\" clashes with \"handed-back\"",
