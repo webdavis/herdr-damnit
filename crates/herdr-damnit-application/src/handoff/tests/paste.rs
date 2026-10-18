@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn the_brief_is_one_bracketed_paste_and_carries_no_return_so_the_operator_submits_it() {
-    let agents = FakeAgents::new();
+    let agents = three_agents();
     hand_off(&agents, &here(), &object(), "start here", "");
 
     let sent = agents.sent_text();

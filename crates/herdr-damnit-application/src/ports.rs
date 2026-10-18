@@ -5,7 +5,7 @@ pub struct Finished {
     pub stderr: String,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum SpawnError {
     NotFound,
     Io(String),

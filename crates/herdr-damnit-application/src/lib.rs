@@ -1,4 +1,6 @@
 pub mod argv;
+#[cfg(any(test, feature = "fakes"))]
+pub mod fakes;
 mod handoff;
 mod handshake;
 mod jobs;

@@ -1,15 +1,17 @@
 use herdr_damnit_adapters::Config;
 use herdr_damnit_application::{PaneFocus, PaneOpen, PanePlacement, SplitSide, Workspace};
 
-use super::fakes::{Call, FakeMemory, FakePanes, Log, here};
+use herdr_damnit_application::fakes::{FakeMemory, FakePanes, PaneCall, PaneLog};
+
+use super::support::here;
 use crate::pane::{Mode, run};
 
 fn default_config() -> Config {
     Config::parse("").expect("the default config")
 }
 
-fn beside_the_caller(focus: PaneFocus) -> Call {
-    Call::Open(PaneOpen {
+fn beside_the_caller(focus: PaneFocus) -> PaneCall {
+    PaneCall::Open(PaneOpen {
         workspace: "w".to_string(),
         neighbor: "w:p1".to_string(),
         placement: PanePlacement::Split(SplitSide::Right),
@@ -23,7 +25,7 @@ fn w(text: &str) -> String {
 
 #[test]
 fn open_with_no_pane_live_opens_beside_the_caller_and_remembers_the_pane() {
-    let log = Log::default();
+    let log = PaneLog::default();
     let herdr = FakePanes::showing(&log, &["w:p1"]);
     let memory = FakeMemory::remembering(&log, "w", "w:pGone");
 
@@ -33,17 +35,17 @@ fn open_with_no_pane_live_opens_beside_the_caller_and_remembers_the_pane() {
     assert_eq!(
         *log.borrow(),
         vec![
-            Call::Live(w("w")),
-            Call::Remembered(w("w")),
+            PaneCall::Live(w("w")),
+            PaneCall::Remembered(w("w")),
             beside_the_caller(PaneFocus::Take),
-            Call::Remember(w("w"), w("w:p9")),
+            PaneCall::Remember(w("w"), w("w:p9")),
         ]
     );
 }
 
 #[test]
 fn auto_open_opens_without_taking_the_focus() {
-    let log = Log::default();
+    let log = PaneLog::default();
     let herdr = FakePanes::showing(&log, &["w:p1"]);
     let memory = FakeMemory::sharing(&log);
     let config = Config::parse("auto_open = true").expect("a config");
@@ -56,7 +58,7 @@ fn auto_open_opens_without_taking_the_focus() {
 
 #[test]
 fn a_focus_herdr_rejects_forgets_the_pane_and_opens_a_new_one() {
-    let log = Log::default();
+    let log = PaneLog::default();
     let mut herdr = FakePanes::showing(&log, &["w:p1", "w:p2"]);
     herdr.focus_refused = true;
     let memory = FakeMemory::remembering(&log, "w", "w:p2");
@@ -67,19 +69,19 @@ fn a_focus_herdr_rejects_forgets_the_pane_and_opens_a_new_one() {
     assert_eq!(
         *log.borrow(),
         vec![
-            Call::Live(w("w")),
-            Call::Remembered(w("w")),
-            Call::Focus(w("w:p2")),
-            Call::Forget(w("w")),
+            PaneCall::Live(w("w")),
+            PaneCall::Remembered(w("w")),
+            PaneCall::Focus(w("w:p2")),
+            PaneCall::Forget(w("w")),
             beside_the_caller(PaneFocus::Take),
-            Call::Remember(w("w"), w("w:p9")),
+            PaneCall::Remember(w("w"), w("w:p9")),
         ]
     );
 }
 
 #[test]
 fn a_focus_rejected_in_focus_mode_reports_the_pane_gone() {
-    let log = Log::default();
+    let log = PaneLog::default();
     let mut herdr = FakePanes::showing(&log, &["w:p1", "w:p2"]);
     herdr.focus_refused = true;
     let memory = FakeMemory::remembering(&log, "w", "w:p2");
@@ -90,17 +92,17 @@ fn a_focus_rejected_in_focus_mode_reports_the_pane_gone() {
     assert_eq!(
         *log.borrow(),
         vec![
-            Call::Live(w("w")),
-            Call::Remembered(w("w")),
-            Call::Focus(w("w:p2")),
-            Call::Forget(w("w")),
+            PaneCall::Live(w("w")),
+            PaneCall::Remembered(w("w")),
+            PaneCall::Focus(w("w:p2")),
+            PaneCall::Forget(w("w")),
         ]
     );
 }
 
 #[test]
 fn a_close_herdr_rejects_forgets_the_pane_and_opens_a_new_one() {
-    let log = Log::default();
+    let log = PaneLog::default();
     let mut herdr = FakePanes::showing(&log, &["w:p1", "w:p2"]);
     herdr.close_refused = true;
     let memory = FakeMemory::remembering(&log, "w", "w:p2");
@@ -111,19 +113,19 @@ fn a_close_herdr_rejects_forgets_the_pane_and_opens_a_new_one() {
     assert_eq!(
         *log.borrow(),
         vec![
-            Call::Live(w("w")),
-            Call::Remembered(w("w")),
-            Call::Close(w("w:p2")),
-            Call::Forget(w("w")),
+            PaneCall::Live(w("w")),
+            PaneCall::Remembered(w("w")),
+            PaneCall::Close(w("w:p2")),
+            PaneCall::Forget(w("w")),
             beside_the_caller(PaneFocus::Take),
-            Call::Remember(w("w"), w("w:p9")),
+            PaneCall::Remember(w("w"), w("w:p9")),
         ]
     );
 }
 
 #[test]
 fn the_pane_id_is_remembered_only_after_a_successful_open() {
-    let log = Log::default();
+    let log = PaneLog::default();
     let mut herdr = FakePanes::showing(&log, &["w:p1"]);
     herdr.opens = Err("herdr plugin pane open named no pane".to_string());
     let memory = FakeMemory::sharing(&log);
@@ -134,8 +136,8 @@ fn the_pane_id_is_remembered_only_after_a_successful_open() {
     assert_eq!(
         *log.borrow(),
         vec![
-            Call::Live(w("w")),
-            Call::Remembered(w("w")),
+            PaneCall::Live(w("w")),
+            PaneCall::Remembered(w("w")),
             beside_the_caller(PaneFocus::Take),
         ]
     );
@@ -143,7 +145,7 @@ fn the_pane_id_is_remembered_only_after_a_successful_open() {
 
 #[test]
 fn a_refused_resize_adds_its_note_to_the_result() {
-    let log = Log::default();
+    let log = PaneLog::default();
     let mut herdr = FakePanes::showing(&log, &["w:p1"]);
     herdr.resizes = Ok(false);
     let memory = FakeMemory::sharing(&log);
@@ -157,14 +159,14 @@ fn a_refused_resize_adds_its_note_to_the_result() {
     );
     assert_eq!(
         log.borrow()[3],
-        Call::Resize(w("w:p1"), SplitSide::Right, 0.7)
+        PaneCall::Resize(w("w:p1"), SplitSide::Right, 0.7)
     );
-    assert_eq!(log.borrow()[4], Call::Remember(w("w"), w("w:p9")));
+    assert_eq!(log.borrow()[4], PaneCall::Remember(w("w"), w("w:p9")));
 }
 
 #[test]
 fn a_resize_herdr_cannot_do_adds_its_error_to_the_result() {
-    let log = Log::default();
+    let log = PaneLog::default();
     let mut herdr = FakePanes::showing(&log, &["w:p1"]);
     herdr.resizes = Err("herdr pane layout named no ratio for w:p1".to_string());
     let memory = FakeMemory::sharing(&log);
@@ -180,7 +182,7 @@ fn a_resize_herdr_cannot_do_adds_its_error_to_the_result() {
 
 #[test]
 fn outside_a_workspace_every_action_refuses_before_calling_herdr() {
-    let log = Log::default();
+    let log = PaneLog::default();
     let herdr = FakePanes::showing(&log, &["w:p1"]);
     let memory = FakeMemory::sharing(&log);
     let nowhere = Workspace {
