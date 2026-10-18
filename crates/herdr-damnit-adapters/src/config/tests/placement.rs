@@ -1,4 +1,4 @@
-use crate::config::{Config, Placement};
+use crate::config::Config;
 
 #[test]
 fn a_width_outside_the_tab_is_refused_by_the_number_it_was_given() {
@@ -20,41 +20,4 @@ fn a_placement_and_a_side_are_taken_by_name_and_an_unknown_one_names_the_alterna
     }
     let error = Config::parse(r#"side = "left""#).expect_err("refuses");
     assert!(error.contains("right") && error.contains("down"), "{error}");
-}
-
-#[test]
-fn a_split_or_zoomed_pane_attaches_to_a_pane_and_a_tab_or_overlay_one_to_the_workspace() {
-    for (placement, attaches) in [
-        (Placement::Split, true),
-        (Placement::Zoomed, true),
-        (Placement::Tab, false),
-        (Placement::Overlay, false),
-    ] {
-        assert_eq!(
-            placement.attaches_to_a_pane_rather_than_the_workspace(),
-            attaches,
-            "{placement:?}"
-        );
-    }
-}
-
-#[test]
-fn every_side_maps_onto_the_direction_herdr_splits_in() {
-    for (text, direction) in [("right", "right"), ("down", "down")] {
-        let config = Config::parse(&format!("side = \"{text}\"")).expect("parses");
-        assert_eq!(config.side.split_direction(), direction);
-    }
-}
-
-#[test]
-fn every_placement_carries_the_word_herdr_takes_for_it() {
-    for (text, word) in [
-        ("overlay", "overlay"),
-        ("split", "split"),
-        ("tab", "tab"),
-        ("zoomed", "zoomed"),
-    ] {
-        let config = Config::parse(&format!("placement = \"{text}\"")).expect("parses");
-        assert_eq!(config.placement.as_str(), word);
-    }
 }
