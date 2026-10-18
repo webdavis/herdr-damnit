@@ -1,54 +1,56 @@
 use std::path::{Path, PathBuf};
 
-pub fn state_dir() -> PathBuf {
-    let given = std::env::var_os("HERDR_PLUGIN_STATE_DIR").map(PathBuf::from);
-    state_dir_in(given.as_deref(), &state_home())
-}
+use herdr_damnit_application::PaneMemory;
 
-fn state_dir_in(herdr_plugin_state_dir: Option<&Path>, base: &Path) -> PathBuf {
-    match herdr_plugin_state_dir {
-        Some(dir) => dir.to_path_buf(),
-        None => base.join("herdr/plugins/state/herdr-damnit"),
+pub struct StateDir(PathBuf);
+
+impl StateDir {
+    pub fn new(dir: PathBuf) -> Self {
+        Self(dir)
+    }
+
+    pub fn locate(herdr_plugin_state_dir: Option<&Path>, state_home: &Path) -> Self {
+        Self(match herdr_plugin_state_dir {
+            Some(dir) => dir.to_path_buf(),
+            None => state_home.join("herdr/plugins/state/herdr-damnit"),
+        })
+    }
+
+    pub fn view_request_path(&self) -> PathBuf {
+        self.0.join("requested-view")
+    }
+
+    pub fn request_view(&self, name: &str) {
+        write(&self.view_request_path(), name);
+    }
+
+    pub fn clear_view_request(&self) {
+        let _ = std::fs::remove_file(self.view_request_path());
+    }
+
+    fn pane_path(&self, workspace: &str) -> PathBuf {
+        self.0.join("panes").join(workspace)
     }
 }
 
-fn state_home() -> PathBuf {
-    match std::env::var_os("XDG_STATE_HOME") {
-        Some(dir) => PathBuf::from(dir),
-        None => PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".local/state"),
+impl PaneMemory for StateDir {
+    fn remembered(&self, workspace: &str) -> Option<String> {
+        read(&self.pane_path(workspace))
     }
-}
 
-fn pane_path(workspace: &str) -> PathBuf {
-    state_dir().join("panes").join(workspace)
-}
+    fn remember(&self, workspace: &str, pane: &str) {
+        write(&self.pane_path(workspace), pane);
+    }
 
-pub fn view_request_path() -> PathBuf {
-    state_dir().join("requested-view")
-}
-
-pub fn remembered_pane(workspace: &str) -> Option<String> {
-    read(&pane_path(workspace))
-}
-
-pub fn remember_pane(workspace: &str, pane: &str) {
-    write(&pane_path(workspace), pane);
-}
-
-pub fn forget_pane(workspace: &str) {
-    let _ = std::fs::remove_file(pane_path(workspace));
-}
-
-pub fn request_view(path: &Path, name: &str) {
-    write(path, name);
-}
-
-pub fn clear_view_request(path: &Path) {
-    let _ = std::fs::remove_file(path);
+    fn forget(&self, workspace: &str) {
+        let _ = std::fs::remove_file(self.pane_path(workspace));
+    }
 }
 
 pub fn take_requested_view(path: &Path) -> Option<String> {
-    take(path)
+    let contents = read(path);
+    let _ = std::fs::remove_file(path);
+    contents
 }
 
 fn write(path: &Path, contents: &str) {
@@ -62,12 +64,6 @@ fn read(path: &Path) -> Option<String> {
     let contents = std::fs::read_to_string(path).ok()?;
     let contents = contents.trim().to_string();
     (!contents.is_empty()).then_some(contents)
-}
-
-fn take(path: &Path) -> Option<String> {
-    let contents = read(path);
-    let _ = std::fs::remove_file(path);
-    contents
 }
 
 #[cfg(test)]
@@ -84,10 +80,14 @@ mod tests {
     fn a_request_is_read_once_and_then_gone() {
         let path = scratch("request");
 
-        assert_eq!(take(&path), None);
+        assert_eq!(take_requested_view(&path), None);
         write(&path, "today");
-        assert_eq!(take(&path), Some("today".to_string()));
-        assert_eq!(take(&path), None, "the request outlived its read");
+        assert_eq!(take_requested_view(&path), Some("today".to_string()));
+        assert_eq!(
+            take_requested_view(&path),
+            None,
+            "the request outlived its read"
+        );
     }
 
     #[test]
@@ -101,7 +101,7 @@ mod tests {
     #[test]
     fn the_state_directory_is_the_plugins_own_name_under_herdr() {
         assert_eq!(
-            state_dir_in(None, Path::new("/x/.local/state")),
+            StateDir::locate(None, Path::new("/x/.local/state")).0,
             Path::new("/x/.local/state/herdr/plugins/state/herdr-damnit")
         );
     }
@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn herdrs_own_state_directory_wins_when_it_names_one() {
         assert_eq!(
-            state_dir_in(Some(Path::new("/given")), Path::new("/x/.local/state")),
+            StateDir::locate(Some(Path::new("/given")), Path::new("/x/.local/state")).0,
             Path::new("/given")
         );
     }

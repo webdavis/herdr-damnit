@@ -1,5 +1,8 @@
 use super::requests::note_then_open;
 use super::*;
+use fakes::{FakeMemory, FakePanes, Log, here, requested, scratch_state};
+
+mod fakes;
 
 fn default_config() -> Config {
     Config::parse("").expect("the default config")
@@ -62,17 +65,22 @@ fn auto_open_opens_a_closed_pane_and_leaves_an_open_one_alone() {
 
 #[test]
 fn an_auto_open_never_takes_the_focus_and_every_other_action_does() {
-    assert_eq!(focus_of(Mode::AutoOpen), Focus::Leave);
-    assert_eq!(focus_of(Mode::Open), Focus::Take);
-    assert_eq!(focus_of(Mode::Toggle), Focus::Take);
-    assert_eq!(focus_of(Mode::Focus), Focus::Take);
+    assert_eq!(focus_of(Mode::AutoOpen), PaneFocus::Leave);
+    assert_eq!(focus_of(Mode::Open), PaneFocus::Take);
+    assert_eq!(focus_of(Mode::Toggle), PaneFocus::Take);
+    assert_eq!(focus_of(Mode::Focus), PaneFocus::Take);
 }
 
 #[test]
 fn auto_open_does_nothing_at_all_when_the_config_has_not_asked_for_it() {
-    let outcome = auto_open(&default_config()).expect("no herdr call at all");
+    let log = Log::default();
+    let herdr = FakePanes::showing(&log, &["w:p1"]);
+    let memory = FakeMemory::default();
+
+    let outcome = auto_open(&here(), &herdr, &memory, &default_config()).expect("no call at all");
 
     assert_eq!(outcome, "auto_open is off");
+    assert_eq!(*log.borrow(), vec![]);
 }
 
 #[test]
@@ -117,7 +125,10 @@ fn a_failed_focus_or_close_retries_as_open_except_in_focus_mode() {
 
 #[test]
 fn a_view_number_past_the_end_names_how_many_views_there_are() {
-    let error = view("4", &default_config()).expect_err("refuses");
+    let herdr = FakePanes::showing(&Log::default(), &[]);
+    let state = scratch_state("view-past-the-end");
+
+    let error = view("4", &here(), &herdr, &state, &default_config()).expect_err("refuses");
 
     assert!(error.contains("no view 4"), "{error}");
     assert!(error.contains("1 views"), "{error}");
@@ -125,27 +136,24 @@ fn a_view_number_past_the_end_names_how_many_views_there_are() {
 
 #[test]
 fn a_view_argument_that_is_not_a_number_is_refused() {
-    let error = view("today", &default_config()).expect_err("refuses");
+    let herdr = FakePanes::showing(&Log::default(), &[]);
+    let state = scratch_state("view-not-a-number");
+
+    let error = view("today", &here(), &herdr, &state, &default_config()).expect_err("refuses");
 
     assert!(error.contains("not a view number"), "{error}");
 }
 
-fn scratch(name: &str) -> std::path::PathBuf {
-    let path = std::env::temp_dir().join(format!("herdr-damnit-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_file(&path);
-    path
-}
-
 #[test]
 fn a_failed_view_open_clears_its_own_request() {
-    let request = scratch("failed-view");
+    let state = scratch_state("failed-view");
 
-    let error = note_then_open("today", &request, || Err("herdr is not there".to_string()))
+    let error = note_then_open("today", &state, || Err("herdr is not there".to_string()))
         .expect_err("failed");
 
     assert_eq!(error, "herdr is not there");
     assert_eq!(
-        state::take_requested_view(&request),
+        requested(&state),
         None,
         "a failed open must clear its request"
     );
@@ -153,30 +161,22 @@ fn a_failed_view_open_clears_its_own_request() {
 
 #[test]
 fn a_view_that_opened_leaves_its_note_for_the_pane_and_says_what_it_shows() {
-    let request = scratch("opened-view");
+    let state = scratch_state("opened-view");
 
-    let outcome = note_then_open("work", &request, || Ok("opened w:p3".to_string()))
+    let outcome = note_then_open("work", &state, || Ok("opened w:p3".to_string()))
         .expect("the open succeeded");
 
     assert_eq!(outcome, "opened w:p3, showing work");
-    assert_eq!(
-        state::take_requested_view(&request),
-        Some("work".to_string())
-    );
+    assert_eq!(requested(&state), Some("work".to_string()));
 }
 
 #[test]
 fn the_status_action_leaves_the_status_request_for_the_pane() {
-    let request =
-        std::env::temp_dir().join(format!("herdr-damnit-status-action-{}", std::process::id()));
-    let _ = std::fs::remove_file(&request);
+    let state = scratch_state("status-action");
 
-    let outcome = note_then_open(STATUS_REQUEST, &request, || Ok("focused w:p3".to_string()))
+    let outcome = note_then_open(STATUS_REQUEST, &state, || Ok("focused w:p3".to_string()))
         .expect("the open succeeded");
 
     assert_eq!(outcome, "focused w:p3, showing status");
-    assert_eq!(
-        state::take_requested_view(&request).as_deref(),
-        Some("status")
-    );
+    assert_eq!(requested(&state).as_deref(), Some("status"));
 }

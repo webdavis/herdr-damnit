@@ -9,3 +9,4 @@ pub use clock::SystemClock;
 pub use config::Config;
 pub use dam_runner::{Cancel, ProcessDamRunner};
 pub use herdr_cli::CliHerdr;
+pub use state::StateDir;

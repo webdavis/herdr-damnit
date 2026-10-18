@@ -10,7 +10,9 @@ mod pane;
 mod screens;
 mod theme;
 
-use herdr_damnit_adapters::{CliHerdr, Config, ProcessDamRunner, SystemClock};
+use std::path::PathBuf;
+
+use herdr_damnit_adapters::{CliHerdr, Config, ProcessDamRunner, StateDir, SystemClock};
 use herdr_damnit_application::{Jobs, Workspace};
 use pane::Mode;
 
@@ -36,51 +38,97 @@ fn main() -> std::process::ExitCode {
             std::process::ExitCode::SUCCESS
         }
         [command] => match action(command) {
-            Some(run) => with_config(run),
+            Some(run) => with_shell(run),
             None => fail(&format!("unknown command '{command}'\n{USAGE}")),
         },
-        [command, argument] if command == "view" => {
-            with_config(|config| pane::view(argument, config))
-        }
+        [command, argument] if command == "view" => with_shell(|shell| {
+            pane::view(
+                argument,
+                &shell.here,
+                &shell.herdr,
+                &shell.state,
+                &shell.config,
+            )
+        }),
         _ => fail(&format!("too many arguments\n{USAGE}")),
     }
 }
 
-type Action = fn(&Config) -> Result<String, String>;
+struct Shell {
+    config: Config,
+    here: Workspace,
+    herdr: CliHerdr,
+    state: StateDir,
+}
+
+impl Shell {
+    fn from_environment() -> Result<Self, String> {
+        Ok(Self {
+            config: Config::load()?,
+            here: Workspace {
+                workspace: std::env::var("HERDR_WORKSPACE_ID").ok(),
+                me: std::env::var("HERDR_PANE_ID").unwrap_or_default(),
+            },
+            herdr: CliHerdr::new(
+                std::env::var("HERDR_BIN_PATH").unwrap_or_else(|_| "herdr".to_string()),
+                std::env::var("HERDR_PLUGIN_ID").unwrap_or_else(|_| "herdr-damnit".to_string()),
+            ),
+            state: StateDir::locate(
+                std::env::var_os("HERDR_PLUGIN_STATE_DIR")
+                    .map(PathBuf::from)
+                    .as_deref(),
+                &state_home(),
+            ),
+        })
+    }
+
+    fn place(&self, mode: Mode) -> Result<String, String> {
+        pane::run(mode, &self.here, &self.herdr, &self.state, &self.config)
+    }
+}
+
+fn state_home() -> PathBuf {
+    match std::env::var_os("XDG_STATE_HOME") {
+        Some(dir) => PathBuf::from(dir),
+        None => PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".local/state"),
+    }
+}
+
+type Action = fn(&Shell) -> Result<String, String>;
 
 fn action(name: &str) -> Option<Action> {
     Some(match name {
-        "doctor" => doctor::run,
-        "open" => |config| pane::run(Mode::Open, config),
-        "toggle" => |config| pane::run(Mode::Toggle, config),
-        "focus" => |config| pane::run(Mode::Focus, config),
-        "status" => pane::open_on_status,
-        "auto-open" => pane::auto_open,
+        "doctor" => |shell| doctor::run(&shell.config),
+        "open" => |shell| shell.place(Mode::Open),
+        "toggle" => |shell| shell.place(Mode::Toggle),
+        "focus" => |shell| shell.place(Mode::Focus),
+        "status" => {
+            |shell| pane::open_on_status(&shell.here, &shell.herdr, &shell.state, &shell.config)
+        }
+        "auto-open" => {
+            |shell| pane::auto_open(&shell.here, &shell.herdr, &shell.state, &shell.config)
+        }
         _ => return None,
     })
 }
 
 fn run_pane() -> std::process::ExitCode {
-    let config = match Config::load() {
-        Ok(config) => config,
+    let shell = match Shell::from_environment() {
+        Ok(shell) => shell,
         Err(error) => return fail(&error),
     };
     let jobs = Jobs::new(
-        Box::new(ProcessDamRunner::new(config.dam.clone())),
+        Box::new(ProcessDamRunner::new(shell.config.dam.clone())),
         Box::new(SystemClock),
     );
-    let here = Workspace {
-        workspace: std::env::var("HERDR_WORKSPACE_ID").ok(),
-        me: std::env::var("HERDR_PANE_ID").unwrap_or_default(),
-    };
     let mut app = app::App::new(
-        config,
+        shell.config,
         jobs,
-        Box::new(CliHerdr),
-        here,
+        Box::new(shell.herdr),
+        shell.here,
         Box::new(SystemClock),
     );
-    app.view_request = Some(herdr_damnit_adapters::state::view_request_path());
+    app.view_request = Some(shell.state.view_request_path());
     open::start(&mut app);
     match loop_::run(&mut app) {
         Ok(()) => std::process::ExitCode::SUCCESS,
@@ -88,8 +136,8 @@ fn run_pane() -> std::process::ExitCode {
     }
 }
 
-fn with_config(run: impl FnOnce(&Config) -> Result<String, String>) -> std::process::ExitCode {
-    report(Config::load().and_then(|config| run(&config)))
+fn with_shell(run: impl FnOnce(&Shell) -> Result<String, String>) -> std::process::ExitCode {
+    report(Shell::from_environment().and_then(|shell| run(&shell)))
 }
 
 fn report(outcome: Result<String, String>) -> std::process::ExitCode {
