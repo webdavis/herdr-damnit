@@ -3,7 +3,6 @@ mod detail;
 mod discard;
 mod editor;
 mod edits;
-mod fakes;
 mod harness;
 mod header;
 mod interval;
@@ -23,7 +22,6 @@ use herdr_damnit_application::{Jobs, Request, SyncKind};
 
 use crate::screens::tests::loaded;
 
-pub(crate) use fakes::*;
 pub(crate) use harness::*;
 
 use super::*;

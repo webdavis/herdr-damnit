@@ -23,23 +23,26 @@ fn workspace(workspace: &str, me: &str) -> Workspace {
 
 #[test]
 fn the_brief_goes_to_the_named_agent_of_this_workspace() {
-    let agents = FakeAgents::new();
+    let agents = three_agents();
     let agent = sent_to(&agents, &here());
 
     assert_eq!(agent.pane, "w1:p2");
     assert_eq!(agent.name, "planner");
-    assert_eq!(agents.calls(), vec!["agents", "send_text", "focus_agent"]);
+    assert_eq!(
+        call_names(&agents),
+        vec!["agents", "send_text", "focus_agent"]
+    );
 }
 
 #[test]
 fn an_agent_pane_in_another_workspace_is_not_a_candidate() {
-    let message = refusal(&FakeAgents::new(), &workspace("w3", "w3:p1"));
+    let message = refusal(&three_agents(), &workspace("w3", "w3:p1"));
     assert_eq!(message, "no agent pane in this workspace.");
 }
 
 #[test]
 fn a_pane_herdr_lists_no_agent_for_is_passed_over_for_the_one_it_does() {
-    assert_ne!(sent_to(&FakeAgents::new(), &here()).pane, "w1:p1");
+    assert_ne!(sent_to(&three_agents(), &here()).pane, "w1:p1");
 }
 
 #[test]
@@ -50,21 +53,18 @@ fn a_workspace_with_no_agent_pane_says_so_and_sends_nothing() {
         refusal(&agents, &here()),
         "no agent pane in this workspace."
     );
-    assert_eq!(agents.calls(), vec!["agents"]);
+    assert_eq!(call_names(&agents), vec!["agents"]);
 }
 
 #[test]
 fn this_pane_is_never_its_own_agent() {
-    let message = refusal(&FakeAgents::new(), &workspace("w1", "w1:p2"));
+    let message = refusal(&three_agents(), &workspace("w1", "w1:p2"));
     assert_eq!(message, "no agent pane in this workspace.");
 }
 
 #[test]
 fn a_listing_herdr_could_not_give_is_refused_with_its_reason_rather_than_guessed_at() {
-    let agents = FakeAgents {
-        agents: Err("herdr agent list: expected value at line 1 column 1".to_string()),
-        ..FakeAgents::new()
-    };
+    let agents = FakeAgents::failing("herdr agent list: expected value at line 1 column 1");
     assert_eq!(
         refusal(&agents, &here()),
         "herdr agent list: expected value at line 1 column 1"

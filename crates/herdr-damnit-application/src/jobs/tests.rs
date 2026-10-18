@@ -4,7 +4,8 @@ mod unanswered;
 use std::time::{Duration, Instant};
 
 use super::*;
-use harness::{Recorder, TestClock, harness, ok};
+use crate::fakes::FakeDam;
+use harness::{harness, jobs_over, ok};
 
 #[test]
 fn a_second_push_is_refused_with_a_sentence_and_never_spawned() {
@@ -116,13 +117,9 @@ fn each_sync_job_names_itself_in_the_refusal() {
 
 #[test]
 fn a_spawn_that_failed_for_some_other_reason_carries_dams_own_error() {
-    let mut jobs = Jobs::new(
-        Box::new(Recorder {
-            io_error: Some("permission denied".to_string()),
-            ..Recorder::default()
-        }),
-        Box::new(TestClock),
-    );
+    let dam = FakeDam::default();
+    dam.refuse(SpawnError::Io("permission denied".to_string()));
+    let mut jobs = jobs_over(&dam);
 
     let Submitted::Failed(message) = jobs.submit(Request::Status) else {
         panic!("expected a failure");
@@ -143,11 +140,9 @@ fn the_header_times_the_job_it_names_and_nothing_when_none_runs() {
 
 #[test]
 fn a_dam_that_is_not_there_is_reported_rather_than_started() {
-    let recorder = Recorder {
-        refuse_spawn: true,
-        ..Recorder::default()
-    };
-    let mut jobs = Jobs::new(Box::new(recorder), Box::new(TestClock));
+    let dam = FakeDam::default();
+    dam.refuse(SpawnError::NotFound);
+    let mut jobs = jobs_over(&dam);
 
     assert!(matches!(
         jobs.submit(Request::Status),

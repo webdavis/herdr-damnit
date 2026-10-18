@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crossterm::event::KeyModifiers;
 use herdr_damnit_adapters::{ProcessDamRunner, SystemClock};
+use herdr_damnit_application::fakes::FakeAgents;
 
 use super::*;
 use crate::screens::render_to_text;
@@ -75,7 +76,7 @@ fn app(scratch: &Scratch) -> App {
     App::new(
         config,
         Jobs::new(Box::new(runner), Box::new(SystemClock)),
-        Box::new(RecordingHerdr::default()),
+        Box::new(FakeAgents::listing(Vec::new())),
         here(),
         Box::new(SystemClock),
     )

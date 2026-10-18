@@ -1,27 +1,38 @@
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent};
 use herdr_damnit_adapters::Config;
-use herdr_damnit_application::{Finished, Jobs, ListedAgent};
-use herdr_damnit_domain::{Cursor, Date, parse_date};
+use herdr_damnit_application::fakes::{FakeAgents, FakeClock, FakeDam};
+use herdr_damnit_application::{Finished, Jobs, ListedAgent, SpawnError, Workspace};
+use herdr_damnit_domain::Cursor;
 
-use super::fakes::{Recorder, RecordingHerdr, StoppedClock, TODAY, here, one_agent};
 use crate::app::{After, App, Screen};
 use crate::overlay::Overlay;
 
+const TODAY: &str = "2026-09-20";
+
+pub(crate) fn here() -> Workspace {
+    Workspace {
+        workspace: Some("w1".to_string()),
+        me: "w1:p9".to_string(),
+    }
+}
+
+fn one_agent() -> Vec<ListedAgent> {
+    vec![ListedAgent {
+        pane: "w1:p2".to_string(),
+        workspace: "w1".to_string(),
+        kind: Some("claude".to_string()),
+        name: Some("planner".to_string()),
+        profile: None,
+    }]
+}
+
 pub(crate) struct Harness {
     pub(crate) app: App,
-    started: Instant,
-    day: Arc<Mutex<Date>>,
-    log: Arc<Mutex<Vec<Vec<String>>>>,
-    senders: Arc<Mutex<Vec<Sender<Finished>>>>,
-    cancels: Arc<AtomicUsize>,
-    missing: Arc<AtomicBool>,
-    herdr_calls: Arc<Mutex<Vec<String>>>,
-    agents: Arc<Mutex<Vec<ListedAgent>>>,
+    clock: FakeClock,
+    dam: FakeDam,
+    herdr: FakeAgents,
 }
 
 pub(crate) fn harness() -> Harness {
@@ -34,58 +45,42 @@ pub(crate) fn harness_with(config: Config) -> Harness {
 
 pub(crate) fn harness_with_missing_dam() -> Harness {
     let harness = harness();
-    harness.missing.store(true, Ordering::SeqCst);
+    harness.dam.refuse(SpawnError::NotFound);
     harness
 }
 
 pub(crate) fn harness_with_listing(config: Config, listing: Vec<ListedAgent>) -> Harness {
-    let herdr = RecordingHerdr {
-        listing: Arc::new(Mutex::new(listing)),
-        calls: Arc::default(),
-    };
-    let herdr_calls = Arc::clone(&herdr.calls);
-    let agents = Arc::clone(&herdr.listing);
-    let recorder = Recorder::default();
-    let log = Arc::clone(&recorder.log);
-    let senders = Arc::clone(&recorder.senders);
-    let cancels = Arc::clone(&recorder.cancels);
-    let missing = Arc::clone(&recorder.missing);
-    let clock = StoppedClock {
-        day: Arc::new(Mutex::new(parse_date(TODAY).expect("a date"))),
-        now: Instant::now(),
-    };
-    let day = Arc::clone(&clock.day);
-    let started = clock.now;
+    let herdr = FakeAgents::listing(listing);
+    let dam = FakeDam::default();
+    let clock = FakeClock::on(TODAY);
     Harness {
         app: App::new(
             config,
-            Jobs::new(Box::new(recorder), Box::new(clock.clone())),
-            Box::new(herdr),
+            Jobs::new(Box::new(dam.clone()), Box::new(clock.clone())),
+            Box::new(herdr.clone()),
             here(),
-            Box::new(clock),
+            Box::new(clock.clone()),
         ),
-        started,
-        day,
-        log,
-        senders,
-        cancels,
-        missing,
-        herdr_calls,
-        agents,
+        clock,
+        dam,
+        herdr,
     }
 }
 
 impl Harness {
     pub(crate) fn started(&self) -> Instant {
-        self.started
+        self.clock.started()
     }
 
     pub(crate) fn answer(&mut self, which: usize, code: i32, stdout: &str, stderr: &str) {
-        let _ = self.senders.lock().expect("the senders")[which].send(Finished {
-            code: Some(code),
-            stdout: stdout.to_string(),
-            stderr: stderr.to_string(),
-        });
+        self.dam.answer(
+            which,
+            Finished {
+                code: Some(code),
+                stdout: stdout.to_string(),
+                stderr: stderr.to_string(),
+            },
+        );
         self.app.tick(Instant::now());
     }
 
@@ -124,11 +119,11 @@ impl Harness {
     }
 
     pub(crate) fn list_agents(&self, listing: Vec<ListedAgent>) {
-        *self.agents.lock().expect("the listing") = listing;
+        self.herdr.list(listing);
     }
 
     pub(crate) fn herdr_calls(&self) -> Vec<String> {
-        self.herdr_calls.lock().expect("the calls").clone()
+        self.herdr.calls()
     }
 
     pub(crate) fn sent_anything(&self) -> bool {
@@ -138,32 +133,22 @@ impl Harness {
     }
 
     pub(crate) fn cancels(&self) -> usize {
-        self.cancels.load(Ordering::SeqCst)
+        self.dam.cancelled().len()
     }
 
     pub(crate) fn install_dam(&self) {
-        self.missing.store(false, Ordering::SeqCst);
+        self.dam.accept();
     }
 
     pub(crate) fn turn_the_day_to(&self, date: &str) {
-        *self.day.lock().expect("the day") = parse_date(date).expect("a date");
+        self.clock.turn_to(date);
     }
 
     pub(crate) fn log_argv_last(&self) -> Vec<String> {
-        self.log
-            .lock()
-            .expect("the log")
-            .last()
-            .cloned()
-            .unwrap_or_default()
+        self.dam.spawned().last().cloned().unwrap_or_default()
     }
 
     pub(crate) fn lines(&self) -> Vec<String> {
-        self.log
-            .lock()
-            .expect("the log")
-            .iter()
-            .map(|argv| argv.join(" "))
-            .collect()
+        self.dam.lines()
     }
 }

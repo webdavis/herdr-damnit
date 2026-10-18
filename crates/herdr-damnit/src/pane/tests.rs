@@ -1,9 +1,10 @@
 use super::requests::note_then_open;
 use super::*;
-use fakes::{FakeMemory, FakePanes, Log, here, requested, scratch_state};
+use herdr_damnit_application::fakes::{FakeMemory, FakePanes, PaneLog};
+use support::{here, requested, scratch_state};
 
-mod fakes;
 mod placing;
+mod support;
 
 fn default_config() -> Config {
     Config::parse("").expect("the default config")
@@ -60,7 +61,7 @@ fn auto_open_opens_a_closed_pane_and_leaves_an_open_one_alone() {
 
 #[test]
 fn auto_open_does_nothing_at_all_when_the_config_has_not_asked_for_it() {
-    let log = Log::default();
+    let log = PaneLog::default();
     let herdr = FakePanes::showing(&log, &["w:p1"]);
     let memory = FakeMemory::sharing(&log);
 
@@ -92,7 +93,7 @@ fn focus_never_opens_a_pane() {
 
 #[test]
 fn a_view_number_past_the_end_names_how_many_views_there_are() {
-    let herdr = FakePanes::showing(&Log::default(), &[]);
+    let herdr = FakePanes::showing(&PaneLog::default(), &[]);
     let state = scratch_state("view-past-the-end");
 
     let error = view("4", &here(), &herdr, &state, &default_config()).expect_err("refuses");
@@ -103,7 +104,7 @@ fn a_view_number_past_the_end_names_how_many_views_there_are() {
 
 #[test]
 fn a_view_argument_that_is_not_a_number_is_refused() {
-    let herdr = FakePanes::showing(&Log::default(), &[]);
+    let herdr = FakePanes::showing(&PaneLog::default(), &[]);
     let state = scratch_state("view-not-a-number");
 
     let error = view("today", &here(), &herdr, &state, &default_config()).expect_err("refuses");
