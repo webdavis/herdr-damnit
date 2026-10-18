@@ -20,7 +20,7 @@ fn with_working_change(fields: &str) -> Harness {
 }
 
 fn question(harness: &Harness) -> String {
-    match harness.app.overlay.as_ref() {
+    match harness.app.showing().overlay() {
         Some(Overlay::Confirm(confirm)) => confirm.question.clone(),
         _ => panic!("expected a confirm"),
     }
@@ -60,7 +60,7 @@ fn any_other_key_dismisses_the_discard_confirm_and_sends_nothing() {
     let before = harness.lines().len();
     harness.press(KeyCode::Char('j'));
 
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
     assert_eq!(harness.lines().len(), before);
 }
 
@@ -71,6 +71,6 @@ fn the_discard_key_does_nothing_on_a_row_with_no_working_change() {
     let before = harness.lines().len();
     harness.press(KeyCode::Char('!'));
 
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
     assert_eq!(harness.lines().len(), before);
 }

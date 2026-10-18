@@ -10,18 +10,14 @@ impl App {
             return After::Stay;
         };
         let carried = &object.labels;
-        let mut names: Vec<&String> = self
-            .objects
-            .iter()
-            .flat_map(|object| &object.labels)
-            .chain(carried)
-            .collect();
-        names.sort();
-        names.dedup();
-        let entries = names.into_iter().map(|name| PickerEntry {
-            text: name.clone(),
-            marked: carried.contains(name),
-        });
+        let entries = self
+            .list
+            .labels_with(carried)
+            .into_iter()
+            .map(|name| PickerEntry {
+                text: name.clone(),
+                marked: carried.contains(name),
+            });
         let picker = picker("labels", entries.collect(), 0);
         let oid = object.oid.clone();
         self.reopen(Overlay::Label(oid, picker))
@@ -43,13 +39,7 @@ impl App {
         let Some(object) = self.selected_object() else {
             return After::Stay;
         };
-        let mut paths: Vec<String> = self
-            .objects
-            .iter()
-            .flat_map(|object| path_and_its_parents(&object.path))
-            .collect();
-        paths.sort();
-        paths.dedup();
+        let paths = self.list.paths();
         let own = object.path.trim_end_matches('/');
         let selected = paths.iter().position(|path| path == own).unwrap_or(0);
         let entries = paths.into_iter().map(|text| PickerEntry {
@@ -77,14 +67,4 @@ fn picker(title: &str, entries: Vec<PickerEntry>, selected: usize) -> Picker {
         entries,
         selected,
     }
-}
-
-fn path_and_its_parents(path: &str) -> Vec<String> {
-    let segments: Vec<&str> = path
-        .split('/')
-        .filter(|segment| !segment.is_empty())
-        .collect();
-    (1..=segments.len())
-        .map(|depth| segments[..depth].join("/"))
-        .collect()
 }

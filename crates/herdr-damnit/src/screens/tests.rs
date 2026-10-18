@@ -30,6 +30,25 @@ pub(crate) const LS: &str = r#"{"objects":[
 pub(crate) const CLEAN: &str =
     r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#;
 
+pub fn render_to_text(app: &crate::app::App, width: u16, height: u16) -> String {
+    let buffer = drawn(app, width, height);
+    (0..height)
+        .map(|row| line_of(&buffer, row).trim_end().to_string())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim_end()
+        .to_string()
+}
+
+pub(crate) fn counts(app: &crate::app::App) -> String {
+    let top = line_of(&drawn(app, 120, 3), 0);
+    top.trim_end()
+        .strip_prefix(app.header(Instant::now()).as_str())
+        .unwrap_or_default()
+        .trim_start()
+        .to_string()
+}
+
 pub(crate) fn drawn(app: &crate::app::App, width: u16, height: u16) -> ratatui::buffer::Buffer {
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height))
         .expect("a test terminal");
@@ -63,35 +82,35 @@ pub(crate) fn loaded_with(config: Config) -> crate::app::tests::Harness {
 #[test]
 fn tab_cycles_the_three_screens_forward_and_shift_tab_back() {
     let mut harness = loaded();
-    assert_eq!(harness.app.screen, Screen::List);
+    assert_eq!(harness.app.showing().screen(), Screen::List);
 
     harness.press(KeyCode::Tab);
-    assert_eq!(harness.app.screen, Screen::Status);
+    assert_eq!(harness.app.showing().screen(), Screen::Status);
     harness.press(KeyCode::Tab);
-    assert_eq!(harness.app.screen, Screen::Done);
+    assert_eq!(harness.app.showing().screen(), Screen::Done);
     harness.press(KeyCode::Tab);
-    assert_eq!(harness.app.screen, Screen::List);
+    assert_eq!(harness.app.showing().screen(), Screen::List);
     harness.press(KeyCode::BackTab);
-    assert_eq!(harness.app.screen, Screen::Done);
+    assert_eq!(harness.app.showing().screen(), Screen::Done);
 }
 
 #[test]
 fn each_screen_keeps_its_own_cursor_across_the_cycle() {
     let mut harness = loaded();
-    assert!(harness.app.list.move_by(1), "the list has a second row");
-    let on_list = harness.app.list.selected_oid().cloned();
+    assert!(harness.cursor_mut().move_by(1), "the list has a second row");
+    let on_list = harness.app.list().cursor().selected_oid().cloned();
 
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Tab);
 
-    assert_eq!(harness.app.list.selected_oid().cloned(), on_list);
+    assert_eq!(harness.app.list().cursor().selected_oid().cloned(), on_list);
 }
 
 #[test]
 fn a_message_takes_the_legend_row_until_the_next_key() {
     let mut harness = loaded();
-    harness.app.message = "the config has 1 views.".to_string();
+    harness.app.say("the config has 1 views.".to_string());
     let drawn = render_to_text(&harness.app, 32, 8);
     assert_eq!(drawn.lines().last(), Some("the config has 1 views."));
 

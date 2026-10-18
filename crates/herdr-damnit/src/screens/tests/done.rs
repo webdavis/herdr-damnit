@@ -93,7 +93,7 @@ fn a_write_once_done_was_opened_refreshes_done_too_and_reads_nothing_twice() {
 #[test]
 fn the_done_screen_draws_the_date_first_newest_first_with_the_uncommitted_ones_on_top() {
     let mut harness = harness_with(ascii_config());
-    harness.app.screen = Screen::Done;
+    harness.put_on(Screen::Done);
     harness.app.submit(herdr_damnit_application::Request::Done);
     harness.answer(
         0,
@@ -158,9 +158,14 @@ fn escape_from_a_detail_opened_on_the_done_screen_returns_to_its_row() {
 
     harness.press(KeyCode::Esc);
 
-    assert_eq!(harness.app.screen, Screen::Done);
+    assert_eq!(harness.app.showing().screen(), Screen::Done);
     assert_eq!(
-        harness.app.done.selected_oid().map(|oid| oid.as_str()),
+        harness
+            .app
+            .done()
+            .cursor()
+            .selected_oid()
+            .map(|oid| oid.as_str()),
         Some("9a0b1c2")
     );
 }

@@ -55,9 +55,14 @@ fn escape_from_a_detail_opened_on_the_status_screen_returns_to_its_row() {
 
     harness.press(KeyCode::Esc);
 
-    assert_eq!(harness.app.screen, Screen::Status);
+    assert_eq!(harness.app.showing().screen(), Screen::Status);
     assert_eq!(
-        harness.app.status.selected_oid().map(|oid| oid.as_str()),
+        harness
+            .app
+            .status()
+            .cursor()
+            .selected_oid()
+            .map(|oid| oid.as_str()),
         Some("5d6e7f8")
     );
     assert!(
@@ -74,11 +79,11 @@ fn a_status_request_while_the_detail_is_open_shows_the_status_screen() {
     harness.answer(3, 0, SHOWN, "");
     let path = std::env::temp_dir().join(format!("herdr-damnit-detail-{}", std::process::id()));
     std::fs::write(&path, crate::pane::STATUS_REQUEST).expect("the request is written");
-    harness.app.view_request = Some(path);
+    harness.app.watch_view_requests(path);
 
     harness.app.tick(Instant::now());
 
-    assert_eq!(harness.app.screen, Screen::Status);
+    assert_eq!(harness.app.showing().screen(), Screen::Status);
     assert!(
         top_row(&harness).starts_with("dam  status"),
         "{}",

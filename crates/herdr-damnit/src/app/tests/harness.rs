@@ -6,10 +6,11 @@ use std::time::Instant;
 use crossterm::event::{KeyCode, KeyEvent};
 use herdr_damnit_adapters::Config;
 use herdr_damnit_application::{Finished, Jobs, ListedAgent};
-use herdr_damnit_domain::{Date, parse_date};
+use herdr_damnit_domain::{Cursor, Date, parse_date};
 
 use super::fakes::{Recorder, RecordingHerdr, StoppedClock, TODAY, here, one_agent};
-use crate::app::{After, App};
+use crate::app::{After, App, Screen};
+use crate::overlay::Overlay;
 
 pub(crate) struct Harness {
     pub(crate) app: App,
@@ -102,6 +103,18 @@ impl Harness {
         while cursor.selected_oid().map(|found| found.as_str()) != Some(oid) {
             assert!(cursor.move_by(1), "{oid} is not on the showing screen");
         }
+    }
+
+    pub(crate) fn cursor_mut(&mut self) -> &mut Cursor {
+        self.app.cursor_mut()
+    }
+
+    pub(crate) fn put_on(&mut self, screen: Screen) {
+        self.app.showing.show(screen);
+    }
+
+    pub(crate) fn open(&mut self, overlay: Overlay) {
+        self.app.showing.open(overlay);
     }
 
     pub(crate) fn type_line(&mut self, text: &str) {

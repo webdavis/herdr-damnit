@@ -8,7 +8,7 @@ const DATE_WORDS: &str = "today, tomorrow, YYYY-MM-DD or YYYY-MM-DDTHH:MM";
 
 impl App {
     pub(super) fn open_commit_box(&mut self) -> After {
-        let staged = self.stage.staged_count();
+        let staged = self.status.stage().staged_count();
         if staged == 0 {
             self.message =
                 "nothing staged; press <Space> on a row or A to stage everything.".to_string();
@@ -64,7 +64,7 @@ impl App {
             LinePurpose::Deadline(oid) => Request::Write(argv::set_deadline(oid, when)),
         };
         if let Some(id) = self.submit(request) {
-            self.pending.insert(id, Pending::Box(line));
+            self.work.pend(id, Pending::Box(line));
         }
         After::Stay
     }

@@ -15,7 +15,7 @@ pub(crate) fn three_views() -> Config {
 }
 
 fn picker_names(app: &App) -> (Vec<String>, usize) {
-    let Some(Overlay::View(picker)) = app.overlay.as_ref() else {
+    let Some(Overlay::View(picker)) = app.showing().overlay() else {
         panic!("expected the view picker");
     };
     let names = picker.entries.iter().map(|entry| entry.text.clone());
@@ -28,9 +28,9 @@ fn a_number_key_shows_that_view_and_reads_its_query() {
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Char('2'));
 
-    assert_eq!(harness.app.views.current().name, "today");
+    assert_eq!(harness.app.list().views().current().name, "today");
     assert_eq!(harness.last(), "ls !done & due:today --json");
-    assert_eq!(harness.app.screen, Screen::List);
+    assert_eq!(harness.app.showing().screen(), Screen::List);
 }
 
 #[test]
@@ -39,7 +39,7 @@ fn a_number_with_no_view_behind_it_says_how_many_there_are_and_reads_nothing() {
     let before = harness.lines().len();
     harness.press(KeyCode::Char('7'));
 
-    assert_eq!(harness.app.message, "the config has 3 views.");
+    assert_eq!(harness.app.message(), "the config has 3 views.");
     assert_eq!(harness.lines().len(), before);
 }
 
@@ -49,7 +49,7 @@ fn the_number_of_the_showing_view_reads_nothing_and_says_nothing() {
     let before = harness.lines().len();
     harness.press(KeyCode::Char('1'));
 
-    assert!(harness.app.message.is_empty());
+    assert!(harness.app.message().is_empty());
     assert_eq!(harness.lines().len(), before);
 }
 
@@ -73,7 +73,7 @@ fn v_on_the_status_screen_opens_nothing() {
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Char('v'));
 
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
 }
 
 #[test]
@@ -83,8 +83,8 @@ fn the_view_picker_takes_the_entry_under_the_cursor_and_closes() {
     harness.press(KeyCode::Char('j'));
     harness.press(KeyCode::Enter);
 
-    assert!(harness.app.overlay.is_none());
-    assert_eq!(harness.app.views.current().name, "today");
+    assert!(harness.app.showing().overlay().is_none());
+    assert_eq!(harness.app.list().views().current().name, "today");
     assert_eq!(harness.last(), "ls !done & due:today --json");
 }
 
@@ -96,8 +96,8 @@ fn escape_closes_the_picker_and_changes_no_view() {
     let before = harness.lines().len();
     harness.press(KeyCode::Esc);
 
-    assert!(harness.app.overlay.is_none());
-    assert_eq!(harness.app.views.current().name, "open");
+    assert!(harness.app.showing().overlay().is_none());
+    assert_eq!(harness.app.list().views().current().name, "open");
     assert_eq!(harness.lines().len(), before);
 }
 
@@ -109,7 +109,7 @@ fn a_configured_default_view_is_the_one_the_pane_opens_on() {
     .expect("parses");
     let mut harness = loaded_with(config);
 
-    assert_eq!(harness.app.views.current().name, "deep");
+    assert_eq!(harness.app.list().views().current().name, "deep");
     assert!(
         harness
             .lines()
@@ -124,16 +124,16 @@ fn a_view_request_file_outranks_the_showing_view_and_is_read_once() {
     let mut harness = loaded_with(three_views());
     let path = std::env::temp_dir().join(format!("herdr-damnit-request-{}", std::process::id()));
     std::fs::write(&path, "deep").expect("the request is written");
-    harness.app.view_request = Some(path.clone());
+    harness.app.watch_view_requests(path.clone());
 
     harness.app.tick(Instant::now());
-    assert_eq!(harness.app.views.current().name, "deep");
+    assert_eq!(harness.app.list().views().current().name, "deep");
     assert_eq!(harness.last(), "ls !done & effort:deep --json");
 
     harness.press(KeyCode::Char('1'));
     harness.app.tick(Instant::now());
     assert_eq!(
-        harness.app.views.current().name,
+        harness.app.list().views().current().name,
         "open",
         "the request outlived its read"
     );
@@ -145,11 +145,11 @@ fn a_status_request_shows_the_status_screen_rather_than_a_view() {
     let mut harness = loaded_with(three_views());
     let path = std::env::temp_dir().join(format!("herdr-damnit-status-{}", std::process::id()));
     std::fs::write(&path, crate::pane::STATUS_REQUEST).expect("the request is written");
-    harness.app.view_request = Some(path.clone());
+    harness.app.watch_view_requests(path.clone());
 
     harness.app.tick(Instant::now());
 
-    assert_eq!(harness.app.screen, Screen::Status);
-    assert_eq!(harness.app.views.current().name, "open");
+    assert_eq!(harness.app.showing().screen(), Screen::Status);
+    assert_eq!(harness.app.list().views().current().name, "open");
     assert!(!path.exists());
 }

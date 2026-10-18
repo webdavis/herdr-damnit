@@ -17,7 +17,7 @@ fn shift_s_opens_the_note_box_over_the_object_under_the_cursor() {
     harness.select("1a2b3c4");
     harness.press(KeyCode::Char('S'));
 
-    let Some(Overlay::Note(note)) = harness.app.overlay.as_ref() else {
+    let Some(Overlay::Note(note)) = harness.app.showing().overlay() else {
         panic!("expected the note box");
     };
     assert_eq!(note.oid.as_str(), "1a2b3c4");
@@ -33,7 +33,7 @@ fn enter_opens_a_line_in_the_note_box_rather_than_sending() {
     harness.press(KeyCode::Enter);
     harness.type_line("b");
 
-    let Some(Overlay::Note(note)) = harness.app.overlay.as_ref() else {
+    let Some(Overlay::Note(note)) = harness.app.showing().overlay() else {
         panic!("the note box closed on Enter");
     };
     assert_eq!(note.text, "a\nb");
@@ -55,8 +55,8 @@ fn control_d_sends_the_brief_with_the_note_and_names_the_agent() {
         .unwrap_or_else(|| panic!("{sent:?}"));
     assert!(paste.contains("ship the pin bump"), "{paste}");
     assert!(paste.contains("note: start here"), "{paste}");
-    assert_eq!(harness.app.message, "sent to planner");
-    assert!(harness.app.overlay.is_none());
+    assert_eq!(harness.app.message(), "sent to planner");
+    assert!(harness.app.showing().overlay().is_none());
 }
 
 #[test]
@@ -77,7 +77,7 @@ fn a_refused_label_does_not_pretend_the_send_failed() {
     harness.answer(3, 2, "", "dam: \"handed-off\" clashes with \"handed-back\"");
 
     assert_eq!(
-        harness.app.message,
+        harness.app.message(),
         "sent to planner, label refused: \"handed-off\" clashes with \"handed-back\"."
     );
 }
@@ -91,7 +91,7 @@ fn an_empty_handoff_label_writes_nothing_and_the_status_line_is_the_whole_record
     send(&mut harness);
 
     assert_eq!(harness.lines().len(), before);
-    assert_eq!(harness.app.message, "sent to planner");
+    assert_eq!(harness.app.message(), "sent to planner");
 }
 
 #[test]
@@ -101,7 +101,7 @@ fn escape_throws_the_draft_away_and_sends_nothing() {
     harness.type_line("x");
     harness.press(KeyCode::Esc);
 
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
     assert!(!harness.sent_anything());
 }
 
@@ -114,8 +114,11 @@ fn shift_s_refuses_before_the_box_opens_when_the_workspace_has_no_agent_pane() {
     harness.answer(2, 0, crate::screens::tests::LS, "");
     harness.press(KeyCode::Char('S'));
 
-    assert!(harness.app.overlay.is_none(), "the note box opened");
-    assert_eq!(harness.app.message, "no agent pane in this workspace.");
+    assert!(
+        harness.app.showing().overlay().is_none(),
+        "the note box opened"
+    );
+    assert_eq!(harness.app.message(), "no agent pane in this workspace.");
 }
 
 #[test]
@@ -127,11 +130,11 @@ fn the_box_comes_back_with_the_draft_when_the_agent_pane_went_away() {
     harness.list_agents(Vec::new());
     send(&mut harness);
 
-    let Some(Overlay::Note(note)) = harness.app.overlay.as_ref() else {
+    let Some(Overlay::Note(note)) = harness.app.showing().overlay() else {
         panic!("the draft was thrown away");
     };
     assert_eq!(note.text, "keep me");
-    assert_eq!(harness.app.message, "no agent pane in this workspace.");
+    assert_eq!(harness.app.message(), "no agent pane in this workspace.");
     assert!(
         harness
             .herdr_calls()

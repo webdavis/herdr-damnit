@@ -1,15 +1,13 @@
 use herdr_damnit_adapters::wire;
 use herdr_damnit_application::{Completion, Phase, Request, SyncKind};
-use herdr_damnit_domain::{
-    Failure, RowStyle, Stage, classify, done_rows, list_rows, message, status_rows,
-};
+use herdr_damnit_domain::{Failure, Stage, classify, message};
 
 use super::{App, Pending};
 use crate::overlay::{LineBox, LinePurpose, Overlay};
 
 impl App {
     pub(super) fn apply(&mut self, completion: Completion) {
-        let pending = self.pending.remove(&completion.id);
+        let pending = self.work.settle(&completion.id);
         if completion.finished.code != Some(0) {
             let failure = classify(
                 completion.finished.code,
@@ -49,25 +47,25 @@ impl App {
             (Phase::Ready, Request::Status) => self.read_status(&completion.finished.stdout)?,
             (_, Request::Status) => self.take_first_status(&completion.finished.stdout),
             (_, Request::List(_)) => {
-                self.objects =
+                let objects =
                     wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
-                self.redraw_list();
+                self.list
+                    .take(objects, self.status.stage(), self.config.icons());
             }
             (_, Request::Done) => {
-                self.done_objects =
-                    wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
-                self.done
-                    .replace(done_rows(&self.done_objects, &self.completion_days));
+                self.done.take_objects(
+                    wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?,
+                );
             }
             (_, Request::Show(_)) => {
-                self.detail =
-                    Some(wire::object(&completion.finished.stdout).map_err(|_| unreadable())?);
+                self.showing.open_detail(
+                    wire::object(&completion.finished.stdout).map_err(|_| unreadable())?,
+                );
             }
             (_, Request::Log) => {
-                self.completion_days =
-                    wire::completions(&completion.finished.stdout).map_err(|_| unreadable())?;
-                self.done
-                    .replace(done_rows(&self.done_objects, &self.completion_days));
+                self.done.take_completion_days(
+                    wire::completions(&completion.finished.stdout).map_err(|_| unreadable())?,
+                );
             }
             (_, Request::Sync(SyncKind::Push, _)) => {
                 self.message =
@@ -83,8 +81,8 @@ impl App {
     }
 
     fn bring_the_box_back(&mut self, line: LineBox, failure: &Failure) {
-        if !matches!(failure, Failure::Store(_)) && self.overlay.is_none() {
-            self.overlay = Some(Overlay::Line(line));
+        if !matches!(failure, Failure::Store(_)) && self.showing.overlay().is_none() {
+            self.showing.open(Overlay::Line(line));
         }
     }
 
@@ -101,18 +99,7 @@ impl App {
     }
 
     pub(super) fn take_stage(&mut self, stage: Stage) {
-        self.stage = stage;
-        self.status
-            .replace(status_rows(&self.stage, self.config.icons()));
-        self.redraw_list();
-    }
-
-    pub(super) fn redraw_list(&mut self) {
-        let style = RowStyle {
-            icons: self.config.icons(),
-            today: self.clock.today(),
-        };
-        self.list
-            .replace(list_rows(&self.objects, &self.stage, style));
+        self.status.take(stage, self.config.icons());
+        self.list.redraw(self.status.stage(), self.config.icons());
     }
 }

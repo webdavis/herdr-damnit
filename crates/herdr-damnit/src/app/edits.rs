@@ -46,10 +46,13 @@ impl App {
     }
 
     pub(super) fn ask_discard(&mut self) -> After {
-        let Some(change) = self
-            .selected_oid()
-            .and_then(|oid| self.stage.unstaged.iter().find(|change| &change.oid == oid))
-        else {
+        let Some(change) = self.selected_oid().and_then(|oid| {
+            self.status
+                .stage()
+                .unstaged
+                .iter()
+                .find(|change| &change.oid == oid)
+        }) else {
             return After::Stay;
         };
         let lost = match change.fields.is_empty() {
@@ -70,7 +73,7 @@ impl App {
     }
 
     pub(super) fn quit(&mut self) -> After {
-        let Some(sync) = self.jobs.exclusive() else {
+        let Some(sync) = self.work.exclusive() else {
             return After::Quit;
         };
         self.reopen(Overlay::Confirm(Confirm {
@@ -82,7 +85,8 @@ impl App {
 
     pub(super) fn resolve(&mut self, side: Side) -> After {
         let conflicted = self.selected_oid().filter(|oid| {
-            self.stage
+            self.status
+                .stage()
                 .conflicts
                 .iter()
                 .any(|conflict| &conflict.oid == *oid)
@@ -105,10 +109,7 @@ impl App {
     }
 
     pub(super) fn object(&self, oid: &Oid) -> Option<&Object> {
-        self.objects
-            .iter()
-            .chain(&self.done_objects)
-            .find(|object| &object.oid == oid)
+        self.list.object(oid).or_else(|| self.done.object(oid))
     }
 
     pub(super) fn selected_object(&self) -> Option<&Object> {

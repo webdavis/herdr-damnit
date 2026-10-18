@@ -17,24 +17,24 @@ impl App {
             };
         }
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-            self.jobs.cancel_current();
+            self.work.cancel_current();
             return After::Stay;
         }
-        if let Some(overlay) = self.overlay.take() {
+        if let Some(overlay) = self.showing.take_overlay() {
             return self.overlay_key(overlay, key);
         }
-        if self.detail.is_some() {
+        if self.showing.detail().is_some() {
             return self.detail_key(key);
         }
         match key.code {
-            KeyCode::Tab => self.show(self.screen.next()),
-            KeyCode::BackTab => self.show(self.screen.previous()),
+            KeyCode::Tab => self.show(self.showing.screen().next()),
+            KeyCode::BackTab => self.show(self.showing.screen().previous()),
             KeyCode::Char('j') | KeyCode::Down => self.move_cursor(1),
             KeyCode::Char('k') | KeyCode::Up => self.move_cursor(-1),
             KeyCode::Char(digit @ '1'..='9') => {
                 self.show_numbered_view(digit as usize - '0' as usize)
             }
-            KeyCode::Char('v') if matches!(self.screen, Screen::List | Screen::Done) => {
+            KeyCode::Char('v') if matches!(self.showing.screen(), Screen::List | Screen::Done) => {
                 self.open_view_picker()
             }
             KeyCode::Char('R' | 'r') => self.reread(),
@@ -68,7 +68,7 @@ impl App {
     fn detail_key(&mut self, key: KeyEvent) -> After {
         match key.code {
             KeyCode::Esc => {
-                self.detail = None;
+                self.showing.close_detail();
                 After::Stay
             }
             KeyCode::Char('q') => self.quit(),
@@ -90,7 +90,7 @@ impl App {
 
     fn toggle_staged(&mut self) -> After {
         match self.selected_oid().cloned() {
-            Some(oid) if self.stage.is_staged(&oid) => self.write(argv::unstage(&oid)),
+            Some(oid) if self.status.stage().is_staged(&oid) => self.write(argv::unstage(&oid)),
             Some(oid) => self.write(argv::stage(&oid)),
             None => After::Stay,
         }
@@ -107,18 +107,18 @@ impl App {
     }
 
     pub(super) fn cursor_mut(&mut self) -> &mut Cursor {
-        match self.screen {
-            Screen::Status => &mut self.status,
-            Screen::Done => &mut self.done,
-            Screen::List => &mut self.list,
+        match self.showing.screen() {
+            Screen::Status => self.status.cursor_mut(),
+            Screen::Done => self.done.cursor_mut(),
+            Screen::List => self.list.cursor_mut(),
         }
     }
 
     pub(super) fn selected_oid(&self) -> Option<&Oid> {
-        match self.screen {
-            Screen::List => self.list.selected_oid(),
-            Screen::Status => self.status.selected_oid(),
-            Screen::Done => self.done.selected_oid(),
+        match self.showing.screen() {
+            Screen::List => self.list.cursor().selected_oid(),
+            Screen::Status => self.status.cursor().selected_oid(),
+            Screen::Done => self.done.cursor().selected_oid(),
         }
     }
 }

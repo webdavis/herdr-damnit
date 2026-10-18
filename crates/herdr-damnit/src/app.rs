@@ -1,25 +1,38 @@
 mod agent;
 mod apply;
 mod boxes;
+mod done;
 mod edits;
 mod handshake;
 mod header;
 mod keys;
+mod list;
 mod overlay_keys;
 mod pending;
 mod pickers;
+mod reach;
+mod rereads;
 mod screen;
+mod showing;
+mod status;
 mod views;
+mod work;
 
 pub use crate::overlay::Overlay;
+pub use done::DoneScreen;
 pub(crate) use handshake::status_refusal;
+pub use list::ListScreen;
 use pending::Pending;
+use reach::AgentReach;
+use rereads::Rereads;
 pub use screen::Screen;
+pub use showing::Showing;
+pub use status::StatusScreen;
+use work::Work;
 
 #[cfg(test)]
 pub(crate) mod tests;
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -27,7 +40,7 @@ use herdr_damnit_adapters::Config;
 use herdr_damnit_application::{
     AgentPanes, Clock, JobId, Jobs, Phase, Request, Submitted, Workspace,
 };
-use herdr_damnit_domain::{Cursor, Date, Failure, Object, Oid, Stage, Views, message, status_rows};
+use herdr_damnit_domain::{Failure, Views, message};
 
 const BUSY_POLL_WINDOW: Duration = Duration::from_millis(50);
 
@@ -41,29 +54,16 @@ pub enum After {
 }
 
 pub struct App {
-    pub screen: Screen,
-    pub views: Views,
-    pub list: Cursor,
-    pub status: Cursor,
-    pub done: Cursor,
-    pub overlay: Option<Overlay>,
-    pub view_request: Option<PathBuf>,
-    pub stage: Stage,
-    pub message: String,
-    pub spinner: usize,
-    pub config: Config,
-    pub phase: Phase,
-    pub detail: Option<Object>,
-    last_reread: Option<Instant>,
-    pending: HashMap<JobId, Pending>,
-    agents: Box<dyn AgentPanes>,
-    here: Workspace,
-    clock: Box<dyn Clock>,
-    objects: Vec<Object>,
-    done_objects: Vec<Object>,
-    completion_days: HashMap<Oid, Date>,
-    done_opened: bool,
-    jobs: Jobs,
+    showing: Showing,
+    list: ListScreen,
+    status: StatusScreen,
+    done: DoneScreen,
+    message: String,
+    config: Config,
+    phase: Phase,
+    agents: AgentReach,
+    rereads: Rereads,
+    work: Work,
 }
 
 impl App {
@@ -79,46 +79,65 @@ impl App {
             views.select_named(name);
         }
         Self {
-            screen: Screen::List,
-            views,
-            list: Cursor::new(Vec::new()),
-            status: Cursor::new(status_rows(&Stage::default(), config.icons())),
-            done: Cursor::new(Vec::new()),
-            overlay: None,
-            view_request: None,
-            stage: Stage::default(),
+            showing: Showing::new(),
+            list: ListScreen::new(views, clock),
+            status: StatusScreen::new(config.icons()),
+            done: DoneScreen::new(),
             message: String::new(),
-            spinner: 0,
             config,
             phase: Phase::Starting,
-            detail: None,
-            last_reread: None,
-            pending: HashMap::new(),
-            agents,
-            here,
-            clock,
-            objects: Vec::new(),
-            done_objects: Vec::new(),
-            completion_days: HashMap::new(),
-            done_opened: false,
-            jobs,
+            agents: AgentReach::new(agents, here),
+            rereads: Rereads::new(),
+            work: Work::new(jobs),
         }
     }
 
     pub fn poll_window(&self) -> Duration {
-        match self.jobs.in_flight() {
+        match self.work.in_flight() {
             0 => IDLE_POLL_WINDOW,
             _ => BUSY_POLL_WINDOW,
         }
     }
 
     pub fn submit(&mut self, request: Request) -> Option<JobId> {
-        match self.jobs.submit(request) {
+        match self.work.submit(request) {
             Submitted::Started(id) => return Some(id),
             Submitted::Refused(said) | Submitted::Failed(said) => self.message = said,
             Submitted::NotInstalled => self.phase = Phase::Refused(message(&Failure::NotInstalled)),
         }
         None
+    }
+
+    pub fn watch_view_requests(&mut self, path: PathBuf) {
+        self.rereads.watch(path);
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    pub fn say(&mut self, said: String) {
+        self.message = said;
+    }
+
+    pub fn list(&self) -> &ListScreen {
+        &self.list
+    }
+
+    pub fn status(&self) -> &StatusScreen {
+        &self.status
+    }
+
+    pub fn done(&self) -> &DoneScreen {
+        &self.done
+    }
+
+    pub fn showing(&self) -> &Showing {
+        &self.showing
     }
 
     pub fn refusal(&self) -> Option<&str> {
@@ -129,10 +148,7 @@ impl App {
     }
 
     pub fn tick(&mut self, now: Instant) {
-        if self.jobs.in_flight() > 0 {
-            self.spinner = self.spinner.wrapping_add(1);
-        }
-        for completion in self.jobs.drain() {
+        for completion in self.work.turn() {
             self.apply(completion);
         }
         self.take_view_request();

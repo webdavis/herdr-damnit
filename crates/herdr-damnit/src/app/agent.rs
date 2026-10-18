@@ -1,4 +1,4 @@
-use herdr_damnit_application::{HandOff, Request, agent_pane, hand_off};
+use herdr_damnit_application::{HandOff, Request};
 
 use super::{After, App, Pending};
 use crate::overlay::{NoteBox, Overlay};
@@ -8,7 +8,7 @@ impl App {
         let Some(oid) = self.selected_object().map(|object| object.oid.clone()) else {
             return After::Stay;
         };
-        match agent_pane(&*self.agents, &self.here) {
+        match self.agents.pane() {
             Ok(_) => self.reopen(Overlay::Note(NoteBox {
                 oid,
                 text: String::new(),
@@ -25,7 +25,7 @@ impl App {
             return After::Stay;
         };
         let label = self.config.handoff_label.clone();
-        match hand_off(&*self.agents, &self.here, &object, note.text.trim(), &label) {
+        match self.agents.hand_off(&object, note.text.trim(), &label) {
             HandOff::Refused(said) => {
                 self.message = said;
                 return self.reopen(Overlay::Note(note));
@@ -35,8 +35,7 @@ impl App {
                 if let Some(write) = label_write
                     && let Some(id) = self.submit(Request::Write(write))
                 {
-                    self.pending
-                        .insert(id, Pending::Label { agent: agent.name });
+                    self.work.pend(id, Pending::Label { agent: agent.name });
                 }
             }
         }

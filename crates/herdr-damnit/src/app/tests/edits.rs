@@ -10,7 +10,7 @@ fn refusal(rule: &str, said: &str) -> String {
 }
 
 fn line_text(harness: &Harness) -> Option<String> {
-    match harness.app.overlay.as_ref() {
+    match harness.app.showing().overlay() {
         Some(Overlay::Line(line)) => Some(line.text.clone()),
         _ => None,
     }
@@ -30,13 +30,13 @@ fn x_completes_and_shift_x_forces_it() {
 #[test]
 fn a_refused_completion_says_dams_own_sentence_and_changes_nothing() {
     let mut harness = loaded();
-    let before = harness.app.list.object_count();
+    let before = harness.app.list().cursor().object_count();
     harness.press(KeyCode::Char('x'));
     let said = "5d6e7f8 has 2 open children; use --force to complete them too";
     harness.answer(3, 4, "", &refusal("blocked", said));
 
-    assert_eq!(harness.app.message, said);
-    assert_eq!(harness.app.list.object_count(), before);
+    assert_eq!(harness.app.message(), said);
+    assert_eq!(harness.app.list().cursor().object_count(), before);
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn x_with_no_object_under_the_cursor_does_nothing_and_says_nothing() {
     harness.press(KeyCode::Char('x'));
 
     assert!(harness.lines().is_empty());
-    assert!(harness.app.message.is_empty());
+    assert!(harness.app.message().is_empty());
 }
 
 #[test]
@@ -56,7 +56,7 @@ fn the_first_d_asks_and_the_second_removes() {
     let before = harness.lines().len();
     harness.press(KeyCode::Char('d'));
     assert_eq!(harness.lines().len(), before, "the first d sent something");
-    let Some(Overlay::Confirm(confirm)) = harness.app.overlay.as_ref() else {
+    let Some(Overlay::Confirm(confirm)) = harness.app.showing().overlay() else {
         panic!("expected a confirm");
     };
     assert!(
@@ -69,7 +69,7 @@ fn the_first_d_asks_and_the_second_removes() {
 
     harness.press(KeyCode::Char('d'));
     assert_eq!(harness.last(), "rm 1a2b3c4 --json");
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
 }
 
 #[test]
@@ -77,13 +77,13 @@ fn any_other_key_dismisses_the_delete_confirm_and_sends_nothing() {
     let mut harness = loaded();
     harness.press(KeyCode::Char('d'));
     let before = harness.lines().len();
-    let under = harness.app.list.selected_oid().cloned();
+    let under = harness.app.list().cursor().selected_oid().cloned();
     harness.press(KeyCode::Char('j'));
 
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
     assert_eq!(harness.lines().len(), before);
     assert_eq!(
-        harness.app.list.selected_oid().cloned(),
+        harness.app.list().cursor().selected_oid().cloned(),
         under,
         "the dismissing key acted"
     );
@@ -106,7 +106,7 @@ fn s_opens_a_box_hinting_exactly_the_words_dam_accepts() {
     let mut harness = loaded();
     harness.press(KeyCode::Char('s'));
 
-    let Some(Overlay::Line(line)) = harness.app.overlay.as_ref() else {
+    let Some(Overlay::Line(line)) = harness.app.showing().overlay() else {
         panic!("expected the date box");
     };
     assert_eq!(line.hint, DATE_WORDS);
@@ -121,7 +121,7 @@ fn a_date_typed_into_the_box_becomes_the_due_flag() {
     harness.press(KeyCode::Enter);
 
     assert_eq!(harness.last(), "edit 1a2b3c4 --due tomorrow --json");
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
 }
 
 #[test]
@@ -159,7 +159,7 @@ fn a_date_dam_cannot_read_comes_back_with_the_line_still_in_the_box() {
         &format!(r#"{{"error":{{"kind":"parse","rule":null,"message":"{said}","oids":[]}}}}"#),
     );
 
-    assert_eq!(harness.app.message, "cannot read \"next mon\" as a date");
+    assert_eq!(harness.app.message(), "cannot read \"next mon\" as a date");
     assert_eq!(line_text(&harness).as_deref(), Some("next mon"));
 }
 
@@ -171,7 +171,7 @@ fn a_held_store_does_not_bring_the_box_back_so_r_reaches_the_retry() {
     harness.press(KeyCode::Enter);
     harness.answer(3, 1, "", "dam: database is locked");
 
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
 }
 
 #[test]
