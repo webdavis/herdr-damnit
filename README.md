@@ -25,7 +25,8 @@ The install step builds the binary into `bin/herdr-damnit` with cargo, so a Rust
 needed. A local checkout is linked instead, and builds itself:
 
 ```bash
-cargo build --release --locked && mkdir -p bin && cp target/release/herdr-damnit bin/
+cargo build --release --locked -p herdr-damnit
+mkdir -p bin && cp target/release/herdr-damnit bin/
 herdr plugin link .
 ```
 
