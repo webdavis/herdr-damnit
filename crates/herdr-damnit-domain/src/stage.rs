@@ -1,4 +1,4 @@
-use crate::{Mark, Oid, StagingMarks};
+use crate::{Mark, Oid, StagingMarks, counted};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Op {
@@ -138,15 +138,6 @@ impl Stage {
         }
         rows
     }
-}
-
-pub fn counted(counts: &[(u64, &str)]) -> String {
-    counts
-        .iter()
-        .filter(|(count, _)| *count > 0)
-        .map(|(count, what)| format!("{count} {what}"))
-        .collect::<Vec<_>>()
-        .join("  ")
 }
 
 fn newlines_as_spaces(value: &str) -> String {

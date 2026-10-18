@@ -1,4 +1,5 @@
 mod brief;
+mod counts;
 mod cursor;
 mod dates;
 mod failure;
@@ -13,6 +14,7 @@ mod version;
 mod views;
 
 pub use brief::brief;
+pub use counts::counted;
 pub use cursor::Cursor;
 pub use dates::{Date, DueState, due_state, long, parse_date, short};
 pub use failure::{
@@ -25,7 +27,7 @@ pub use oid::Oid;
 pub use priority::Priority;
 pub use rows::{ObjectRow, Row, RowStyle, Segment, StagingMarks, rows};
 pub use slot::Slot;
-pub use stage::{Change, Conflict, Notice, Op, Stage, StatusRow, Unpushed, counted};
+pub use stage::{Change, Conflict, Notice, Op, Stage, StatusRow, Unpushed};
 pub use version::{
     DAM_HIGHEST_TESTED, DAM_MINIMUM, DAM_RESTORE, DamVersion, Verdict, parse_version, verdict,
 };
