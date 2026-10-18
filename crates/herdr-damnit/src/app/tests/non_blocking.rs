@@ -82,8 +82,6 @@ fn app(scratch: &Scratch) -> App {
     )
 }
 
-/// Drives the loop the way `loop_::run` does, without a terminal, until the push is over. The
-/// key goes in once the fake has logged the push, so it always lands mid-push.
 fn drive(app: &mut App, scratch: &Scratch, mut key: Option<KeyEvent>) -> Vec<String> {
     let started = Instant::now();
     let mut frames = Vec::new();
