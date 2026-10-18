@@ -1,5 +1,6 @@
 use herdr_damnit_adapters::wire;
 use herdr_damnit_application::{Handshake, Phase, Request, check_version};
+use herdr_damnit_domain::{Failure, message};
 
 use super::App;
 
@@ -31,5 +32,11 @@ impl App {
 }
 
 pub(crate) fn status_refusal(error: &str) -> String {
-    format!("dam status is missing what this pane reads: {error}")
+    match error
+        .strip_prefix("missing field `")
+        .and_then(|rest| rest.split('`').next())
+    {
+        Some(key) => format!("dam status answered without {key:?}; this pane needs a newer dam."),
+        None => message(&Failure::Unreadable),
+    }
 }

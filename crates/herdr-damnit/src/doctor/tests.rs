@@ -58,7 +58,20 @@ fn a_status_missing_a_key_is_reported_by_name() {
     )
     .expect_err("it refuses");
 
-    assert!(error.contains("missing field `unpushed`"), "{error}");
+    assert_eq!(
+        error,
+        "dam status answered without \"unpushed\"; this pane needs a newer dam."
+    );
+}
+
+#[test]
+fn a_status_that_is_not_json_is_reported_in_plain_words() {
+    let error = report_from("dam 0.2.0\n", "not json", Ok(String::new())).expect_err("it refuses");
+
+    assert_eq!(
+        error,
+        "dam answered with something this pane could not read."
+    );
 }
 
 #[test]

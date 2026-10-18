@@ -96,16 +96,29 @@ fn a_status_document_missing_a_key_refuses_to_draw() {
         "",
     );
 
-    let refusal = harness.app.refusal().expect("a refusal");
-    assert!(
-        refusal.starts_with("dam status is missing what this pane reads: missing field `unpushed`"),
-        "{refusal}"
+    assert_eq!(
+        harness.app.refusal(),
+        Some("dam status answered without \"unpushed\"; this pane needs a newer dam.")
     );
     assert_eq!(
         harness.lines().len(),
         2,
         "it read on past a failed handshake"
     );
+}
+
+#[test]
+fn a_status_document_that_is_not_json_is_refused_in_plain_words() {
+    let mut harness = harness();
+    start(&mut harness.app);
+    harness.answer(0, 0, "dam 0.2.0\n", "");
+    harness.answer(1, 0, "not json", "");
+
+    assert_eq!(
+        harness.app.refusal(),
+        Some("dam answered with something this pane could not read.")
+    );
+    assert_eq!(harness.lines().len(), 2);
 }
 
 #[test]
