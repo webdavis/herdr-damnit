@@ -9,7 +9,7 @@ description = "A task pane over the dam task store: the terminal UI, and a docto
 command = [
   "sh",
   "-c",
-  "cargo build --release --locked && mkdir -p bin && cp target/release/herdr-damnit bin/herdr-damnit",
+  "cargo build --release --locked -p herdr-damnit && mkdir -p bin && cp target/release/herdr-damnit bin/herdr-damnit",
 ]
 
 [[panes]]

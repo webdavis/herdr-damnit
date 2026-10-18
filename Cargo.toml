@@ -6,7 +6,6 @@ members = [
   "crates/herdr-damnit-adapters",
   "crates/herdr-damnit",
 ]
-default-members = ["crates/herdr-damnit"]
 
 [workspace.package]
 edition = "2024"
