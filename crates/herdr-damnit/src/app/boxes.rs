@@ -64,7 +64,7 @@ impl App {
             LinePurpose::Deadline(oid) => Request::Write(argv::set_deadline(oid, when)),
         };
         if let Some(id) = self.submit(request) {
-            self.pending.insert(id, Pending::Box(line));
+            self.work.pend(id, Pending::Box(line));
         }
         After::Stay
     }

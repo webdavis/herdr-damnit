@@ -17,7 +17,7 @@ impl App {
             };
         }
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-            self.jobs.cancel_current();
+            self.work.cancel_current();
             return After::Stay;
         }
         if let Some(overlay) = self.showing.take_overlay() {

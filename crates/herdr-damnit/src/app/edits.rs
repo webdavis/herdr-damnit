@@ -73,7 +73,7 @@ impl App {
     }
 
     pub(super) fn quit(&mut self) -> After {
-        let Some(sync) = self.jobs.exclusive() else {
+        let Some(sync) = self.work.exclusive() else {
             return After::Quit;
         };
         self.reopen(Overlay::Confirm(Confirm {

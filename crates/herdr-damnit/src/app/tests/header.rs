@@ -53,7 +53,8 @@ fn the_spinner_steps_one_frame_per_tick() {
     let mut harness = harness();
     harness.app.submit(Request::Status);
 
-    let first = harness.app.spinner;
+    let now = harness.started();
+    let first = harness.app.header(now);
     harness.app.tick(Instant::now());
-    assert_ne!(harness.app.spinner, first);
+    assert_ne!(harness.app.header(now), first);
 }

@@ -47,7 +47,7 @@ impl App {
                     self.read_done();
                 }
             }
-            _ if self.jobs.in_flight() == 0 => crate::open::start(self),
+            _ if self.work.in_flight() == 0 => crate::open::start(self),
             _ => {}
         }
         After::Stay

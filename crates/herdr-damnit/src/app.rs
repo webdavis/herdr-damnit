@@ -14,6 +14,7 @@ mod screen;
 mod showing;
 mod status;
 mod views;
+mod work;
 
 pub use crate::overlay::Overlay;
 pub use done::DoneScreen;
@@ -23,11 +24,11 @@ use pending::Pending;
 pub use screen::Screen;
 pub use showing::Showing;
 pub use status::StatusScreen;
+use work::Work;
 
 #[cfg(test)]
 pub(crate) mod tests;
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -55,14 +56,12 @@ pub struct App {
     done: DoneScreen,
     pub view_request: Option<PathBuf>,
     pub message: String,
-    pub spinner: usize,
     pub config: Config,
     pub phase: Phase,
     last_reread: Option<Instant>,
-    pending: HashMap<JobId, Pending>,
     agents: Box<dyn AgentPanes>,
     here: Workspace,
-    jobs: Jobs,
+    work: Work,
 }
 
 impl App {
@@ -84,26 +83,24 @@ impl App {
             done: DoneScreen::new(),
             view_request: None,
             message: String::new(),
-            spinner: 0,
             config,
             phase: Phase::Starting,
             last_reread: None,
-            pending: HashMap::new(),
             agents,
             here,
-            jobs,
+            work: Work::new(jobs),
         }
     }
 
     pub fn poll_window(&self) -> Duration {
-        match self.jobs.in_flight() {
+        match self.work.in_flight() {
             0 => IDLE_POLL_WINDOW,
             _ => BUSY_POLL_WINDOW,
         }
     }
 
     pub fn submit(&mut self, request: Request) -> Option<JobId> {
-        match self.jobs.submit(request) {
+        match self.work.submit(request) {
             Submitted::Started(id) => return Some(id),
             Submitted::Refused(said) | Submitted::Failed(said) => self.message = said,
             Submitted::NotInstalled => self.phase = Phase::Refused(message(&Failure::NotInstalled)),
@@ -135,10 +132,7 @@ impl App {
     }
 
     pub fn tick(&mut self, now: Instant) {
-        if self.jobs.in_flight() > 0 {
-            self.spinner = self.spinner.wrapping_add(1);
-        }
-        for completion in self.jobs.drain() {
+        for completion in self.work.turn() {
             self.apply(completion);
         }
         self.take_view_request();

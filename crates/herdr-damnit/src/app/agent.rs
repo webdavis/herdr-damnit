@@ -35,8 +35,7 @@ impl App {
                 if let Some(write) = label_write
                     && let Some(id) = self.submit(Request::Write(write))
                 {
-                    self.pending
-                        .insert(id, Pending::Label { agent: agent.name });
+                    self.work.pend(id, Pending::Label { agent: agent.name });
                 }
             }
         }

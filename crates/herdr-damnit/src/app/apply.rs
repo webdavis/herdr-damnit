@@ -7,7 +7,7 @@ use crate::overlay::{LineBox, LinePurpose, Overlay};
 
 impl App {
     pub(super) fn apply(&mut self, completion: Completion) {
-        let pending = self.pending.remove(&completion.id);
+        let pending = self.work.settle(&completion.id);
         if completion.finished.code != Some(0) {
             let failure = classify(
                 completion.finished.code,
