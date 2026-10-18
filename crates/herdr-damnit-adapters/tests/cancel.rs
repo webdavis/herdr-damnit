@@ -138,7 +138,7 @@ fn cancelling_sends_sigint_and_dam_answers_with_its_cancelled_code() {
 }
 
 #[test]
-fn a_read_past_its_deadline_is_cancelled_without_the_pane_asking() {
+fn the_doctor_past_its_own_deadline_is_cancelled_without_the_pane_asking() {
     let env = FakeEnv::lock_cleared();
     env.set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
     env.set("FAKE_DAM_FIXTURE_DIR", fixtures());
