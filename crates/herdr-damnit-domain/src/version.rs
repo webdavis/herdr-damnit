@@ -10,12 +10,6 @@ pub const DAM_HIGHEST_TESTED: DamVersion = DamVersion {
     patch: 0,
 };
 
-pub const DAM_RESTORE: DamVersion = DamVersion {
-    major: 0,
-    minor: 2,
-    patch: 0,
-};
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DamVersion {
     pub major: u32,
@@ -126,14 +120,5 @@ mod tests {
     fn a_newer_patch_of_a_known_minor_says_nothing() {
         assert!(matches!(verdict(at(0, 2, 7)), Verdict::Fine));
         assert!(matches!(verdict(DAM_HIGHEST_TESTED), Verdict::Fine));
-    }
-
-    #[test]
-    fn every_dam_the_pane_accepts_clears_the_restore_gate_the_destructive_discard_key_keeps() {
-        assert!(DAM_MINIMUM >= DAM_RESTORE);
-        assert!(at(0, 2, 0) >= DAM_RESTORE);
-        assert!(at(0, 2, 9) >= DAM_RESTORE);
-        assert!(at(0, 3, 0) >= DAM_RESTORE);
-        assert!(at(0, 1, 9) < DAM_RESTORE, "and that dam is refused anyway");
     }
 }

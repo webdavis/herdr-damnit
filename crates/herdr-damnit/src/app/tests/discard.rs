@@ -1,5 +1,5 @@
 use crate::app::Overlay;
-use crate::screens::tests::{LS, ascii_config, loaded};
+use crate::screens::tests::loaded;
 
 use super::*;
 
@@ -76,23 +76,4 @@ fn the_discard_key_does_nothing_on_a_row_with_no_working_change() {
 
     assert!(harness.app.overlay.is_none());
     assert_eq!(harness.lines().len(), before);
-}
-
-#[test]
-fn the_discard_key_is_unbound_until_dam_has_named_a_version_with_restore() {
-    let mut harness = harness_with(ascii_config());
-    harness.app.submit(
-        JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
-    harness.answer(0, 0, &working(r#"["due"]"#), "");
-    harness.app.submit(
-        JobKind::ReadList,
-        herdr_damnit_application::argv::list("!done"),
-    );
-    harness.answer(1, 0, LS, "");
-    harness.select("1a2b3c4");
-    harness.press(KeyCode::Char('!'));
-
-    assert!(harness.app.overlay.is_none());
 }

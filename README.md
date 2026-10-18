@@ -272,10 +272,8 @@ one-line box, `<CR>` sends and `<Esc>` cancels.
 **`X` is force-complete, not reopen.** In `herdr-todoist` it reopened a task; `dam` has no verb
 that clears `done`, so the key now completes past whatever blocks a plain `x`.
 
-**`!` is there only on a `dam` that has `restore`.** The pane reads the version as it opens and
-binds the key from `dam` 0.2.0 on, which is also the oldest `dam` it opens on at all. A destructive
-key that asked first and was then refused would be the worst shape a key could have, so without the
-verb the key is simply not bound. The confirm names the object and the fields the change would lose.
+**`!` discards after a confirm.** The confirm names the object and the fields the change would
+lose; a second `!` sends `dam restore`.
 
 `q` with a push, pull or commit running asks once, and a second `q` closes the pane and leaves the
 `dam` child to finish. `dam push` records each mutation as its result arrives, so killing it halfway

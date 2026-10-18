@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 
 use herdr_damnit_adapters::Config;
 use herdr_damnit_application::{Clock, Herdr, JobId, JobKind, Jobs, Submitted, Workspace};
-use herdr_damnit_domain::{Cursor, DamVersion, Date, Failure, Object, Oid, Stage, Views, message};
+use herdr_damnit_domain::{Cursor, Date, Failure, Object, Oid, Stage, Views, message};
 
 const BUSY_POLL_WINDOW: Duration = Duration::from_millis(50);
 
@@ -50,7 +50,6 @@ pub struct App {
     pub spinner: usize,
     pub config: Config,
     pub refusal: Option<String>,
-    pub version: Option<DamVersion>,
     pub detail: Option<Object>,
     under_detail: Screen,
     last_reread: Option<Instant>,
@@ -93,7 +92,6 @@ impl App {
             spinner: 0,
             config,
             refusal: None,
-            version: None,
             detail: None,
             under_detail: Screen::List,
             last_reread: None,
