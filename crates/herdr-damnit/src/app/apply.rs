@@ -1,8 +1,6 @@
 use herdr_damnit_adapters::wire;
 use herdr_damnit_application::{Completion, Phase, Request, SyncKind};
-use herdr_damnit_domain::{
-    Failure, RowStyle, Stage, classify, done_rows, list_rows, message, status_rows,
-};
+use herdr_damnit_domain::{Failure, Stage, classify, done_rows, message, status_rows};
 
 use super::{App, Pending};
 use crate::overlay::{LineBox, LinePurpose, Overlay};
@@ -49,9 +47,9 @@ impl App {
             (Phase::Ready, Request::Status) => self.read_status(&completion.finished.stdout)?,
             (_, Request::Status) => self.take_first_status(&completion.finished.stdout),
             (_, Request::List(_)) => {
-                self.objects =
+                let objects =
                     wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
-                self.redraw_list();
+                self.list.take(objects, &self.stage, self.config.icons());
             }
             (_, Request::Done) => {
                 self.done_objects =
@@ -105,15 +103,6 @@ impl App {
         self.stage = stage;
         self.status
             .replace(status_rows(&self.stage, self.config.icons()));
-        self.redraw_list();
-    }
-
-    pub(super) fn redraw_list(&mut self) {
-        let style = RowStyle {
-            icons: self.config.icons(),
-            today: self.clock.today(),
-        };
-        self.list
-            .replace(list_rows(&self.objects, &self.stage, style));
+        self.list.redraw(&self.stage, self.config.icons());
     }
 }

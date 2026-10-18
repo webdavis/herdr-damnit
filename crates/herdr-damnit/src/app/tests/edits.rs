@@ -30,13 +30,13 @@ fn x_completes_and_shift_x_forces_it() {
 #[test]
 fn a_refused_completion_says_dams_own_sentence_and_changes_nothing() {
     let mut harness = loaded();
-    let before = harness.app.list.object_count();
+    let before = harness.app.list().cursor().object_count();
     harness.press(KeyCode::Char('x'));
     let said = "5d6e7f8 has 2 open children; use --force to complete them too";
     harness.answer(3, 4, "", &refusal("blocked", said));
 
     assert_eq!(harness.app.message, said);
-    assert_eq!(harness.app.list.object_count(), before);
+    assert_eq!(harness.app.list().cursor().object_count(), before);
 }
 
 #[test]
@@ -77,13 +77,13 @@ fn any_other_key_dismisses_the_delete_confirm_and_sends_nothing() {
     let mut harness = loaded();
     harness.press(KeyCode::Char('d'));
     let before = harness.lines().len();
-    let under = harness.app.list.selected_oid().cloned();
+    let under = harness.app.list().cursor().selected_oid().cloned();
     harness.press(KeyCode::Char('j'));
 
     assert!(harness.app.showing().overlay().is_none());
     assert_eq!(harness.lines().len(), before);
     assert_eq!(
-        harness.app.list.selected_oid().cloned(),
+        harness.app.list().cursor().selected_oid().cloned(),
         under,
         "the dismissing key acted"
     );

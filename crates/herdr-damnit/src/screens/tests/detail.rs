@@ -133,8 +133,8 @@ fn a_long_body_line_wraps_rather_than_being_cut() {
 #[test]
 fn escape_leaves_the_detail_for_the_screen_under_it_with_its_cursor_untouched() {
     let mut harness = loaded();
-    assert!(harness.app.list.move_by(1), "the list has a second row");
-    let under = harness.app.list.selected_oid().cloned();
+    assert!(harness.cursor_mut().move_by(1), "the list has a second row");
+    let under = harness.app.list().cursor().selected_oid().cloned();
     harness.press(KeyCode::Enter);
     harness.answer(
         3,
@@ -145,7 +145,7 @@ fn escape_leaves_the_detail_for_the_screen_under_it_with_its_cursor_untouched() 
 
     harness.press(KeyCode::Esc);
     assert_eq!(harness.app.showing().screen(), Screen::List);
-    assert_eq!(harness.app.list.selected_oid().cloned(), under);
+    assert_eq!(harness.app.list().cursor().selected_oid().cloned(), under);
 }
 
 #[test]

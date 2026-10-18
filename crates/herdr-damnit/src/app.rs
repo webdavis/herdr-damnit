@@ -5,6 +5,7 @@ mod edits;
 mod handshake;
 mod header;
 mod keys;
+mod list;
 mod overlay_keys;
 mod pending;
 mod pickers;
@@ -14,6 +15,7 @@ mod views;
 
 pub use crate::overlay::Overlay;
 pub(crate) use handshake::status_refusal;
+pub use list::ListScreen;
 use pending::Pending;
 pub use screen::Screen;
 pub use showing::Showing;
@@ -44,8 +46,7 @@ pub enum After {
 
 pub struct App {
     showing: Showing,
-    pub views: Views,
-    pub list: Cursor,
+    list: ListScreen,
     pub status: Cursor,
     pub done: Cursor,
     pub view_request: Option<PathBuf>,
@@ -58,8 +59,6 @@ pub struct App {
     pending: HashMap<JobId, Pending>,
     agents: Box<dyn AgentPanes>,
     here: Workspace,
-    clock: Box<dyn Clock>,
-    objects: Vec<Object>,
     done_objects: Vec<Object>,
     completion_days: HashMap<Oid, Date>,
     done_opened: bool,
@@ -80,8 +79,7 @@ impl App {
         }
         Self {
             showing: Showing::new(),
-            views,
-            list: Cursor::new(Vec::new()),
+            list: ListScreen::new(views, clock),
             status: Cursor::new(status_rows(&Stage::default(), config.icons())),
             done: Cursor::new(Vec::new()),
             view_request: None,
@@ -94,8 +92,6 @@ impl App {
             pending: HashMap::new(),
             agents,
             here,
-            clock,
-            objects: Vec::new(),
             done_objects: Vec::new(),
             completion_days: HashMap::new(),
             done_opened: false,
@@ -117,6 +113,10 @@ impl App {
             Submitted::NotInstalled => self.phase = Phase::Refused(message(&Failure::NotInstalled)),
         }
         None
+    }
+
+    pub fn list(&self) -> &ListScreen {
+        &self.list
     }
 
     pub fn showing(&self) -> &Showing {

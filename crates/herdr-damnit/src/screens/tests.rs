@@ -78,14 +78,14 @@ fn tab_cycles_the_three_screens_forward_and_shift_tab_back() {
 #[test]
 fn each_screen_keeps_its_own_cursor_across_the_cycle() {
     let mut harness = loaded();
-    assert!(harness.app.list.move_by(1), "the list has a second row");
-    let on_list = harness.app.list.selected_oid().cloned();
+    assert!(harness.cursor_mut().move_by(1), "the list has a second row");
+    let on_list = harness.app.list().cursor().selected_oid().cloned();
 
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Tab);
 
-    assert_eq!(harness.app.list.selected_oid().cloned(), on_list);
+    assert_eq!(harness.app.list().cursor().selected_oid().cloned(), on_list);
 }
 
 #[test]

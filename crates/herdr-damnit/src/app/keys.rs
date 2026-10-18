@@ -110,13 +110,13 @@ impl App {
         match self.showing.screen() {
             Screen::Status => &mut self.status,
             Screen::Done => &mut self.done,
-            Screen::List => &mut self.list,
+            Screen::List => self.list.cursor_mut(),
         }
     }
 
     pub(super) fn selected_oid(&self) -> Option<&Oid> {
         match self.showing.screen() {
-            Screen::List => self.list.selected_oid(),
+            Screen::List => self.list.cursor().selected_oid(),
             Screen::Status => self.status.selected_oid(),
             Screen::Done => self.done.selected_oid(),
         }

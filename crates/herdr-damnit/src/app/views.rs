@@ -8,28 +8,28 @@ use crate::overlay::{Overlay, Picker, PickerEntry};
 
 impl App {
     pub(super) fn show_numbered_view(&mut self, number: usize) -> After {
-        match self.views.name_of_number(number) {
+        match self.list.views().name_of_number(number) {
             Some(_) => self.show_view(number - 1),
             None => {
-                self.message = format!("the config has {} views.", self.views.count());
+                self.message = format!("the config has {} views.", self.list.views().count());
                 After::Stay
             }
         }
     }
 
     pub(super) fn show_view(&mut self, index: usize) -> After {
-        if self.views.select(index) {
+        if self.list.select_view(index) {
             self.read_list();
         }
         self.show(Screen::List)
     }
 
     pub(super) fn open_view_picker(&mut self) -> After {
-        let entries = self.views.names().map(|name| PickerEntry {
+        let entries = self.list.views().names().map(|name| PickerEntry {
             text: name.to_string(),
             marked: false,
         });
-        let selected = self.views.showing();
+        let selected = self.list.views().showing();
         self.reopen(Overlay::View(Picker {
             title: "view".to_string(),
             entries: entries.collect(),
@@ -55,7 +55,7 @@ impl App {
 
     fn read_list(&mut self) {
         if self.phase == Phase::Ready {
-            let query = self.views.current().query.clone();
+            let query = self.list.views().current().query.clone();
             self.submit(Request::List(query));
         }
     }
@@ -77,7 +77,7 @@ impl App {
             self.show(Screen::Status);
             return;
         }
-        let index = self.views.names().position(|found| found == name);
+        let index = self.list.views().names().position(|found| found == name);
         if let Some(index) = index {
             self.show_view(index);
         }

@@ -23,7 +23,7 @@ impl App {
             Ok(stage) => {
                 self.take_stage(stage);
                 self.phase = Phase::Ready;
-                let query = self.views.current().query.clone();
+                let query = self.list.views().current().query.clone();
                 self.submit(Request::List(query));
                 self.show(self.showing.screen());
             }

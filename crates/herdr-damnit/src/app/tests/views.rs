@@ -28,7 +28,7 @@ fn a_number_key_shows_that_view_and_reads_its_query() {
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Char('2'));
 
-    assert_eq!(harness.app.views.current().name, "today");
+    assert_eq!(harness.app.list().views().current().name, "today");
     assert_eq!(harness.last(), "ls !done & due:today --json");
     assert_eq!(harness.app.showing().screen(), Screen::List);
 }
@@ -84,7 +84,7 @@ fn the_view_picker_takes_the_entry_under_the_cursor_and_closes() {
     harness.press(KeyCode::Enter);
 
     assert!(harness.app.showing().overlay().is_none());
-    assert_eq!(harness.app.views.current().name, "today");
+    assert_eq!(harness.app.list().views().current().name, "today");
     assert_eq!(harness.last(), "ls !done & due:today --json");
 }
 
@@ -97,7 +97,7 @@ fn escape_closes_the_picker_and_changes_no_view() {
     harness.press(KeyCode::Esc);
 
     assert!(harness.app.showing().overlay().is_none());
-    assert_eq!(harness.app.views.current().name, "open");
+    assert_eq!(harness.app.list().views().current().name, "open");
     assert_eq!(harness.lines().len(), before);
 }
 
@@ -109,7 +109,7 @@ fn a_configured_default_view_is_the_one_the_pane_opens_on() {
     .expect("parses");
     let mut harness = loaded_with(config);
 
-    assert_eq!(harness.app.views.current().name, "deep");
+    assert_eq!(harness.app.list().views().current().name, "deep");
     assert!(
         harness
             .lines()
@@ -127,13 +127,13 @@ fn a_view_request_file_outranks_the_showing_view_and_is_read_once() {
     harness.app.view_request = Some(path.clone());
 
     harness.app.tick(Instant::now());
-    assert_eq!(harness.app.views.current().name, "deep");
+    assert_eq!(harness.app.list().views().current().name, "deep");
     assert_eq!(harness.last(), "ls !done & effort:deep --json");
 
     harness.press(KeyCode::Char('1'));
     harness.app.tick(Instant::now());
     assert_eq!(
-        harness.app.views.current().name,
+        harness.app.list().views().current().name,
         "open",
         "the request outlived its read"
     );
@@ -150,6 +150,6 @@ fn a_status_request_shows_the_status_screen_rather_than_a_view() {
     harness.app.tick(Instant::now());
 
     assert_eq!(harness.app.showing().screen(), Screen::Status);
-    assert_eq!(harness.app.views.current().name, "open");
+    assert_eq!(harness.app.list().views().current().name, "open");
     assert!(!path.exists());
 }

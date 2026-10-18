@@ -10,19 +10,24 @@ const TWO_CHANGES: &str = r#"{"staged":[
 #[test]
 fn j_and_k_move_the_cursor_and_stop_at_either_end() {
     let mut harness = loaded();
-    let first = harness.app.list.selected_oid().cloned();
+    let first = harness.app.list().cursor().selected_oid().cloned();
 
     harness.press(KeyCode::Char('j'));
-    assert_ne!(harness.app.list.selected_oid().cloned(), first);
+    assert_ne!(harness.app.list().cursor().selected_oid().cloned(), first);
     harness.press(KeyCode::Up);
-    assert_eq!(harness.app.list.selected_oid().cloned(), first);
+    assert_eq!(harness.app.list().cursor().selected_oid().cloned(), first);
     harness.press(KeyCode::Char('k'));
-    assert_eq!(harness.app.list.selected_oid().cloned(), first);
+    assert_eq!(harness.app.list().cursor().selected_oid().cloned(), first);
     harness.press(KeyCode::Down);
     harness.press(KeyCode::Char('j'));
     harness.press(KeyCode::Char('j'));
     assert_eq!(
-        harness.app.list.selected_oid().map(|oid| oid.as_str()),
+        harness
+            .app
+            .list()
+            .cursor()
+            .selected_oid()
+            .map(|oid| oid.as_str()),
         Some("9a0b1c2")
     );
 }

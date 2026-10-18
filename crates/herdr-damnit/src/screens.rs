@@ -41,7 +41,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     ) {
         (Some(said), ..) => refusal::draw(frame, body, said),
         (None, Some(object), _) => detail::draw(frame, body, object, app),
-        (None, None, Screen::List) => rows::draw(frame, body, &app.list, "nothing in this view"),
+        (None, None, Screen::List) => {
+            rows::draw(frame, body, app.list().cursor(), "nothing in this view")
+        }
         (None, None, Screen::Status) => rows::draw(frame, body, &app.status, ""),
         (None, None, Screen::Done) => rows::draw(frame, body, &app.done, "nothing completed yet"),
     }
@@ -103,7 +105,7 @@ fn counts(app: &App) -> String {
 
 fn open_counts(app: &App) -> String {
     counted(&[
-        (app.list.object_count() as u64, "open"),
+        (app.list().cursor().object_count() as u64, "open"),
         (app.stage.staged_count() as u64, "staged"),
         (app.stage.unpushed_commits(), "unpushed"),
     ])
@@ -121,7 +123,7 @@ fn bottom_line(app: &App, width: u16) -> Paragraph<'static> {
 fn cursor(app: &App) -> Option<usize> {
     match (app.showing().detail(), app.showing().screen()) {
         (Some(_), _) => None,
-        (None, Screen::List) => Some(app.list.selected()),
+        (None, Screen::List) => Some(app.list().cursor().selected()),
         (None, Screen::Status) => app.status.selected_oid().map(|_| app.status.selected()),
         (None, Screen::Done) => Some(app.done.selected()),
     }

@@ -111,14 +111,14 @@ fn a_write_completion_once_done_was_opened_also_re_reads_the_done_list_and_the_l
 #[test]
 fn a_refusal_puts_dams_own_sentence_in_the_status_line_and_leaves_the_model_alone() {
     let mut harness = harness();
-    let before = harness.app.list.object_count();
+    let before = harness.app.list().cursor().object_count();
     harness
         .app
         .submit(Request::Write(herdr_damnit_application::argv::stage_all()));
     harness.answer(0, 2, "", "dam: no object matches \"zzzzzzz\"\n");
 
     assert_eq!(harness.app.message, "no object matches \"zzzzzzz\"");
-    assert_eq!(harness.app.list.object_count(), before);
+    assert_eq!(harness.app.list().cursor().object_count(), before);
 }
 
 #[test]

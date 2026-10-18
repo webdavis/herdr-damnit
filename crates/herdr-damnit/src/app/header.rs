@@ -9,7 +9,7 @@ const PLAIN_SPINNER: [&str; 4] = ["|", "/", "-", "\\"];
 
 impl App {
     pub fn header(&self, now: Instant) -> String {
-        let showing = self.showing.label(&self.views.current().name);
+        let showing = self.showing.label(&self.list.views().current().name);
         let Some(elapsed) = self.jobs.elapsed_of_current(now) else {
             return format!("dam  {showing}");
         };
