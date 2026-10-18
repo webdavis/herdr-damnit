@@ -57,14 +57,7 @@ pub fn hand_off(
     note: &str,
     handoff_label: &str,
 ) -> HandOff {
-    let Some(workspace) = here.workspace.as_deref() else {
-        return HandOff::Refused("no workspace context: run this pane inside herdr.".to_string());
-    };
-    let listing = match herdr.call(&["agent", "list"]) {
-        Ok(listing) => listing,
-        Err(error) => return HandOff::Refused(error),
-    };
-    let agent = match first_listed_agent_pane_in(&listing, workspace, &here.me) {
+    let agent = match agent_pane(herdr, here) {
         Ok(agent) => agent,
         Err(error) => return HandOff::Refused(error),
     };
@@ -79,6 +72,14 @@ pub fn hand_off(
     let label_write =
         (!handoff_label.trim().is_empty()).then(|| argv::label(&object.oid, handoff_label.trim()));
     HandOff::Sent { agent, label_write }
+}
+
+pub fn agent_pane(herdr: &dyn Herdr, here: &Workspace) -> Result<Agent, String> {
+    let Some(workspace) = here.workspace.as_deref() else {
+        return Err("no workspace context: run this pane inside herdr.".to_string());
+    };
+    let listing = herdr.call(&["agent", "list"])?;
+    first_listed_agent_pane_in(&listing, workspace, &here.me)
 }
 
 fn first_listed_agent_pane_in(listing: &str, workspace: &str, me: &str) -> Result<Agent, String> {
