@@ -4,28 +4,28 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
 
-use herdr_damnit_domain::{Kind, Object, Oid, long};
+use herdr_damnit_domain::{Kind, Object, Oid, Slot, long};
 
 use crate::app::App;
-use crate::theme::Palette;
+use crate::theme::color;
 
 const INDENT: &str = "  ";
 
-pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, palette: &Palette) {
+pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let Some(object) = &app.detail else {
         return;
     };
     frame.render_widget(
-        Paragraph::new(lines(object, app, palette)).wrap(Wrap { trim: false }),
+        Paragraph::new(lines(object, app)).wrap(Wrap { trim: false }),
         area,
     );
 }
 
-fn lines(object: &Object, app: &App, palette: &Palette) -> Vec<Line<'static>> {
-    let plain = Style::new().fg(palette.text);
+fn lines(object: &Object, app: &App) -> Vec<Line<'static>> {
+    let plain = Style::new().fg(color(Slot::Text));
     let named = |name: &str, value: String| {
         Line::from(vec![
-            Span::styled(format!("{name}: "), Style::new().fg(palette.dim1)),
+            Span::styled(format!("{name}: "), Style::new().fg(color(Slot::Dim1))),
             Span::styled(value, plain),
         ])
     };

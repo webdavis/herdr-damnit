@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 mod kinds;
 
-pub use kinds::{Icons, Placement, Side};
+pub use kinds::{Icons, Placement, Side, ThemeName};
 
 pub const DEFAULT_REFRESH_SECONDS: u64 = 300;
 
@@ -24,7 +24,8 @@ pub struct Config {
     pub default_view: Option<String>,
     #[serde(default)]
     pub auto_open: bool,
-    pub theme: Option<String>,
+    #[serde(default)]
+    pub theme: ThemeName,
     #[serde(default)]
     pub icons: Icons,
     pub refresh_seconds: Option<u64>,
@@ -76,16 +77,6 @@ impl Config {
 
     pub fn refresh_seconds(&self) -> u64 {
         self.refresh_seconds.unwrap_or(DEFAULT_REFRESH_SECONDS)
-    }
-
-    pub fn check_theme_against(&self, names: &[&str]) -> Result<(), String> {
-        match &self.theme {
-            Some(name) if !names.contains(&name.as_str()) => Err(format!(
-                "unknown theme '{name}': expected one of {}",
-                names.join(", ")
-            )),
-            _ => Ok(()),
-        }
     }
 
     fn check_dam(&self) -> Result<(), String> {

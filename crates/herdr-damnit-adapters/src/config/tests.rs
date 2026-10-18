@@ -11,7 +11,6 @@ fn an_empty_file_is_the_defaults() {
     assert_eq!(config.width, None);
     assert_eq!(config.default_view, None);
     assert!(!config.auto_open);
-    assert_eq!(config.theme, None);
     assert_eq!(config.icons(), IconSet::NerdFont);
     assert_eq!(config.handoff_label, "handed-off");
     assert_eq!(config.refresh_seconds(), DEFAULT_REFRESH_SECONDS);
@@ -263,25 +262,19 @@ fn a_refresh_interval_of_zero_turns_the_interval_off_rather_than_taking_the_defa
 }
 
 #[test]
-fn a_theme_is_checked_against_the_names_the_caller_knows_rather_than_a_list_of_its_own() {
-    let config = Config::parse(r#"theme = "gruvbox""#).expect("parses");
-    assert!(config.check_theme_against(&["gruvbox", "nord"]).is_ok());
-
-    let error = config
-        .check_theme_against(&["nord", "onedark"])
-        .expect_err("refuses");
-    assert!(error.contains("unknown theme 'gruvbox'"), "{error}");
-    assert!(error.contains("nord, onedark"), "{error}");
+fn the_theme_is_catppuccin_mocha_by_name_and_by_default() {
+    assert_eq!(
+        Config::parse("").expect("parses"),
+        Config::parse(r#"theme = "catppuccin-mocha""#).expect("parses")
+    );
 }
 
 #[test]
-fn a_config_naming_no_theme_passes_every_vocabulary() {
-    assert!(
-        Config::parse("")
-            .expect("parses")
-            .check_theme_against(&[])
-            .is_ok()
-    );
+fn a_theme_the_pane_does_not_have_is_refused_naming_the_one_it_has() {
+    for name in ["dracula", "catppuccin"] {
+        let error = Config::parse(&format!("theme = \"{name}\"")).expect_err("refuses");
+        assert!(error.contains("catppuccin-mocha"), "{error}");
+    }
 }
 
 #[test]

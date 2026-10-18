@@ -6,12 +6,12 @@ use ratatui::widgets::{ListItem, ListState};
 
 use crate::app::App;
 use crate::screens::list::spans;
-use crate::theme::Palette;
+use crate::theme::color;
 use herdr_damnit_domain::{Mark, Segment, Slot, StatusRow};
 
 const MARKED_ROW_INDENT: &str = "  ";
 
-pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, palette: &Palette) {
+pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let mut state = ListState::default()
         .with_selected(app.status.selected_oid().map(|_| app.status.selected()));
     frame.render_stateful_widget(
@@ -19,7 +19,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, palette: &Palette) {
             app.stage
                 .rows()
                 .iter()
-                .map(|row| item(row, app.config.icons(), palette, area.width)),
+                .map(|row| item(row, app.config.icons(), area.width)),
         )
         .highlight_style(Style::new().add_modifier(Modifier::REVERSED)),
         area,
@@ -27,23 +27,20 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, palette: &Palette) {
     );
 }
 
-fn item(
-    row: &StatusRow,
-    icons: herdr_damnit_domain::IconSet,
-    palette: &Palette,
-    width: u16,
-) -> ListItem<'static> {
+fn item(row: &StatusRow, icons: herdr_damnit_domain::IconSet, width: u16) -> ListItem<'static> {
     let segments = match row {
         StatusRow::Heading(text) => {
             return ListItem::new(Line::styled(
                 text.clone(),
-                Style::new().fg(palette.blue).add_modifier(Modifier::BOLD),
+                Style::new()
+                    .fg(color(Slot::Blue))
+                    .add_modifier(Modifier::BOLD),
             ));
         }
         StatusRow::Change { mark, text, .. } => marked(Some(*mark), text, icons),
         StatusRow::Line { mark, text } => marked(*mark, text, icons),
     };
-    ListItem::new(Line::from(spans(&segments, palette, width as usize)))
+    ListItem::new(Line::from(spans(&segments, width as usize)))
 }
 
 fn marked(mark: Option<Mark>, text: &str, icons: herdr_damnit_domain::IconSet) -> Vec<Segment> {
