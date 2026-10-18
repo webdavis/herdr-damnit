@@ -30,6 +30,25 @@ pub(crate) const LS: &str = r#"{"objects":[
 pub(crate) const CLEAN: &str =
     r#"{"staged":[],"unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#;
 
+pub fn render_to_text(app: &crate::app::App, width: u16, height: u16) -> String {
+    let buffer = drawn(app, width, height);
+    (0..height)
+        .map(|row| line_of(&buffer, row).trim_end().to_string())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim_end()
+        .to_string()
+}
+
+pub(crate) fn counts(app: &crate::app::App) -> String {
+    let top = line_of(&drawn(app, 120, 3), 0);
+    top.trim_end()
+        .strip_prefix(app.header(Instant::now()).as_str())
+        .unwrap_or_default()
+        .trim_start()
+        .to_string()
+}
+
 pub(crate) fn drawn(app: &crate::app::App, width: u16, height: u16) -> ratatui::buffer::Buffer {
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height))
         .expect("a test terminal");

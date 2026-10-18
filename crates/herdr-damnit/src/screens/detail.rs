@@ -6,19 +6,23 @@ use ratatui::widgets::{Paragraph, Wrap};
 
 use herdr_damnit_domain::{Kind, Object, Oid, Slot, long};
 
-use crate::app::App;
 use crate::theme::color;
 
 const INDENT: &str = "  ";
 
-pub fn draw(frame: &mut Frame<'_>, area: Rect, object: &Object, app: &App) {
+pub fn draw<'a>(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    object: &Object,
+    subject_of: &dyn Fn(&Oid) -> Option<&'a str>,
+) {
     frame.render_widget(
-        Paragraph::new(lines(object, app)).wrap(Wrap { trim: false }),
+        Paragraph::new(lines(object, subject_of)).wrap(Wrap { trim: false }),
         area,
     );
 }
 
-fn lines(object: &Object, app: &App) -> Vec<Line<'static>> {
+fn lines<'a>(object: &Object, subject_of: &dyn Fn(&Oid) -> Option<&'a str>) -> Vec<Line<'static>> {
     let plain = Style::new().fg(color(Slot::Text));
     let named = |name: &str, value: String| {
         Line::from(vec![
@@ -31,7 +35,7 @@ fn lines(object: &Object, app: &App) -> Vec<Line<'static>> {
         plain.add_modifier(Modifier::BOLD),
     )];
     lines.extend(
-        fields(object, app)
+        fields(object, subject_of)
             .into_iter()
             .map(|(name, value)| named(name, value)),
     );
@@ -50,7 +54,7 @@ fn lines(object: &Object, app: &App) -> Vec<Line<'static>> {
         object
             .depends
             .iter()
-            .map(|oid| with_subject(oid, app))
+            .map(|oid| with_subject(oid, subject_of))
             .collect(),
     );
     if let Some(event) = &object.event {
@@ -70,7 +74,10 @@ fn lines(object: &Object, app: &App) -> Vec<Line<'static>> {
     lines
 }
 
-fn fields(object: &Object, app: &App) -> Vec<(&'static str, String)> {
+fn fields<'a>(
+    object: &Object,
+    subject_of: &dyn Fn(&Oid) -> Option<&'a str>,
+) -> Vec<(&'static str, String)> {
     let kind = match object.kind {
         Kind::Task => "task",
         Kind::Event => "event",
@@ -94,7 +101,7 @@ fn fields(object: &Object, app: &App) -> Vec<(&'static str, String)> {
                 "event",
                 task.attached_event
                     .as_ref()
-                    .map(|oid| with_subject(oid, app)),
+                    .map(|oid| with_subject(oid, subject_of)),
             ),
         ]);
     }
@@ -121,8 +128,8 @@ fn fields(object: &Object, app: &App) -> Vec<(&'static str, String)> {
         .collect()
 }
 
-fn with_subject(oid: &Oid, app: &App) -> String {
-    match app.subject_of(oid) {
+fn with_subject<'a>(oid: &Oid, subject_of: &dyn Fn(&Oid) -> Option<&'a str>) -> String {
+    match subject_of(oid) {
         Some(subject) => format!("{}  {subject}", oid.short()),
         None => oid.short().to_string(),
     }
