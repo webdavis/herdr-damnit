@@ -7,53 +7,51 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::app::App;
 use crate::screens::ELLIPSIS;
-use crate::theme::Palette;
-use herdr_damnit_domain::{Row, Segment};
+use crate::theme::color;
+use herdr_damnit_domain::{Row, Segment, Slot};
 
 const EMPTY: &str = "nothing in this view";
 
-pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, palette: &Palette) {
+pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
     if app.list.rows().is_empty() {
         frame.render_widget(
-            ratatui::widgets::Paragraph::new(Line::styled(EMPTY, Style::new().fg(palette.dim1))),
+            ratatui::widgets::Paragraph::new(Line::styled(
+                EMPTY,
+                Style::new().fg(color(Slot::Dim1)),
+            )),
             area,
         );
         return;
     }
     let mut state = ListState::default().with_selected(Some(app.list.selected()));
     frame.render_stateful_widget(
-        ratatui::widgets::List::new(
-            app.list
-                .rows()
-                .iter()
-                .map(|row| item(row, palette, area.width)),
-        )
-        .highlight_style(Style::new().add_modifier(Modifier::REVERSED)),
+        ratatui::widgets::List::new(app.list.rows().iter().map(|row| item(row, area.width)))
+            .highlight_style(Style::new().add_modifier(Modifier::REVERSED)),
         area,
         &mut state,
     );
 }
 
-fn item(row: &Row, palette: &Palette, width: u16) -> ListItem<'static> {
+fn item(row: &Row, width: u16) -> ListItem<'static> {
     match row {
         Row::Heading(text) => ListItem::new(Line::styled(
             text.clone(),
-            Style::new().fg(palette.blue).add_modifier(Modifier::BOLD),
+            Style::new()
+                .fg(color(Slot::Blue))
+                .add_modifier(Modifier::BOLD),
         )),
-        Row::Object(object) => {
-            ListItem::new(Line::from(spans(&object.segments, palette, width as usize)))
-        }
+        Row::Object(object) => ListItem::new(Line::from(spans(&object.segments, width as usize))),
     }
 }
 
-pub(super) fn spans(segments: &[Segment], palette: &Palette, width: usize) -> Vec<Span<'static>> {
+pub(super) fn spans(segments: &[Segment], width: usize) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
     let mut left = width;
     for segment in segments {
         if left == 0 {
             break;
         }
-        let style = Style::new().fg(palette.color(segment.slot));
+        let style = Style::new().fg(color(segment.slot));
         if segment.text.width() <= left {
             left -= segment.text.width();
             spans.push(Span::styled(segment.text.clone(), style));

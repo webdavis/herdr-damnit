@@ -4,9 +4,7 @@ use herdr_damnit_domain::Slot;
 
 #[test]
 fn every_foreground_role_keeps_its_catppuccin_mocha_color() {
-    let palette = crate::theme::resolve(Some("catppuccin"));
-
-    for (slot, color) in [
+    for (slot, expected) in [
         (Slot::Text, Color::Rgb(0xcd, 0xd6, 0xf4)),
         (Slot::Dim1, Color::Rgb(0x7f, 0x84, 0x9c)),
         (Slot::Red, Color::Rgb(0xf3, 0x8b, 0xa8)),
@@ -17,6 +15,6 @@ fn every_foreground_role_keeps_its_catppuccin_mocha_color() {
         (Slot::Blue, Color::Rgb(0xb4, 0xbe, 0xfe)),
         (Slot::Cyan, Color::Rgb(0x94, 0xe2, 0xd5)),
     ] {
-        assert_eq!(palette.color(slot), color, "{slot:?}");
+        assert_eq!(crate::theme::color(slot), expected, "{slot:?}");
     }
 }

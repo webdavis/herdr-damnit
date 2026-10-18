@@ -102,7 +102,6 @@ fn a_mark_takes_its_own_colour_and_the_subject_stays_plain() {
         .expect("it drew");
     let buffer = terminal.backend().buffer();
 
-    let palette = crate::theme::resolve(None);
     let row = buffer
         .content()
         .chunks(32)
@@ -114,7 +113,10 @@ fn a_mark_takes_its_own_colour_and_the_subject_stays_plain() {
         })
         .expect("the row is on screen");
     let priority = &buffer.content()[row * 32 + 4];
-    assert_eq!(priority.fg, palette.color(herdr_damnit_domain::Slot::Red));
+    assert_eq!(
+        priority.fg,
+        crate::theme::color(herdr_damnit_domain::Slot::Red)
+    );
 }
 
 #[test]

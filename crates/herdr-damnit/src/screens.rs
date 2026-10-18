@@ -8,7 +8,8 @@ use ratatui::widgets::Paragraph;
 use unicode_width::UnicodeWidthStr;
 
 use crate::app::{App, Screen};
-use crate::theme::Palette;
+use crate::theme::{color, ground};
+use herdr_damnit_domain::Slot;
 
 mod detail;
 mod done;
@@ -24,11 +25,10 @@ pub const ELLIPSIS: &str = "\u{2026}";
 const HINTS: &str = "x X dd p s D l m a S e <CR> <Space> c P L v Tab";
 
 pub fn draw(frame: &mut Frame<'_>, app: &App) {
-    let palette = crate::theme::resolve(None);
     let area = frame.area();
-    frame.buffer_mut().set_style(area, palette.ground());
+    frame.buffer_mut().set_style(area, ground());
     if let Some(said) = &app.refusal {
-        refusal::draw(frame, frame.area(), said, &palette);
+        refusal::draw(frame, frame.area(), said);
         return;
     }
     let [header, body, hints] = Layout::vertical([
@@ -38,17 +38,17 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     ])
     .areas(frame.area());
 
-    frame.render_widget(status_line(app, header.width, &palette), header);
+    frame.render_widget(status_line(app, header.width), header);
     match app.screen {
-        Screen::List => list::draw(frame, body, app, &palette),
-        Screen::Status => status::draw(frame, body, app, &palette),
-        Screen::Done => done::draw(frame, body, app, &palette),
-        Screen::Detail => detail::draw(frame, body, app, &palette),
+        Screen::List => list::draw(frame, body, app),
+        Screen::Status => status::draw(frame, body, app),
+        Screen::Done => done::draw(frame, body, app),
+        Screen::Detail => detail::draw(frame, body, app),
     }
     if let Some(open) = &app.overlay {
-        overlay::draw(frame, body, open, app.config.icons(), &palette);
+        overlay::draw(frame, body, open, app.config.icons());
     }
-    frame.render_widget(hint_line(app, hints.width, &palette), hints);
+    frame.render_widget(hint_line(app, hints.width), hints);
 }
 
 #[cfg(test)]
@@ -71,7 +71,7 @@ pub fn render_to_text(app: &App, width: u16, height: u16) -> String {
         .to_string()
 }
 
-fn status_line(app: &App, width: u16, palette: &Palette) -> Paragraph<'static> {
+fn status_line(app: &App, width: u16) -> Paragraph<'static> {
     let width = width as usize;
     let counts_kept_first = cut_to(&counts(app), width);
     let room_left_for_the_header = width.saturating_sub(counts_kept_first.width());
@@ -79,7 +79,7 @@ fn status_line(app: &App, width: u16, palette: &Palette) -> Paragraph<'static> {
     let gap = room_left_for_the_header.saturating_sub(header_cut_first.width());
     Paragraph::new(Line::styled(
         format!("{header_cut_first}{}{counts_kept_first}", " ".repeat(gap)),
-        Style::new().fg(palette.text),
+        Style::new().fg(color(Slot::Text)),
     ))
 }
 
@@ -103,10 +103,10 @@ fn open_counts(app: &App) -> String {
     counts.join("  ")
 }
 
-fn hint_line(app: &App, width: u16, palette: &Palette) -> Paragraph<'static> {
+fn hint_line(app: &App, width: u16) -> Paragraph<'static> {
     let (said, colour) = match app.message.is_empty() {
-        true => (HINTS, palette.dim1),
-        false => (app.message.as_str(), palette.text),
+        true => (HINTS, color(Slot::Dim1)),
+        false => (app.message.as_str(), color(Slot::Text)),
     };
     Paragraph::new(Line::styled(
         cut_to(said, width as usize),
