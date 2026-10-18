@@ -1,7 +1,7 @@
 use herdr_damnit_adapters::wire;
 use herdr_damnit_application::{Completion, Phase, Request, SyncKind};
 use herdr_damnit_domain::{
-    Failure, ObjectRow, Row, RowStyle, Stage, StatusRow, classify, message, rows,
+    Failure, RowStyle, Stage, classify, done_rows, list_rows, message, status_rows,
 };
 
 use super::{App, Pending};
@@ -56,7 +56,8 @@ impl App {
             (_, Request::Done) => {
                 self.done_objects =
                     wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
-                self.done.replace(self.done_rows());
+                self.done
+                    .replace(done_rows(&self.done_objects, &self.completion_days));
             }
             (_, Request::Show(_)) => {
                 self.detail =
@@ -65,7 +66,8 @@ impl App {
             (_, Request::Log) => {
                 self.completion_days =
                     wire::completions(&completion.finished.stdout).map_err(|_| unreadable())?;
-                self.done.replace(self.done_rows());
+                self.done
+                    .replace(done_rows(&self.done_objects, &self.completion_days));
             }
             (_, Request::Sync(SyncKind::Push, _)) => {
                 self.message =
@@ -100,7 +102,8 @@ impl App {
 
     pub(super) fn take_stage(&mut self, stage: Stage) {
         self.stage = stage;
-        self.status.replace(cursor_targets(&self.stage.rows()));
+        self.status
+            .replace(status_rows(&self.stage, self.config.icons()));
         self.redraw_list();
     }
 
@@ -109,18 +112,7 @@ impl App {
             icons: self.config.icons(),
             today: self.clock.today(),
         };
-        self.list.replace(rows(&self.objects, &self.stage, style));
+        self.list
+            .replace(list_rows(&self.objects, &self.stage, style));
     }
-}
-
-fn cursor_targets(status: &[StatusRow]) -> Vec<Row> {
-    let target = |row: &StatusRow| match row {
-        StatusRow::Change { oid, text, .. } => Row::Object(ObjectRow {
-            oid: oid.clone(),
-            subject: text.clone(),
-            segments: Vec::new(),
-        }),
-        StatusRow::Heading(text) | StatusRow::Line { text, .. } => Row::Heading(text.clone()),
-    };
-    status.iter().map(target).collect()
 }

@@ -1,5 +1,5 @@
 use super::*;
-use herdr_damnit_domain::{Oid, Op};
+use herdr_damnit_domain::{IconSet, Oid, Op, status_rows};
 
 fn fixture(name: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -11,10 +11,11 @@ fn fixture(name: &str) -> String {
 #[test]
 fn a_clean_status_is_a_clean_stage() {
     assert_eq!(
-        stage(&fixture("status-clean.json"))
-            .expect("it parsed")
-            .rows(),
-        Stage::default().rows()
+        status_rows(
+            &stage(&fixture("status-clean.json")).expect("it parsed"),
+            IconSet::Ascii
+        ),
+        status_rows(&Stage::default(), IconSet::Ascii)
     );
 }
 

@@ -87,17 +87,16 @@ impl Cursor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ObjectRow, Segment, Slot};
+    use crate::{Segment, Slot};
 
     fn row(oid: &str) -> Row {
-        Row::Object(ObjectRow {
-            oid: Oid::new(oid),
-            subject: oid.to_string(),
+        Row::Line {
+            oid: Some(Oid::new(oid)),
             segments: vec![Segment {
                 text: oid.to_string(),
                 slot: Slot::Text,
             }],
-        })
+        }
     }
 
     fn listing(oids: &[&str]) -> Vec<Row> {

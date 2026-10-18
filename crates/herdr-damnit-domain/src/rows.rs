@@ -1,5 +1,9 @@
 use crate::{Date, DueState, IconSet, Mark, Object, Oid, Slot, due_state, short};
 
+mod done;
+
+pub use done::done_rows;
+
 const NO_PATH_HEADING: &str = "(no path)";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -9,30 +13,26 @@ pub struct Segment {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ObjectRow {
-    pub oid: Oid,
-    pub subject: String,
-    pub segments: Vec<Segment>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Row {
     Heading(String),
-    Object(ObjectRow),
+    Line {
+        oid: Option<Oid>,
+        segments: Vec<Segment>,
+    },
 }
 
 impl Row {
     pub fn oid(&self) -> Option<&Oid> {
         match self {
             Self::Heading(_) => None,
-            Self::Object(row) => Some(&row.oid),
+            Self::Line { oid, .. } => oid.as_ref(),
         }
     }
 
     pub fn text(&self) -> String {
         match self {
             Self::Heading(text) => text.clone(),
-            Self::Object(row) => row.segments.iter().map(|part| part.text.as_str()).collect(),
+            Self::Line { segments, .. } => segments.iter().map(|part| part.text.as_str()).collect(),
         }
     }
 }
@@ -46,7 +46,7 @@ pub struct RowStyle {
     pub today: Date,
 }
 
-pub fn rows(objects: &[Object], marks: &dyn StagingMarks, style: RowStyle) -> Vec<Row> {
+pub fn list_rows(objects: &[Object], marks: &dyn StagingMarks, style: RowStyle) -> Vec<Row> {
     let mut paths: Vec<&str> = objects.iter().map(heading).collect();
     paths.sort_unstable();
     paths.dedup();
@@ -133,11 +133,10 @@ fn object_row(object: &Object, marks: &dyn StagingMarks, style: &RowStyle, depth
             slot: mark.slot(),
         });
     }
-    Row::Object(ObjectRow {
-        oid: object.oid.clone(),
-        subject: object.subject.clone(),
+    Row::Line {
+        oid: Some(object.oid.clone()),
         segments,
-    })
+    }
 }
 
 fn push_mark_and_gap(segments: &mut Vec<Segment>, mark: Mark, icons: IconSet) {

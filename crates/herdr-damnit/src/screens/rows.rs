@@ -5,27 +5,25 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{ListItem, ListState};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use crate::app::App;
 use crate::screens::ELLIPSIS;
 use crate::theme::{bar, color};
-use herdr_damnit_domain::{Row, Segment, Slot};
+use herdr_damnit_domain::{Cursor, Row, Segment, Slot};
 
-const EMPTY: &str = "nothing in this view";
-
-pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
-    if app.list.rows().is_empty() {
+pub fn draw(frame: &mut Frame<'_>, area: Rect, cursor: &Cursor, empty: &str) {
+    if cursor.rows().is_empty() {
         frame.render_widget(
             ratatui::widgets::Paragraph::new(Line::styled(
-                EMPTY,
+                empty,
                 Style::new().fg(color(Slot::Dim1)),
             )),
             area,
         );
         return;
     }
-    let mut state = ListState::default().with_selected(Some(app.list.selected()));
+    let mut state =
+        ListState::default().with_selected(cursor.selected_oid().map(|_| cursor.selected()));
     frame.render_stateful_widget(
-        ratatui::widgets::List::new(app.list.rows().iter().map(|row| item(row, area.width)))
+        ratatui::widgets::List::new(cursor.rows().iter().map(|row| item(row, area.width)))
             .highlight_style(bar()),
         area,
         &mut state,
@@ -40,11 +38,11 @@ fn item(row: &Row, width: u16) -> ListItem<'static> {
                 .fg(color(Slot::Blue))
                 .add_modifier(Modifier::BOLD),
         )),
-        Row::Object(object) => ListItem::new(Line::from(spans(&object.segments, width as usize))),
+        Row::Line { segments, .. } => ListItem::new(Line::from(spans(segments, width as usize))),
     }
 }
 
-pub(super) fn spans(segments: &[Segment], width: usize) -> Vec<Span<'static>> {
+fn spans(segments: &[Segment], width: usize) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
     let mut left = width;
     for segment in segments {

@@ -1,5 +1,9 @@
 use crate::{Mark, Oid, StagingMarks, counted};
 
+mod rows;
+
+pub use rows::status_rows;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Op {
     Create,
@@ -45,13 +49,6 @@ pub struct Stage {
     pub notices: Vec<Notice>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum StatusRow {
-    Heading(String),
-    Change { oid: Oid, mark: Mark, text: String },
-    Line { mark: Option<Mark>, text: String },
-}
-
 impl Stage {
     pub fn is_staged(&self, oid: &Oid) -> bool {
         self.staged.iter().any(|change| &change.oid == oid)
@@ -83,98 +80,6 @@ impl Stage {
             (self.unpushed_commits(), "unpushed"),
             (self.notices.len() as u64, notices),
         ])
-    }
-
-    pub fn rows(&self) -> Vec<StatusRow> {
-        let mut rows = Vec::new();
-        section(&mut rows, "Staged", &self.staged, Mark::Staged);
-        section(&mut rows, "Working", &self.unstaged, Mark::Working);
-        if self.unpushed.iter().any(|remote| remote.commits > 0) {
-            rows.push(StatusRow::Heading("Unpushed".to_string()));
-            for remote in self.unpushed.iter().filter(|remote| remote.commits > 0) {
-                rows.push(StatusRow::Line {
-                    mark: Some(Mark::Unpushed),
-                    text: format!(
-                        "  {}  {} commit{}",
-                        remote.remote,
-                        remote.commits,
-                        if remote.commits == 1 { "" } else { "s" }
-                    ),
-                });
-            }
-        }
-        if !self.conflicts.is_empty() || !self.notices.is_empty() {
-            rows.push(StatusRow::Heading("Notices".to_string()));
-            for conflict in &self.conflicts {
-                rows.push(StatusRow::Change {
-                    oid: conflict.oid.clone(),
-                    mark: Mark::Conflict,
-                    text: format!(
-                        "  {}  {}  ours: \"{}\"  theirs: \"{}\"",
-                        conflict.oid.short(),
-                        conflict.remote,
-                        newlines_as_spaces(&conflict.ours),
-                        newlines_as_spaces(&conflict.theirs)
-                    ),
-                });
-            }
-            rows.extend(self.notices.iter().map(Notice::row));
-        }
-        if rows.is_empty() {
-            rows.push(StatusRow::Line {
-                mark: None,
-                text: "nothing staged, nothing changed".to_string(),
-            });
-        }
-        rows
-    }
-}
-
-fn newlines_as_spaces(value: &str) -> String {
-    value.replace(['\n', '\r'], " ")
-}
-
-fn section(rows: &mut Vec<StatusRow>, heading: &str, changes: &[Change], mark: Mark) {
-    if changes.is_empty() {
-        return;
-    }
-    rows.push(StatusRow::Heading(heading.to_string()));
-    rows.extend(changes.iter().map(|change| StatusRow::Change {
-        oid: change.oid.clone(),
-        mark,
-        text: change.line(),
-    }));
-}
-
-impl Change {
-    fn line(&self) -> String {
-        let word = match self.op {
-            Op::Create => "new     ",
-            Op::Update => "changed ",
-            Op::Delete => "removed ",
-        };
-        let fields = if self.fields.is_empty() {
-            String::new()
-        } else {
-            format!("  ({})", self.fields.join(", "))
-        };
-        format!("  {word} {}  {}{fields}", self.oid.short(), self.subject)
-    }
-}
-
-impl Notice {
-    fn row(&self) -> StatusRow {
-        match &self.oid {
-            Some(oid) => StatusRow::Change {
-                oid: oid.clone(),
-                mark: Mark::Notice,
-                text: format!("  {}  {}", oid.short(), self.message),
-            },
-            None => StatusRow::Line {
-                mark: None,
-                text: format!("  {}", self.message),
-            },
-        }
     }
 }
 

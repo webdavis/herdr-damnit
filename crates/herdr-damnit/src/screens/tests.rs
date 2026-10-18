@@ -1,6 +1,7 @@
 mod bar;
 mod detail;
 mod done;
+mod frames;
 mod legend;
 mod list;
 mod overlay;

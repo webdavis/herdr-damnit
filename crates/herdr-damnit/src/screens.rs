@@ -13,15 +13,13 @@ use crate::theme::{color, ground};
 use herdr_damnit_domain::{Slot, counted};
 
 mod detail;
-mod done;
-mod list;
 mod overlay;
 mod placement;
 mod refusal;
-mod status;
+mod rows;
 
-use list::cut_to;
 use placement::Placement;
+use rows::cut_to;
 
 pub const ELLIPSIS: &str = "\u{2026}";
 
@@ -39,9 +37,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     match (app.refusal(), &app.detail, app.screen) {
         (Some(said), ..) => refusal::draw(frame, body, said),
         (None, Some(object), _) => detail::draw(frame, body, object, app),
-        (None, None, Screen::List) => list::draw(frame, body, app),
-        (None, None, Screen::Status) => status::draw(frame, body, app),
-        (None, None, Screen::Done) => done::draw(frame, body, app),
+        (None, None, Screen::List) => rows::draw(frame, body, &app.list, "nothing in this view"),
+        (None, None, Screen::Status) => rows::draw(frame, body, &app.status, ""),
+        (None, None, Screen::Done) => rows::draw(frame, body, &app.done, "nothing completed yet"),
     }
     if let (None, Some(open)) = (app.refusal(), &app.overlay) {
         overlay::draw(

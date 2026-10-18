@@ -1,7 +1,6 @@
 mod agent;
 mod apply;
 mod boxes;
-mod done;
 mod edits;
 mod handshake;
 mod header;
@@ -28,7 +27,7 @@ use herdr_damnit_adapters::Config;
 use herdr_damnit_application::{
     AgentPanes, Clock, JobId, Jobs, Phase, Request, Submitted, Workspace,
 };
-use herdr_damnit_domain::{Cursor, Date, Failure, Object, Oid, Stage, Views, message};
+use herdr_damnit_domain::{Cursor, Date, Failure, Object, Oid, Stage, Views, message, status_rows};
 
 const BUSY_POLL_WINDOW: Duration = Duration::from_millis(50);
 
@@ -83,7 +82,7 @@ impl App {
             screen: Screen::List,
             views,
             list: Cursor::new(Vec::new()),
-            status: Cursor::new(Vec::new()),
+            status: Cursor::new(status_rows(&Stage::default(), config.icons())),
             done: Cursor::new(Vec::new()),
             overlay: None,
             view_request: None,
