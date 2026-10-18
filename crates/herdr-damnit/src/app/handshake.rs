@@ -2,7 +2,7 @@ use herdr_damnit_adapters::wire;
 use herdr_damnit_application::{Handshake, Phase, Request, check_version};
 use herdr_damnit_domain::{Failure, message};
 
-use super::App;
+use super::{App, Message};
 
 impl App {
     pub(super) fn take_version(&mut self, stdout: &str) {
@@ -10,7 +10,7 @@ impl App {
             Handshake::Refuse(said) => self.phase = Phase::Refused(said),
             Handshake::Ready { warning, .. } => {
                 if let Some(warning) = warning {
-                    self.message = warning;
+                    self.message = Message::said(warning);
                 }
                 self.submit(Request::Status);
             }

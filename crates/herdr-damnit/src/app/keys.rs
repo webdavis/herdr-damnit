@@ -2,12 +2,12 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use herdr_damnit_application::{Request, SyncKind, Toward, argv};
 use herdr_damnit_domain::{Cursor, Oid};
 
-use super::{After, App, Screen};
+use super::{After, App, Message, Screen};
 use crate::overlay::LinePurpose;
 
 impl App {
     pub fn key(&mut self, key: KeyEvent) -> After {
-        self.message.clear();
+        self.message = Message::none();
 
         if self.refusal().is_some() {
             return match key.code {

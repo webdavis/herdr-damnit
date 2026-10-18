@@ -4,7 +4,7 @@ use herdr_damnit_adapters::Config;
 use herdr_damnit_application::{Phase, Request};
 use herdr_damnit_domain::Views;
 
-use super::{After, App, Screen};
+use super::{After, App, Message, Screen};
 use crate::overlay::{Overlay, Picker, PickerEntry};
 
 impl App {
@@ -12,7 +12,7 @@ impl App {
         match self.list.views().name_of_number(number) {
             Some(_) => self.show_view(number - 1),
             None => {
-                self.message = format!("the config has {} views.", self.list.views().count());
+                self.message = Message::no_such_view(self.list.views().count());
                 After::Stay
             }
         }
@@ -41,7 +41,7 @@ impl App {
     pub(super) fn reread_config_and_dam(&mut self) -> After {
         match self.rereads.config() {
             Some(Ok(config)) => self.take_config(config),
-            Some(Err(said)) => self.message = said,
+            Some(Err(said)) => self.message = Message::said(said),
             None => {}
         }
         self.reread()
