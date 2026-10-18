@@ -5,7 +5,7 @@ use crate::argv;
 use crate::jobs::{Jobs, Request, SyncKind};
 use crate::{DamRunner, RunningJob, SpawnError};
 
-use super::TestClock;
+use super::harness::TestClock;
 
 #[test]
 fn cancelling_reaches_the_exclusive_job_before_any_read_that_started_earlier() {
