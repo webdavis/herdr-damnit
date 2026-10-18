@@ -57,7 +57,9 @@ impl ProcessDamRunner {
         });
 
         Ok(RunningJob {
-            cancel: Box::new(move || cancel.interrupt()),
+            cancel: Box::new(move || {
+                std::thread::spawn(move || cancel.interrupt());
+            }),
             results,
         })
     }

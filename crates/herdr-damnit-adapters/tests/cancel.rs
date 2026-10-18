@@ -255,3 +255,32 @@ fn a_group_that_has_already_gone_is_not_waited_out() {
         started.elapsed()
     );
 }
+
+#[test]
+fn cancelling_returns_at_once_and_a_deaf_dam_is_still_killed_after_the_grace() {
+    let env = FakeEnv::lock_cleared();
+    let scratch = Scratch::new("cancel-off-thread");
+    let log = scratch.file("argv.jsonl");
+    env.set("FAKE_DAM_LOG", &log);
+    env.set("FAKE_DAM_SLEEP_MS", FOREVER_MS);
+    env.set("FAKE_DAM_IGNORE_SIGINT", "1");
+
+    let job = runner()
+        .spawn(&words(&["push", "--json"]))
+        .expect("it spawned");
+    await_argv_line_of_a_job_with_no_pid_to_ask(&log, "the deaf push");
+
+    let asked = Instant::now();
+    (job.cancel)();
+    let returned_after = asked.elapsed();
+
+    let finished = job
+        .results
+        .recv_timeout(Duration::from_secs(3))
+        .expect("the deaf dam was killed within the grace plus a margin");
+    assert_eq!(finished.code, None, "a killed child carries no code");
+    assert!(
+        returned_after < Duration::from_millis(100),
+        "cancel blocked the caller for {returned_after:?}"
+    );
+}
