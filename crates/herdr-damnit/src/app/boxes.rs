@@ -17,7 +17,7 @@ impl App {
         let plural = if staged == 1 { "" } else { "s" };
         self.open_box(
             format!("commit {staged} staged change{plural}"),
-            "<CR> commits, <Esc> cancels",
+            "",
             LinePurpose::Commit,
         )
     }
@@ -36,11 +36,7 @@ impl App {
             .selected_object()
             .map(|object| object.path.clone())
             .unwrap_or_default();
-        self.open_box(
-            format!("new task in {path}"),
-            "<CR> adds, <Esc> cancels",
-            LinePurpose::New(path),
-        )
+        self.open_box(format!("new task in {path}"), "", LinePurpose::New(path))
     }
 
     fn open_box(&mut self, title: String, hint: &str, purpose: LinePurpose) -> After {

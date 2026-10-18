@@ -22,7 +22,7 @@ fn shift_s_opens_the_note_box_over_the_object_under_the_cursor() {
     };
     assert_eq!(note.oid.as_str(), "1a2b3c4");
     let drawn = crate::screens::render_to_text(&harness.app, 40, 8);
-    assert!(drawn.contains("<C-d> sends"), "{drawn}");
+    assert!(drawn.contains("note for the agent"), "{drawn}");
 }
 
 #[test]
