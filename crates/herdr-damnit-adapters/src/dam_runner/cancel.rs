@@ -25,26 +25,26 @@ impl Cancel {
     }
 
     pub fn interrupt(self) {
-        self.signal_group(DAMS_CANCELLATION_SIGNAL);
+        self.signal_the_group_the_child_leads(DAMS_CANCELLATION_SIGNAL);
         let deadline = Instant::now() + self.grace;
         while Instant::now() < deadline {
-            if !self.alive() {
+            if !self.the_group_the_child_leads_is_alive() {
                 return;
             }
             std::thread::sleep(GROUP_EXIT_POLL);
         }
-        self.signal_group(libc::SIGKILL);
+        self.signal_the_group_the_child_leads(libc::SIGKILL);
     }
 
     pub fn alive_group(self) -> bool {
-        self.alive()
+        self.the_group_the_child_leads_is_alive()
     }
 
-    fn signal_group(self, signal: libc::c_int) {
+    fn signal_the_group_the_child_leads(self, signal: libc::c_int) {
         unsafe { libc::kill(-self.group, signal) };
     }
 
-    fn alive(self) -> bool {
+    fn the_group_the_child_leads_is_alive(self) -> bool {
         unsafe { libc::kill(-self.group, 0) == 0 }
     }
 }
