@@ -2,11 +2,17 @@ use std::collections::HashMap;
 
 use herdr_damnit_domain::{Cursor, Date, Object, Oid, done_rows};
 
+#[derive(PartialEq, Eq)]
+enum DoneReads {
+    NotYetAsked,
+    KeptFresh,
+}
+
 pub struct DoneScreen {
     objects: Vec<Object>,
     completion_days: HashMap<Oid, Date>,
     cursor: Cursor,
-    opened: bool,
+    reads: DoneReads,
 }
 
 impl DoneScreen {
@@ -15,7 +21,7 @@ impl DoneScreen {
             objects: Vec::new(),
             completion_days: HashMap::new(),
             cursor: Cursor::new(Vec::new()),
-            opened: false,
+            reads: DoneReads::NotYetAsked,
         }
     }
 
@@ -27,12 +33,12 @@ impl DoneScreen {
         &mut self.cursor
     }
 
-    pub(super) fn opened(&self) -> bool {
-        self.opened
+    pub(super) fn kept_fresh(&self) -> bool {
+        self.reads == DoneReads::KeptFresh
     }
 
-    pub(super) fn open_the_first_time(&mut self) -> bool {
-        !std::mem::replace(&mut self.opened, true)
+    pub(super) fn start_keeping_fresh(&mut self) -> bool {
+        std::mem::replace(&mut self.reads, DoneReads::KeptFresh) == DoneReads::NotYetAsked
     }
 
     pub(super) fn object(&self, oid: &Oid) -> Option<&Object> {
