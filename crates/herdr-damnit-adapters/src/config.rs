@@ -49,14 +49,15 @@ impl Config {
     }
 
     pub fn load() -> Result<Self, String> {
-        Self::load_from(&Self::path())
+        let path = Self::path();
+        Self::load_from(&path).map_err(|error| format!("{}: {error}", path.display()))
     }
 
     pub fn load_from(path: &Path) -> Result<Self, String> {
         match std::fs::read_to_string(path) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::parse("")?),
-            Err(error) => Err(format!("{}: {error}", path.display())),
-            Ok(text) => Self::parse(&text).map_err(|error| format!("{}: {error}", path.display())),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Self::parse(""),
+            Err(error) => Err(error.to_string()),
+            Ok(text) => Self::parse(&text),
         }
     }
 

@@ -72,10 +72,9 @@ fn a_config_that_no_longer_parses_is_said_on_the_bottom_line_and_the_views_stay(
 
     harness.press(KeyCode::Char('R'));
 
-    assert!(
-        harness.app.message().contains("share of the tab"),
-        "{}",
-        harness.app.message()
+    assert_eq!(
+        harness.app.message(),
+        "width 2 is not a share of the tab: use a fraction above 0 and below 1"
     );
     assert_eq!(views_of(&harness), ["open", "today"]);
     std::fs::remove_file(path).expect("removed");
