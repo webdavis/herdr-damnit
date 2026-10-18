@@ -7,13 +7,14 @@ mod handshake;
 mod header;
 mod keys;
 mod overlay_keys;
+mod pending;
 mod pickers;
 mod screen;
 mod views;
 
-use crate::overlay::LineBox;
 pub use crate::overlay::Overlay;
 pub(crate) use handshake::status_refusal;
+use pending::Pending;
 pub use screen::Screen;
 
 #[cfg(test)]
@@ -52,10 +53,8 @@ pub struct App {
     pub config: Config,
     pub phase: Phase,
     pub detail: Option<Object>,
-    under_detail: Screen,
     last_reread: Option<Instant>,
-    awaiting: Option<(JobId, LineBox)>,
-    labelled: Option<(JobId, String)>,
+    pending: HashMap<JobId, Pending>,
     herdr: Box<dyn Herdr>,
     here: Workspace,
     clock: Box<dyn Clock>,
@@ -92,10 +91,8 @@ impl App {
             config,
             phase: Phase::Starting,
             detail: None,
-            under_detail: Screen::List,
             last_reread: None,
-            awaiting: None,
-            labelled: None,
+            pending: HashMap::new(),
             herdr,
             here,
             clock,

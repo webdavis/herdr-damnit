@@ -36,12 +36,12 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     .areas(area);
 
     frame.render_widget(status_line(app, header.width), header);
-    match (app.refusal(), app.screen) {
-        (Some(said), _) => refusal::draw(frame, body, said),
-        (None, Screen::List) => list::draw(frame, body, app),
-        (None, Screen::Status) => status::draw(frame, body, app),
-        (None, Screen::Done) => done::draw(frame, body, app),
-        (None, Screen::Detail) => detail::draw(frame, body, app),
+    match (app.refusal(), &app.detail, app.screen) {
+        (Some(said), ..) => refusal::draw(frame, body, said),
+        (None, Some(object), _) => detail::draw(frame, body, object, app),
+        (None, None, Screen::List) => list::draw(frame, body, app),
+        (None, None, Screen::Status) => status::draw(frame, body, app),
+        (None, None, Screen::Done) => done::draw(frame, body, app),
     }
     if let (None, Some(open)) = (app.refusal(), &app.overlay) {
         overlay::draw(
@@ -87,8 +87,8 @@ fn status_line(app: &App, width: u16) -> Paragraph<'static> {
 }
 
 fn counts(app: &App) -> String {
-    match (app.refusal().is_some(), app.screen) {
-        (true, _) | (false, Screen::Detail) => String::new(),
+    match (app.refusal().is_some() || app.detail.is_some(), app.screen) {
+        (true, _) => String::new(),
         (false, Screen::List) => open_counts(app),
         (false, Screen::Status) => app.stage.summary(),
         (false, Screen::Done) => format!("{} done", app.done.object_count()),
@@ -113,11 +113,11 @@ fn bottom_line(app: &App, width: u16) -> Paragraph<'static> {
 }
 
 fn cursor(app: &App) -> Option<usize> {
-    match app.screen {
-        Screen::List => Some(app.list.selected()),
-        Screen::Status => app.status.selected_oid().map(|_| app.status.selected()),
-        Screen::Done => Some(app.done.selected()),
-        Screen::Detail => None,
+    match (&app.detail, app.screen) {
+        (Some(_), _) => None,
+        (None, Screen::List) => Some(app.list.selected()),
+        (None, Screen::Status) => app.status.selected_oid().map(|_| app.status.selected()),
+        (None, Screen::Done) => Some(app.done.selected()),
     }
 }
 
@@ -125,15 +125,15 @@ fn mode(app: &App) -> Mode {
     if app.refusal().is_some() {
         return Mode::Refusal;
     }
-    match (&app.overlay, app.screen) {
-        (Some(Overlay::View(_) | Overlay::Label(..) | Overlay::Path(..)), _) => Mode::Picker,
-        (Some(Overlay::Line(_)), _) => Mode::LineBox,
-        (Some(Overlay::Note(_)), _) => Mode::NoteBox,
-        (Some(Overlay::Confirm(confirm)), _) => Mode::Confirm(confirm.key),
-        (None, Screen::List) => Mode::List,
-        (None, Screen::Status) => Mode::Status,
-        (None, Screen::Done) => Mode::Done,
-        (None, Screen::Detail) => Mode::Detail,
+    match (&app.overlay, &app.detail, app.screen) {
+        (Some(Overlay::View(_) | Overlay::Label(..) | Overlay::Path(..)), ..) => Mode::Picker,
+        (Some(Overlay::Line(_)), ..) => Mode::LineBox,
+        (Some(Overlay::Note(_)), ..) => Mode::NoteBox,
+        (Some(Overlay::Confirm(confirm)), ..) => Mode::Confirm(confirm.key),
+        (None, Some(_), _) => Mode::Detail,
+        (None, None, Screen::List) => Mode::List,
+        (None, None, Screen::Status) => Mode::Status,
+        (None, None, Screen::Done) => Mode::Done,
     }
 }
 

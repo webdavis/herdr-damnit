@@ -3,7 +3,6 @@ pub enum Screen {
     List,
     Status,
     Done,
-    Detail,
 }
 
 const TAB_ORDER: [Screen; 3] = [Screen::List, Screen::Status, Screen::Done];
@@ -14,7 +13,6 @@ impl Screen {
             Self::List => None,
             Self::Status => "status".into(),
             Self::Done => "done".into(),
-            Self::Detail => "detail".into(),
         }
     }
 

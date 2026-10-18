@@ -137,3 +137,30 @@ fn the_done_screen_draws_the_date_first_newest_first_with_the_uncommitted_ones_o
     assert_eq!(body[2], "2026-09-20  newer");
     assert_eq!(body[3], "2026-09-18  older");
 }
+
+#[test]
+fn escape_from_a_detail_opened_on_the_done_screen_returns_to_its_row() {
+    let mut harness = loaded();
+    harness.press(KeyCode::Tab);
+    harness.press(KeyCode::Tab);
+    harness.answer(3, 0, WATERED, "");
+    harness.answer(4, 0, NO_COMMITS, "");
+    harness.select("9a0b1c2");
+    harness.press(KeyCode::Enter);
+    assert_eq!(harness.last(), "show 9a0b1c2 --json");
+    harness.answer(
+        5,
+        0,
+        r#"{"oid":"9a0b1c2","kind":"task","subject":"water the plants","task":{"done":true,"priority":4}}"#,
+        "",
+    );
+    assert!(render_to_text(&harness.app, 40, 8).starts_with("dam  detail"));
+
+    harness.press(KeyCode::Esc);
+
+    assert_eq!(harness.app.screen, Screen::Done);
+    assert_eq!(
+        harness.app.done.selected_oid().map(|oid| oid.as_str()),
+        Some("9a0b1c2")
+    );
+}

@@ -4,15 +4,12 @@ use herdr_damnit_domain::{
     Failure, ObjectRow, Row, RowStyle, Stage, StatusRow, classify, message, rows,
 };
 
-use super::{App, Screen};
+use super::{App, Pending};
 use crate::overlay::{LineBox, LinePurpose, Overlay};
 
 impl App {
     pub(super) fn apply(&mut self, completion: Completion) {
-        let awaited = self
-            .awaiting
-            .take_if(|(id, _)| *id == completion.id)
-            .map(|(_, line)| line);
+        let pending = self.pending.remove(&completion.id);
         if completion.finished.code != Some(0) {
             let failure = classify(
                 completion.finished.code,
@@ -20,16 +17,19 @@ impl App {
                 &completion.finished.stderr,
             );
             self.message = message(&failure);
-            if let Some((_, agent)) = self.labelled.take_if(|(id, _)| *id == completion.id) {
-                self.message = format!("sent to {agent}, label refused: {}.", self.message);
+            match pending {
+                Some(Pending::Label { agent }) => {
+                    self.message = format!("sent to {agent}, label refused: {}.", self.message);
+                }
+                Some(Pending::Box(line)) => self.bring_the_box_back(line, &failure),
+                None => {}
             }
-            self.bring_the_box_back(awaited, &failure);
             return;
         }
-        if let Some(LineBox {
+        if let Some(Pending::Box(LineBox {
             purpose: LinePurpose::New(_),
             ..
-        }) = awaited
+        })) = pending
         {
             self.name_what_dam_made(&completion.finished.stdout);
         }
@@ -61,10 +61,6 @@ impl App {
             (_, Request::Show(_)) => {
                 self.detail =
                     Some(wire::object(&completion.finished.stdout).map_err(|_| unreadable())?);
-                if self.screen != Screen::Detail {
-                    self.under_detail = self.screen;
-                    self.screen = Screen::Detail;
-                }
             }
             (_, Request::Log) => {
                 self.completion_days =
@@ -84,11 +80,8 @@ impl App {
         Ok(())
     }
 
-    fn bring_the_box_back(&mut self, awaited: Option<LineBox>, failure: &Failure) {
-        if let Some(line) = awaited
-            && !matches!(failure, Failure::Store(_))
-            && self.overlay.is_none()
-        {
+    fn bring_the_box_back(&mut self, line: LineBox, failure: &Failure) {
+        if !matches!(failure, Failure::Store(_)) && self.overlay.is_none() {
             self.overlay = Some(Overlay::Line(line));
         }
     }

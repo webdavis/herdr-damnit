@@ -1,7 +1,7 @@
 use herdr_damnit_application::{Request, SyncKind, argv};
 use herdr_damnit_domain::Oid;
 
-use super::{After, App};
+use super::{After, App, Pending};
 use crate::overlay::{LineBox, LinePurpose, Overlay};
 
 const DATE_WORDS: &str = "today, tomorrow, YYYY-MM-DD or YYYY-MM-DDTHH:MM";
@@ -64,7 +64,7 @@ impl App {
             LinePurpose::Deadline(oid) => Request::Write(argv::set_deadline(oid, when)),
         };
         if let Some(id) = self.submit(request) {
-            self.awaiting = Some((id, line));
+            self.pending.insert(id, Pending::Box(line));
         }
         After::Stay
     }
