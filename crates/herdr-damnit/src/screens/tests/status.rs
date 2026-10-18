@@ -15,12 +15,11 @@ pub(super) const FULL_STATUS: &str = r#"{
   "notices":[{"kind":"pull_failed","remote":"example","why":"unreachable"}]}"#;
 
 fn on_status() -> crate::app::tests::Harness {
-    let mut harness = harness_with(ascii_config());
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
-    harness.answer(0, 0, FULL_STATUS, "");
+    let mut harness = loaded();
+    harness
+        .app
+        .submit(herdr_damnit_application::Request::Status);
+    harness.answer(3, 0, FULL_STATUS, "");
     harness.app.screen = Screen::Status;
     harness
 }
@@ -73,10 +72,9 @@ fn the_status_screen_names_itself_and_counts_the_stage_in_dams_own_words() {
 #[test]
 fn a_clean_status_screen_says_so_in_dams_own_words() {
     let mut harness = harness_with(ascii_config());
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
+    harness
+        .app
+        .submit(herdr_damnit_application::Request::Status);
     harness.answer(0, 0, CLEAN, "");
     harness.app.screen = Screen::Status;
 
@@ -90,10 +88,9 @@ fn a_clean_status_screen_says_so_in_dams_own_words() {
 #[test]
 fn a_clean_status_header_shows_no_counts() {
     let mut harness = harness_with(ascii_config());
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
+    harness
+        .app
+        .submit(herdr_damnit_application::Request::Status);
     harness.answer(0, 0, CLEAN, "");
     harness.app.screen = Screen::Status;
 

@@ -27,10 +27,9 @@ fn on_list() -> Harness {
 
 fn on_status() -> Harness {
     let mut harness = harness_with(ascii_config());
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
+    harness
+        .app
+        .submit(herdr_damnit_application::Request::Status);
     harness.answer(0, 0, super::status::FULL_STATUS, "");
     harness.app.screen = Screen::Status;
     harness.select("1a2b3c4");

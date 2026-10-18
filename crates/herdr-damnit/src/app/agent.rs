@@ -1,4 +1,4 @@
-use herdr_damnit_application::{HandOff, JobKind, agent_pane, hand_off};
+use herdr_damnit_application::{HandOff, Request, agent_pane, hand_off};
 
 use super::{After, App};
 use crate::overlay::{NoteBox, Overlay};
@@ -33,7 +33,7 @@ impl App {
             HandOff::Sent { agent, label_write } => {
                 self.message = format!("sent to {}", agent.name);
                 if let Some(write) = label_write
-                    && let Some(id) = self.submit(JobKind::Write, write)
+                    && let Some(id) = self.submit(Request::Write(write))
                 {
                     self.labelled = Some((id, agent.name));
                 }

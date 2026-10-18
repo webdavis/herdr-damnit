@@ -10,10 +10,7 @@ const ONE_STAGED: &str = r#"{"staged":[
 
 fn staged() -> Harness {
     let mut harness = loaded();
-    harness.app.submit(
-        JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
+    harness.app.submit(Request::Status);
     harness.answer(3, 0, ONE_STAGED, "");
     harness
 }

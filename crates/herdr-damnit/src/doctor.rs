@@ -1,7 +1,9 @@
 use std::time::Duration;
 
-use herdr_damnit_adapters::{Config, ProcessDamRunner};
-use herdr_damnit_application::{Finished, Handshake, argv, check_status, check_version};
+use herdr_damnit_adapters::{Config, ProcessDamRunner, wire};
+use herdr_damnit_application::{Finished, Handshake, argv, check_version};
+
+use crate::app::status_refusal;
 use herdr_damnit_domain::{Failure, READ_DEADLINE_SECONDS, message};
 
 pub fn run(config: &Config) -> Result<String, String> {
@@ -48,7 +50,7 @@ fn report_from(
         Handshake::Ready { version, warning } => (version, warning),
         Handshake::Refuse(said) => return Err(said),
     };
-    check_status(status_output)?;
+    wire::stage(status_output).map_err(|error| status_refusal(&error))?;
     let mut report = format!("dam:     {version}\nstatus:  ok, every key the pane reads is there");
     if let Some(warning) = warning {
         report.push_str(&format!("\nnote:    {warning}"));

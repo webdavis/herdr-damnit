@@ -11,10 +11,7 @@ const CONFLICTED: &str = r#"{"staged":[],"unstaged":[],"unpushed":[],
 
 fn conflicted() -> Harness {
     let mut harness = loaded();
-    harness.app.submit(
-        JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
+    harness.app.submit(Request::Status);
     harness.answer(3, 0, CONFLICTED, "");
     harness.press(KeyCode::Tab);
     harness.select("3d4e5f6");
@@ -68,10 +65,7 @@ fn q_mid_push_asks_once_and_quits_on_the_second_press_without_cancelling() {
 #[test]
 fn q_mid_read_closes_without_asking() {
     let mut harness = harness();
-    harness.app.submit(
-        JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
+    harness.app.submit(Request::Status);
     assert_eq!(harness.press(KeyCode::Char('q')), After::Quit);
 }
 

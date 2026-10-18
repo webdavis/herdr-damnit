@@ -13,6 +13,7 @@ mod views;
 
 use crate::overlay::LineBox;
 pub use crate::overlay::Overlay;
+pub(crate) use handshake::status_refusal;
 pub use screen::Screen;
 
 #[cfg(test)]
@@ -23,7 +24,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use herdr_damnit_adapters::Config;
-use herdr_damnit_application::{Clock, Herdr, JobId, JobKind, Jobs, Submitted, Workspace};
+use herdr_damnit_application::{Clock, Herdr, JobId, Jobs, Phase, Request, Submitted, Workspace};
 use herdr_damnit_domain::{Cursor, Date, Failure, Object, Oid, Stage, Views, message};
 
 const BUSY_POLL_WINDOW: Duration = Duration::from_millis(50);
@@ -49,7 +50,7 @@ pub struct App {
     pub message: String,
     pub spinner: usize,
     pub config: Config,
-    pub refusal: Option<String>,
+    pub phase: Phase,
     pub detail: Option<Object>,
     under_detail: Screen,
     last_reread: Option<Instant>,
@@ -58,8 +59,6 @@ pub struct App {
     herdr: Box<dyn Herdr>,
     here: Workspace,
     clock: Box<dyn Clock>,
-    handshake_accepted: bool,
-    newer_dam_warning_shown: bool,
     objects: Vec<Object>,
     done_objects: Vec<Object>,
     completion_days: HashMap<Oid, Date>,
@@ -91,7 +90,7 @@ impl App {
             message: String::new(),
             spinner: 0,
             config,
-            refusal: None,
+            phase: Phase::Starting,
             detail: None,
             under_detail: Screen::List,
             last_reread: None,
@@ -100,8 +99,6 @@ impl App {
             herdr,
             here,
             clock,
-            handshake_accepted: false,
-            newer_dam_warning_shown: false,
             objects: Vec::new(),
             done_objects: Vec::new(),
             completion_days: HashMap::new(),
@@ -117,13 +114,20 @@ impl App {
         }
     }
 
-    pub fn submit(&mut self, kind: JobKind, argv: Vec<String>) -> Option<JobId> {
-        match self.jobs.submit(kind, argv) {
+    pub fn submit(&mut self, request: Request) -> Option<JobId> {
+        match self.jobs.submit(request) {
             Submitted::Started(id) => return Some(id),
             Submitted::Refused(said) | Submitted::Failed(said) => self.message = said,
-            Submitted::NotInstalled => self.refusal = Some(message(&Failure::NotInstalled)),
+            Submitted::NotInstalled => self.phase = Phase::Refused(message(&Failure::NotInstalled)),
         }
         None
+    }
+
+    pub fn refusal(&self) -> Option<&str> {
+        match &self.phase {
+            Phase::Refused(said) => Some(said),
+            _ => None,
+        }
     }
 
     pub fn tick(&mut self, now: Instant) {

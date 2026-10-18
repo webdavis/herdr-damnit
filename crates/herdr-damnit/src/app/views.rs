@@ -1,8 +1,7 @@
 use std::time::{Duration, Instant};
 
 use herdr_damnit_adapters::state;
-use herdr_damnit_application::{JobKind, argv};
-use herdr_damnit_domain::DONE_QUERY;
+use herdr_damnit_application::{Phase, Request};
 
 use super::{After, App, Screen};
 use crate::overlay::{Overlay, Picker, PickerEntry};
@@ -40,28 +39,30 @@ impl App {
 
     pub(crate) fn reread(&mut self) -> After {
         self.last_reread = None;
-        if !self.handshake_accepted {
-            crate::open::start(self);
-            return After::Stay;
-        }
-        self.read_list();
-        self.submit(JobKind::ReadStatus, argv::status());
-        if self.done_opened {
-            self.read_done();
+        match self.phase {
+            Phase::Ready => {
+                self.read_list();
+                self.submit(Request::Status);
+                if self.done_opened {
+                    self.read_done();
+                }
+            }
+            _ if self.jobs.in_flight() == 0 => crate::open::start(self),
+            _ => {}
         }
         After::Stay
     }
 
     fn read_list(&mut self) {
-        if self.handshake_accepted {
+        if self.phase == Phase::Ready {
             let query = self.views.current().query.clone();
-            self.submit(JobKind::ReadList, argv::list(&query));
+            self.submit(Request::List(query));
         }
     }
 
     fn read_done(&mut self) {
-        self.submit(JobKind::ReadDone, argv::list(DONE_QUERY));
-        self.submit(JobKind::ReadLog, argv::log());
+        self.submit(Request::Done);
+        self.submit(Request::Log);
     }
 
     pub(super) fn take_view_request(&mut self) {
@@ -97,7 +98,7 @@ impl App {
 
     pub(super) fn show(&mut self, screen: Screen) -> After {
         self.screen = screen;
-        if screen == Screen::Done && self.handshake_accepted && !self.done_opened {
+        if screen == Screen::Done && self.phase == Phase::Ready && !self.done_opened {
             self.done_opened = true;
             self.read_done();
         }

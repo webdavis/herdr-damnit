@@ -1,5 +1,5 @@
 use crossterm::event::KeyCode;
-use herdr_damnit_application::{JobKind, argv};
+use herdr_damnit_application::Request;
 
 use super::*;
 use crate::app::tests::{harness, harness_with_missing_dam};
@@ -57,7 +57,7 @@ fn a_dam_below_the_floor_draws_the_refusal_and_makes_no_further_call() {
     harness.answer(0, 0, "dam 0.0.9\n", "");
 
     assert_eq!(harness.lines(), vec!["--version".to_string()]);
-    assert!(harness.app.refusal.is_some());
+    assert!(harness.app.refusal().is_some());
     let drawn = crate::screens::render_to_text(&harness.app, 80, 6);
     assert!(
         drawn.contains("is older than the 0.2 this pane needs"),
@@ -75,7 +75,7 @@ fn a_newer_dam_warns_once_rather_than_once_per_read() {
     assert!(warned.contains("newer than this pane knows"), "{warned}");
 
     harness.app.message.clear();
-    harness.app.submit(JobKind::ReadStatus, argv::status());
+    harness.app.submit(Request::Status);
     harness.answer(3, 0, CLEAN, "");
 
     assert_eq!(
@@ -96,12 +96,29 @@ fn a_status_document_missing_a_key_refuses_to_draw() {
         "",
     );
 
-    assert!(harness.app.refusal.is_some());
+    assert_eq!(
+        harness.app.refusal(),
+        Some("dam status answered without \"unpushed\"; this pane needs a newer dam.")
+    );
     assert_eq!(
         harness.lines().len(),
         2,
         "it read on past a failed handshake"
     );
+}
+
+#[test]
+fn a_status_document_that_is_not_json_is_refused_in_plain_words() {
+    let mut harness = harness();
+    start(&mut harness.app);
+    harness.answer(0, 0, "dam 0.2.0\n", "");
+    harness.answer(1, 0, "not json", "");
+
+    assert_eq!(
+        harness.app.refusal(),
+        Some("dam answered with something this pane could not read.")
+    );
+    assert_eq!(harness.lines().len(), 2);
 }
 
 #[test]

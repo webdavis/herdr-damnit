@@ -3,9 +3,9 @@ use std::time::{Duration, Instant};
 
 use crate::{Clock, DamRunner, Finished, RunningJob, SpawnError};
 
-mod kind;
+mod request;
 
-pub use kind::{JobKind, SyncKind};
+pub use request::{Request, SyncKind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct JobId(u64);
@@ -21,14 +21,13 @@ pub enum Submitted {
 #[derive(Debug)]
 pub struct Completion {
     pub id: JobId,
-    pub kind: JobKind,
+    pub request: Request,
     pub finished: Finished,
-    pub follow_up: Vec<JobKind>,
 }
 
 struct Running {
     id: JobId,
-    kind: JobKind,
+    request: Request,
     started: Instant,
     job: RunningJob,
 }
@@ -50,18 +49,22 @@ impl Jobs {
         }
     }
 
-    pub fn submit(&mut self, kind: JobKind, argv: Vec<String>) -> Submitted {
-        if let (JobKind::Exclusive(_), Some(running)) = (&kind, self.exclusive()) {
+    pub fn submit(&mut self, request: Request) -> Submitted {
+        if let (Some(_), Some(running)) = (request.exclusive(), self.exclusive()) {
             return Submitted::Refused(format!(
                 "a {} is already running; <C-c> cancels it.",
                 running.verb()
             ));
         }
-        if kind.supersedes_its_own_kind() {
-            self.cancel_every(&kind);
-            self.running.retain(|job| job.kind != kind);
+        for superseded in self
+            .running
+            .iter()
+            .filter(|job| request.supersedes(&job.request))
+        {
+            (superseded.job.cancel)();
         }
-        let job = match self.runner.spawn(&argv) {
+        self.running.retain(|job| !request.supersedes(&job.request));
+        let job = match self.runner.spawn(&request.argv()) {
             Ok(job) => job,
             Err(SpawnError::NotFound) => return Submitted::NotInstalled,
             Err(SpawnError::Io(error)) => return Submitted::Failed(error),
@@ -70,7 +73,7 @@ impl Jobs {
         let id = JobId(self.next);
         self.running.push(Running {
             id,
-            kind,
+            request,
             started: self.clock.now(),
             job,
         });
@@ -86,8 +89,7 @@ impl Jobs {
                     finished.push(running.id);
                     completions.push(Completion {
                         id: running.id,
-                        kind: running.kind.clone(),
-                        follow_up: running.kind.follow_up(),
+                        request: running.request.clone(),
                         finished: result,
                     });
                 }
@@ -104,10 +106,7 @@ impl Jobs {
     }
 
     pub fn exclusive(&self) -> Option<SyncKind> {
-        self.running.iter().find_map(|job| match job.kind {
-            JobKind::Exclusive(sync) => Some(sync),
-            _ => None,
-        })
+        self.running.iter().find_map(|job| job.request.exclusive())
     }
 
     pub fn cancel_current(&mut self) -> bool {
@@ -123,16 +122,10 @@ impl Jobs {
             .map(|running| now.saturating_duration_since(running.started))
     }
 
-    fn cancel_every(&self, kind: &JobKind) {
-        for superseded in self.running.iter().filter(|job| job.kind == *kind) {
-            (superseded.job.cancel)();
-        }
-    }
-
     fn exclusive_else_oldest(&self) -> Option<&Running> {
         self.running
             .iter()
-            .find(|job| matches!(job.kind, JobKind::Exclusive(_)))
+            .find(|job| job.request.exclusive().is_some())
             .or_else(|| self.running.first())
     }
 }

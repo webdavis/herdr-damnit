@@ -1,5 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use herdr_damnit_application::{JobKind, Side, SyncKind, argv};
+use herdr_damnit_application::{Request, Side, SyncKind, argv};
 use herdr_damnit_domain::{Cursor, Oid};
 
 use super::{After, App, Screen};
@@ -9,13 +9,10 @@ impl App {
     pub fn key(&mut self, key: KeyEvent) -> After {
         self.message.clear();
 
-        if self.refusal.is_some() {
+        if self.refusal().is_some() {
             return match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => After::Quit,
-                KeyCode::Char('R' | 'r') => {
-                    crate::open::start(self);
-                    After::Stay
-                }
+                KeyCode::Char('R' | 'r') => self.reread(),
                 _ => After::Stay,
             };
         }
@@ -87,7 +84,7 @@ impl App {
 
     fn read_detail(&mut self) -> After {
         if let Some(oid) = self.selected_oid().cloned() {
-            self.submit(JobKind::ReadShow(oid.clone()), argv::show(&oid));
+            self.submit(Request::Show(oid));
         }
         After::Stay
     }
@@ -101,12 +98,12 @@ impl App {
     }
 
     pub(super) fn write(&mut self, argv: Vec<String>) -> After {
-        self.submit(JobKind::Write, argv);
+        self.submit(Request::Write(argv));
         After::Stay
     }
 
     fn sync(&mut self, kind: SyncKind, argv: Vec<String>) -> After {
-        self.submit(JobKind::Exclusive(kind), argv);
+        self.submit(Request::Sync(kind, argv));
         After::Stay
     }
 

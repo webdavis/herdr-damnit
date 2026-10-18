@@ -1,6 +1,8 @@
 use herdr_damnit_adapters::wire;
-use herdr_damnit_application::{Completion, JobKind, SyncKind};
-use herdr_damnit_domain::{Failure, ObjectRow, Row, RowStyle, StatusRow, classify, message, rows};
+use herdr_damnit_application::{Completion, Phase, Request, SyncKind};
+use herdr_damnit_domain::{
+    Failure, ObjectRow, Row, RowStyle, Stage, StatusRow, classify, message, rows,
+};
 
 use super::{App, Screen};
 use crate::overlay::{LineBox, LinePurpose, Overlay};
@@ -31,33 +33,32 @@ impl App {
         {
             self.name_what_dam_made(&completion.finished.stdout);
         }
-        if self.applied_as_handshake(&completion) {
-            return;
-        }
         if let Err(said) = self.read_into_model(&completion) {
             self.message = said;
             return;
         }
-        if matches!(completion.kind, JobKind::Write | JobKind::Exclusive(_)) {
+        if completion.request.rereads_after() {
             self.reread();
         }
     }
 
     fn read_into_model(&mut self, completion: &Completion) -> Result<(), String> {
         let unreadable = || message(&Failure::Unreadable);
-        match &completion.kind {
-            JobKind::ReadStatus => self.read_status(&completion.finished.stdout)?,
-            JobKind::ReadList => {
+        match (&self.phase, &completion.request) {
+            (_, Request::Version) => self.take_version(&completion.finished.stdout),
+            (Phase::Ready, Request::Status) => self.read_status(&completion.finished.stdout)?,
+            (_, Request::Status) => self.take_first_status(&completion.finished.stdout),
+            (_, Request::List(_)) => {
                 self.objects =
                     wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
                 self.redraw_list();
             }
-            JobKind::ReadDone => {
+            (_, Request::Done) => {
                 self.done_objects =
                     wire::objects(&completion.finished.stdout).map_err(|_| unreadable())?;
                 self.done.replace(self.done_rows());
             }
-            JobKind::ReadShow(_) => {
+            (_, Request::Show(_)) => {
                 self.detail =
                     Some(wire::object(&completion.finished.stdout).map_err(|_| unreadable())?);
                 if self.screen != Screen::Detail {
@@ -65,16 +66,16 @@ impl App {
                     self.screen = Screen::Detail;
                 }
             }
-            JobKind::ReadLog => {
+            (_, Request::Log) => {
                 self.completion_days =
                     wire::completions(&completion.finished.stdout).map_err(|_| unreadable())?;
                 self.done.replace(self.done_rows());
             }
-            JobKind::Exclusive(SyncKind::Push) => {
+            (_, Request::Sync(SyncKind::Push, _)) => {
                 self.message =
                     wire::push_summary(&completion.finished.stdout).map_err(|_| unreadable())?;
             }
-            JobKind::Exclusive(SyncKind::Pull) => {
+            (_, Request::Sync(SyncKind::Pull, _)) => {
                 self.message =
                     wire::pull_summary(&completion.finished.stdout).map_err(|_| unreadable())?;
             }
@@ -83,7 +84,6 @@ impl App {
         Ok(())
     }
 
-    /// A held store is the one failure the box stays shut for, so `R` reaches the retry.
     fn bring_the_box_back(&mut self, awaited: Option<LineBox>, failure: &Failure) {
         if let Some(line) = awaited
             && !matches!(failure, Failure::Store(_))
@@ -99,11 +99,16 @@ impl App {
         }
     }
 
-    pub(super) fn read_status(&mut self, stdout: &str) -> Result<(), String> {
-        self.stage = wire::stage(stdout).map_err(|_| message(&Failure::Unreadable))?;
+    fn read_status(&mut self, stdout: &str) -> Result<(), String> {
+        let stage = wire::stage(stdout).map_err(|_| message(&Failure::Unreadable))?;
+        self.take_stage(stage);
+        Ok(())
+    }
+
+    pub(super) fn take_stage(&mut self, stage: Stage) {
+        self.stage = stage;
         self.status.replace(cursor_targets(&self.stage.rows()));
         self.redraw_list();
-        Ok(())
     }
 
     pub(super) fn redraw_list(&mut self) {
