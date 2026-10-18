@@ -144,7 +144,7 @@ fn escape_leaves_the_detail_for_the_screen_under_it_with_its_cursor_untouched() 
     );
 
     harness.press(KeyCode::Esc);
-    assert_eq!(harness.app.screen, Screen::List);
+    assert_eq!(harness.app.showing().screen(), Screen::List);
     assert_eq!(harness.app.list.selected_oid().cloned(), under);
 }
 
@@ -163,7 +163,7 @@ fn a_show_dam_refuses_leaves_the_screen_where_it_was() {
     harness.press(KeyCode::Enter);
     harness.answer(3, 2, "", "dam: no object matches \"5d6e7f8\"");
 
-    assert_eq!(harness.app.screen, Screen::List);
+    assert_eq!(harness.app.showing().screen(), Screen::List);
     assert_eq!(harness.app.message, "no object matches \"5d6e7f8\"");
 }
 

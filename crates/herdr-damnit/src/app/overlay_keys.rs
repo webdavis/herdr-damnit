@@ -39,7 +39,7 @@ impl App {
     }
 
     pub(super) fn reopen(&mut self, overlay: Overlay) -> After {
-        self.overlay = Some(overlay);
+        self.showing.open(overlay);
         After::Stay
     }
 }

@@ -16,7 +16,7 @@ fn bottom_row(harness: &crate::app::tests::Harness) -> String {
 
 fn with_overlay(overlay: Overlay) -> crate::app::tests::Harness {
     let mut harness = loaded();
-    harness.app.overlay = Some(overlay);
+    harness.open(overlay);
     harness
 }
 
@@ -57,7 +57,7 @@ fn delete_confirm() -> Overlay {
 
 fn on(screen: Screen) -> crate::app::tests::Harness {
     let mut harness = loaded();
-    harness.app.screen = screen;
+    harness.put_on(screen);
     harness
 }
 

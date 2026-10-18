@@ -29,12 +29,12 @@ impl App {
             text: name.to_string(),
             marked: false,
         });
-        self.overlay = Some(Overlay::View(Picker {
+        let selected = self.views.showing();
+        self.reopen(Overlay::View(Picker {
             title: "view".to_string(),
             entries: entries.collect(),
-            selected: self.views.showing(),
-        }));
-        After::Stay
+            selected,
+        }))
     }
 
     pub(crate) fn reread(&mut self) -> After {
@@ -90,9 +90,8 @@ impl App {
         };
         let interval = Duration::from_secs(self.config.refresh_seconds());
         let held_back = interval.is_zero()
-            || self.overlay.is_some()
-            || self.detail.is_some()
-            || self.screen != Screen::List;
+            || self.showing.is_layered()
+            || self.showing.screen() != Screen::List;
         if now.saturating_duration_since(since) >= interval && !held_back {
             self.reread();
             self.last_reread = Some(now);
@@ -100,8 +99,7 @@ impl App {
     }
 
     pub(super) fn show(&mut self, screen: Screen) -> After {
-        self.screen = screen;
-        self.detail = None;
+        self.showing.show(screen);
         if screen == Screen::Done && self.phase == Phase::Ready && !self.done_opened {
             self.done_opened = true;
             self.read_done();

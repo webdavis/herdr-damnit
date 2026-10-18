@@ -63,16 +63,16 @@ pub(crate) fn loaded_with(config: Config) -> crate::app::tests::Harness {
 #[test]
 fn tab_cycles_the_three_screens_forward_and_shift_tab_back() {
     let mut harness = loaded();
-    assert_eq!(harness.app.screen, Screen::List);
+    assert_eq!(harness.app.showing().screen(), Screen::List);
 
     harness.press(KeyCode::Tab);
-    assert_eq!(harness.app.screen, Screen::Status);
+    assert_eq!(harness.app.showing().screen(), Screen::Status);
     harness.press(KeyCode::Tab);
-    assert_eq!(harness.app.screen, Screen::Done);
+    assert_eq!(harness.app.showing().screen(), Screen::Done);
     harness.press(KeyCode::Tab);
-    assert_eq!(harness.app.screen, Screen::List);
+    assert_eq!(harness.app.showing().screen(), Screen::List);
     harness.press(KeyCode::BackTab);
-    assert_eq!(harness.app.screen, Screen::Done);
+    assert_eq!(harness.app.showing().screen(), Screen::Done);
 }
 
 #[test]

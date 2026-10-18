@@ -31,7 +31,7 @@ fn on_status() -> Harness {
         .app
         .submit(herdr_damnit_application::Request::Status);
     harness.answer(0, 0, super::status::FULL_STATUS, "");
-    harness.app.screen = Screen::Status;
+    harness.put_on(Screen::Status);
     harness.select("1a2b3c4");
     harness
 }
@@ -53,7 +53,7 @@ fn on_picker() -> Harness {
 }
 
 fn picked_entry(harness: &Harness) -> String {
-    let Some(Overlay::View(picker)) = harness.app.overlay.as_ref() else {
+    let Some(Overlay::View(picker)) = harness.app.showing().overlay() else {
         panic!("expected the view picker");
     };
     picker.entries[picker.selected].text.clone()

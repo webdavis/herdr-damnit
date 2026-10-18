@@ -60,8 +60,9 @@ impl App {
                     .replace(done_rows(&self.done_objects, &self.completion_days));
             }
             (_, Request::Show(_)) => {
-                self.detail =
-                    Some(wire::object(&completion.finished.stdout).map_err(|_| unreadable())?);
+                self.showing.open_detail(
+                    wire::object(&completion.finished.stdout).map_err(|_| unreadable())?,
+                );
             }
             (_, Request::Log) => {
                 self.completion_days =
@@ -83,8 +84,8 @@ impl App {
     }
 
     fn bring_the_box_back(&mut self, line: LineBox, failure: &Failure) {
-        if !matches!(failure, Failure::Store(_)) && self.overlay.is_none() {
-            self.overlay = Some(Overlay::Line(line));
+        if !matches!(failure, Failure::Store(_)) && self.showing.overlay().is_none() {
+            self.showing.open(Overlay::Line(line));
         }
     }
 

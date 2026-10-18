@@ -66,5 +66,5 @@ fn control_c_with_nothing_in_flight_says_nothing_and_opens_no_box() {
     harness.app.key(control('c'));
 
     assert!(harness.app.message.is_empty());
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
 }

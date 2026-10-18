@@ -63,14 +63,14 @@ fn on_status() -> Harness {
         .app
         .submit(herdr_damnit_application::Request::Status);
     harness.answer(3, 0, super::status::FULL_STATUS, "");
-    harness.app.screen = Screen::Status;
+    harness.put_on(Screen::Status);
     harness.select("9a0b1c2");
     harness
 }
 
 fn on_done() -> Harness {
     let mut harness = harness_with(ascii_config());
-    harness.app.screen = Screen::Done;
+    harness.put_on(Screen::Done);
     harness.app.submit(herdr_damnit_application::Request::Done);
     harness.answer(
         0,
@@ -149,9 +149,9 @@ fn the_done_frame_draws_the_date_faint_and_the_bar_on_the_cursor() {
 #[test]
 fn a_clean_status_frame_and_an_empty_done_frame_draw_no_bar() {
     let mut clean = loaded();
-    clean.app.screen = Screen::Status;
+    clean.put_on(Screen::Status);
     let mut empty = loaded();
-    empty.app.screen = Screen::Done;
+    empty.put_on(Screen::Done);
     assert_eq!(
         [frame(&clean, 48, 3), frame(&empty, 48, 3)],
         [

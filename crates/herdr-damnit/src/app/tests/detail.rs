@@ -55,7 +55,7 @@ fn escape_from_a_detail_opened_on_the_status_screen_returns_to_its_row() {
 
     harness.press(KeyCode::Esc);
 
-    assert_eq!(harness.app.screen, Screen::Status);
+    assert_eq!(harness.app.showing().screen(), Screen::Status);
     assert_eq!(
         harness.app.status.selected_oid().map(|oid| oid.as_str()),
         Some("5d6e7f8")
@@ -78,7 +78,7 @@ fn a_status_request_while_the_detail_is_open_shows_the_status_screen() {
 
     harness.app.tick(Instant::now());
 
-    assert_eq!(harness.app.screen, Screen::Status);
+    assert_eq!(harness.app.showing().screen(), Screen::Status);
     assert!(
         top_row(&harness).starts_with("dam  status"),
         "{}",

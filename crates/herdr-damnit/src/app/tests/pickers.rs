@@ -18,7 +18,7 @@ fn the_label_picker_offers_every_label_in_the_view_and_marks_the_ones_this_objec
     harness.select("5d6e7f8");
     harness.press(KeyCode::Char('l'));
 
-    let Some(Overlay::Label(_, picker)) = harness.app.overlay.as_ref() else {
+    let Some(Overlay::Label(_, picker)) = harness.app.showing().overlay() else {
         panic!("expected the label picker");
     };
     assert_eq!(texts(picker), vec!["a", "b"]);
@@ -48,7 +48,7 @@ fn the_label_picker_stays_open_after_a_pick_with_the_mark_flipped() {
     harness.press(KeyCode::Char('l'));
     harness.press(KeyCode::Enter);
 
-    let Some(Overlay::Label(_, picker)) = harness.app.overlay.as_ref() else {
+    let Some(Overlay::Label(_, picker)) = harness.app.showing().overlay() else {
         panic!("the picker closed");
     };
     assert!(picker.entries[0].marked);
@@ -60,7 +60,7 @@ fn the_path_picker_offers_every_path_and_every_parent_prefix() {
     harness.select("1a2b3c4");
     harness.press(KeyCode::Char('m'));
 
-    let Some(Overlay::Path(_, picker)) = harness.app.overlay.as_ref() else {
+    let Some(Overlay::Path(_, picker)) = harness.app.showing().overlay() else {
         panic!("expected the path picker");
     };
     assert_eq!(texts(picker), vec!["proj", "proj/dotfiles", "proj/home"]);
@@ -79,7 +79,7 @@ fn picking_a_path_moves_the_object_and_closes_the_picker() {
     harness.press(KeyCode::Enter);
 
     assert_eq!(harness.last(), "mv 1a2b3c4 proj/home --json");
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
 }
 
 #[test]

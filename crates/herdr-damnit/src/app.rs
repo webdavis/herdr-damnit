@@ -9,12 +9,14 @@ mod overlay_keys;
 mod pending;
 mod pickers;
 mod screen;
+mod showing;
 mod views;
 
 pub use crate::overlay::Overlay;
 pub(crate) use handshake::status_refusal;
 use pending::Pending;
 pub use screen::Screen;
+pub use showing::Showing;
 
 #[cfg(test)]
 pub(crate) mod tests;
@@ -41,19 +43,17 @@ pub enum After {
 }
 
 pub struct App {
-    pub screen: Screen,
+    showing: Showing,
     pub views: Views,
     pub list: Cursor,
     pub status: Cursor,
     pub done: Cursor,
-    pub overlay: Option<Overlay>,
     pub view_request: Option<PathBuf>,
     pub stage: Stage,
     pub message: String,
     pub spinner: usize,
     pub config: Config,
     pub phase: Phase,
-    pub detail: Option<Object>,
     last_reread: Option<Instant>,
     pending: HashMap<JobId, Pending>,
     agents: Box<dyn AgentPanes>,
@@ -79,19 +79,17 @@ impl App {
             views.select_named(name);
         }
         Self {
-            screen: Screen::List,
+            showing: Showing::new(),
             views,
             list: Cursor::new(Vec::new()),
             status: Cursor::new(status_rows(&Stage::default(), config.icons())),
             done: Cursor::new(Vec::new()),
-            overlay: None,
             view_request: None,
             stage: Stage::default(),
             message: String::new(),
             spinner: 0,
             config,
             phase: Phase::Starting,
-            detail: None,
             last_reread: None,
             pending: HashMap::new(),
             agents,
@@ -119,6 +117,10 @@ impl App {
             Submitted::NotInstalled => self.phase = Phase::Refused(message(&Failure::NotInstalled)),
         }
         None
+    }
+
+    pub fn showing(&self) -> &Showing {
+        &self.showing
     }
 
     pub fn refusal(&self) -> Option<&str> {

@@ -15,7 +15,7 @@ pub(crate) fn three_views() -> Config {
 }
 
 fn picker_names(app: &App) -> (Vec<String>, usize) {
-    let Some(Overlay::View(picker)) = app.overlay.as_ref() else {
+    let Some(Overlay::View(picker)) = app.showing().overlay() else {
         panic!("expected the view picker");
     };
     let names = picker.entries.iter().map(|entry| entry.text.clone());
@@ -30,7 +30,7 @@ fn a_number_key_shows_that_view_and_reads_its_query() {
 
     assert_eq!(harness.app.views.current().name, "today");
     assert_eq!(harness.last(), "ls !done & due:today --json");
-    assert_eq!(harness.app.screen, Screen::List);
+    assert_eq!(harness.app.showing().screen(), Screen::List);
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn v_on_the_status_screen_opens_nothing() {
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Char('v'));
 
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn the_view_picker_takes_the_entry_under_the_cursor_and_closes() {
     harness.press(KeyCode::Char('j'));
     harness.press(KeyCode::Enter);
 
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
     assert_eq!(harness.app.views.current().name, "today");
     assert_eq!(harness.last(), "ls !done & due:today --json");
 }
@@ -96,7 +96,7 @@ fn escape_closes_the_picker_and_changes_no_view() {
     let before = harness.lines().len();
     harness.press(KeyCode::Esc);
 
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
     assert_eq!(harness.app.views.current().name, "open");
     assert_eq!(harness.lines().len(), before);
 }
@@ -149,7 +149,7 @@ fn a_status_request_shows_the_status_screen_rather_than_a_view() {
 
     harness.app.tick(Instant::now());
 
-    assert_eq!(harness.app.screen, Screen::Status);
+    assert_eq!(harness.app.showing().screen(), Screen::Status);
     assert_eq!(harness.app.views.current().name, "open");
     assert!(!path.exists());
 }

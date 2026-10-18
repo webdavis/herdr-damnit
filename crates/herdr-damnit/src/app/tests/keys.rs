@@ -119,8 +119,8 @@ fn opening_a_second_task_drops_the_first_tasks_later_answer_and_shows_the_second
     assert_eq!(
         harness
             .app
-            .detail
-            .as_ref()
+            .showing()
+            .detail()
             .map(|shown| shown.subject.as_str()),
         Some("refresh the roster row")
     );

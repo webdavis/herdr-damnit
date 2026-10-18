@@ -115,7 +115,7 @@ fn the_delete_confirm_asks_without_naming_a_key() {
 #[test]
 fn the_note_box_borders_name_no_key() {
     let mut harness = loaded();
-    harness.app.overlay = Some(crate::overlay::Overlay::Note(crate::overlay::NoteBox {
+    harness.open(crate::overlay::Overlay::Note(crate::overlay::NoteBox {
         oid: herdr_damnit_domain::Oid::new("1a2b3c4"),
         text: "hi".to_string(),
     }));

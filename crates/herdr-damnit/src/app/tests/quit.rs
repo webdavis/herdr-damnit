@@ -50,7 +50,7 @@ fn q_mid_push_asks_once_and_quits_on_the_second_press_without_cancelling() {
     harness.press(KeyCode::Char('P'));
 
     assert_eq!(harness.press(KeyCode::Char('q')), After::Stay);
-    let Some(Overlay::Confirm(confirm)) = harness.app.overlay.as_ref() else {
+    let Some(Overlay::Confirm(confirm)) = harness.app.showing().overlay() else {
         panic!("expected a confirm");
     };
     assert_eq!(
@@ -74,7 +74,7 @@ fn escape_closes_an_overlay_and_closes_the_pane_when_nothing_is_open() {
     let mut harness = loaded();
     harness.press(KeyCode::Char('v'));
     assert_eq!(harness.press(KeyCode::Esc), After::Stay);
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
 
     assert_eq!(harness.press(KeyCode::Esc), After::Quit);
 }

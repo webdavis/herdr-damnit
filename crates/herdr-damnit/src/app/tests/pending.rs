@@ -30,7 +30,7 @@ fn a_refused_date_brings_back_its_own_box_while_a_later_one_is_in_flight() {
 
     harness.answer(3, 1, "", UNREADABLE_DATE);
 
-    let Some(Overlay::Line(line)) = harness.app.overlay.as_ref() else {
+    let Some(Overlay::Line(line)) = harness.app.showing().overlay() else {
         panic!("the refused box did not come back");
     };
     assert_eq!(line.text, "next mon");

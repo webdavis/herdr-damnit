@@ -20,7 +20,7 @@ fn on_status() -> crate::app::tests::Harness {
         .app
         .submit(herdr_damnit_application::Request::Status);
     harness.answer(3, 0, FULL_STATUS, "");
-    harness.app.screen = Screen::Status;
+    harness.put_on(Screen::Status);
     harness
 }
 
@@ -76,7 +76,7 @@ fn a_clean_status_screen_says_so_in_dams_own_words() {
         .app
         .submit(herdr_damnit_application::Request::Status);
     harness.answer(0, 0, CLEAN, "");
-    harness.app.screen = Screen::Status;
+    harness.put_on(Screen::Status);
 
     assert!(
         render_to_text(&harness.app, 32, 6).contains("nothing staged, nothing changed"),
@@ -92,7 +92,7 @@ fn a_clean_status_header_shows_no_counts() {
         .app
         .submit(herdr_damnit_application::Request::Status);
     harness.answer(0, 0, CLEAN, "");
-    harness.app.screen = Screen::Status;
+    harness.put_on(Screen::Status);
 
     assert_eq!(counts(&harness.app), "");
 }

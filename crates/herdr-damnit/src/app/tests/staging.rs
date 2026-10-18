@@ -50,7 +50,7 @@ fn c_opens_the_commit_box_headed_with_the_count_dam_reported() {
     let mut harness = staged();
     harness.press(KeyCode::Char('c'));
 
-    let Some(Overlay::Line(line)) = harness.app.overlay.as_ref() else {
+    let Some(Overlay::Line(line)) = harness.app.showing().overlay() else {
         panic!("expected the commit box");
     };
     assert_eq!(line.title, "commit 1 staged change");
@@ -75,7 +75,7 @@ fn a_commit_sends_the_line_as_one_argument_and_closes_the_box() {
             "--json".to_string()
         ]
     );
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
 }
 
 #[test]
@@ -88,7 +88,10 @@ fn a_blank_commit_message_is_refused_in_the_pane_and_nothing_is_spawned() {
 
     assert_eq!(harness.app.message, "a commit needs a message.");
     assert_eq!(harness.lines().len(), before);
-    assert!(harness.app.overlay.is_some(), "the box closed on a refusal");
+    assert!(
+        harness.app.showing().overlay().is_some(),
+        "the box closed on a refusal"
+    );
 }
 
 #[test]
@@ -98,7 +101,7 @@ fn escape_closes_the_commit_box_and_spawns_nothing() {
     let before = harness.lines().len();
     harness.press(KeyCode::Esc);
 
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
     assert_eq!(harness.lines().len(), before);
 }
 
@@ -111,7 +114,7 @@ fn c_with_nothing_staged_says_what_to_press_and_opens_no_box() {
         harness.app.message,
         "nothing staged; press <Space> on a row or A to stage everything."
     );
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
 }
 
 #[test]

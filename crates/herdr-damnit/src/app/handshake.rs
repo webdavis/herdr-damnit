@@ -25,7 +25,7 @@ impl App {
                 self.phase = Phase::Ready;
                 let query = self.views.current().query.clone();
                 self.submit(Request::List(query));
-                self.show(self.screen);
+                self.show(self.showing.screen());
             }
         }
     }

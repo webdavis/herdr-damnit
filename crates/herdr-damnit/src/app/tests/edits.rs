@@ -10,7 +10,7 @@ fn refusal(rule: &str, said: &str) -> String {
 }
 
 fn line_text(harness: &Harness) -> Option<String> {
-    match harness.app.overlay.as_ref() {
+    match harness.app.showing().overlay() {
         Some(Overlay::Line(line)) => Some(line.text.clone()),
         _ => None,
     }
@@ -56,7 +56,7 @@ fn the_first_d_asks_and_the_second_removes() {
     let before = harness.lines().len();
     harness.press(KeyCode::Char('d'));
     assert_eq!(harness.lines().len(), before, "the first d sent something");
-    let Some(Overlay::Confirm(confirm)) = harness.app.overlay.as_ref() else {
+    let Some(Overlay::Confirm(confirm)) = harness.app.showing().overlay() else {
         panic!("expected a confirm");
     };
     assert!(
@@ -69,7 +69,7 @@ fn the_first_d_asks_and_the_second_removes() {
 
     harness.press(KeyCode::Char('d'));
     assert_eq!(harness.last(), "rm 1a2b3c4 --json");
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn any_other_key_dismisses_the_delete_confirm_and_sends_nothing() {
     let under = harness.app.list.selected_oid().cloned();
     harness.press(KeyCode::Char('j'));
 
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
     assert_eq!(harness.lines().len(), before);
     assert_eq!(
         harness.app.list.selected_oid().cloned(),
@@ -106,7 +106,7 @@ fn s_opens_a_box_hinting_exactly_the_words_dam_accepts() {
     let mut harness = loaded();
     harness.press(KeyCode::Char('s'));
 
-    let Some(Overlay::Line(line)) = harness.app.overlay.as_ref() else {
+    let Some(Overlay::Line(line)) = harness.app.showing().overlay() else {
         panic!("expected the date box");
     };
     assert_eq!(line.hint, DATE_WORDS);
@@ -121,7 +121,7 @@ fn a_date_typed_into_the_box_becomes_the_due_flag() {
     harness.press(KeyCode::Enter);
 
     assert_eq!(harness.last(), "edit 1a2b3c4 --due tomorrow --json");
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
 }
 
 #[test]
@@ -171,7 +171,7 @@ fn a_held_store_does_not_bring_the_box_back_so_r_reaches_the_retry() {
     harness.press(KeyCode::Enter);
     harness.answer(3, 1, "", "dam: database is locked");
 
-    assert!(harness.app.overlay.is_none());
+    assert!(harness.app.showing().overlay().is_none());
 }
 
 #[test]

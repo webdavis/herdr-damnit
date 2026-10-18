@@ -34,14 +34,18 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     .areas(area);
 
     frame.render_widget(status_line(app, header.width), header);
-    match (app.refusal(), &app.detail, app.screen) {
+    match (
+        app.refusal(),
+        app.showing().detail(),
+        app.showing().screen(),
+    ) {
         (Some(said), ..) => refusal::draw(frame, body, said),
         (None, Some(object), _) => detail::draw(frame, body, object, app),
         (None, None, Screen::List) => rows::draw(frame, body, &app.list, "nothing in this view"),
         (None, None, Screen::Status) => rows::draw(frame, body, &app.status, ""),
         (None, None, Screen::Done) => rows::draw(frame, body, &app.done, "nothing completed yet"),
     }
-    if let (None, Some(open)) = (app.refusal(), &app.overlay) {
+    if let (None, Some(open)) = (app.refusal(), app.showing().overlay()) {
         overlay::draw(
             frame,
             &Placement::new(body, cursor(app)),
@@ -85,7 +89,11 @@ fn status_line(app: &App, width: u16) -> Paragraph<'static> {
 }
 
 fn counts(app: &App) -> String {
-    match (app.refusal().is_some() || app.detail.is_some(), app.screen) {
+    let showing = app.showing();
+    match (
+        app.refusal().is_some() || showing.detail().is_some(),
+        showing.screen(),
+    ) {
         (true, _) => String::new(),
         (false, Screen::List) => open_counts(app),
         (false, Screen::Status) => app.stage.summary(),
@@ -111,7 +119,7 @@ fn bottom_line(app: &App, width: u16) -> Paragraph<'static> {
 }
 
 fn cursor(app: &App) -> Option<usize> {
-    match (&app.detail, app.screen) {
+    match (app.showing().detail(), app.showing().screen()) {
         (Some(_), _) => None,
         (None, Screen::List) => Some(app.list.selected()),
         (None, Screen::Status) => app.status.selected_oid().map(|_| app.status.selected()),
@@ -123,7 +131,8 @@ fn mode(app: &App) -> Mode {
     if app.refusal().is_some() {
         return Mode::Refusal;
     }
-    match (&app.overlay, &app.detail, app.screen) {
+    let showing = app.showing();
+    match (showing.overlay(), showing.detail(), showing.screen()) {
         (Some(Overlay::View(_) | Overlay::Label(..) | Overlay::Path(..)), ..) => Mode::Picker,
         (Some(Overlay::Line(_)), ..) => Mode::LineBox,
         (Some(Overlay::Note(_)), ..) => Mode::NoteBox,
