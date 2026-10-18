@@ -32,9 +32,7 @@ pub struct Conflict {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Notice {
-    pub kind: String,
     pub oid: Option<Oid>,
-    pub remote: Option<String>,
     pub message: String,
 }
 
@@ -55,14 +53,6 @@ pub enum StatusRow {
 }
 
 impl Stage {
-    pub fn is_clean(&self) -> bool {
-        self.staged.is_empty()
-            && self.unstaged.is_empty()
-            && self.unpushed.iter().all(|remote| remote.commits == 0)
-            && self.conflicts.is_empty()
-            && self.notices.is_empty()
-    }
-
     pub fn is_staged(&self, oid: &Oid) -> bool {
         self.staged.iter().any(|change| &change.oid == oid)
     }

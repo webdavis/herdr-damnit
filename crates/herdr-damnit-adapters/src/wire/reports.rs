@@ -97,11 +97,11 @@ fn into_change(wire: WireChange) -> Change {
 
 fn into_notice(wire: &serde_json::Value) -> Notice {
     let text = |key: &str| wire.get(key).and_then(|value| value.as_str()).unwrap_or("");
-    let kind = text("kind").to_string();
+    let kind = text("kind");
     let remote = text("remote");
     let subject = text("subject");
     let why = text("why");
-    let message = match kind.as_str() {
+    let message = match kind {
         "removed_upstream" => format!("removed on {remote}: {subject:?} is kept here"),
         "event_cancelled" => format!("event cancelled: {subject:?}"),
         "push_failed" => format!("{remote}: push failed: {why}"),
@@ -114,12 +114,10 @@ fn into_notice(wire: &serde_json::Value) -> Notice {
         other => format!("{other}: {why}"),
     };
     Notice {
-        kind,
         oid: wire
             .get("oid")
             .and_then(|value| value.as_str())
             .map(Oid::new),
-        remote: (!remote.is_empty()).then(|| remote.to_string()),
         message,
     }
 }

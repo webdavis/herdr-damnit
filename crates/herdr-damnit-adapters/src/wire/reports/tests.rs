@@ -10,17 +10,17 @@ fn fixture(name: &str) -> String {
 
 #[test]
 fn a_clean_status_is_a_clean_stage() {
-    assert!(
+    assert_eq!(
         stage(&fixture("status-clean.json"))
             .expect("it parsed")
-            .is_clean()
+            .rows(),
+        Stage::default().rows()
     );
 }
 
 #[test]
 fn a_full_status_fills_every_array_it_carries() {
     let stage = stage(&fixture("status-full.json")).expect("it parsed");
-    assert!(!stage.is_clean());
     assert!(
         !stage.unstaged.is_empty(),
         "the captured store had working changes"
@@ -85,7 +85,6 @@ fn a_conflict_and_a_notice_carry_the_text_the_status_screen_draws() {
         stage.unpushed[0].oids.is_empty(),
         "a dam that sends no oids leaves the set empty"
     );
-    assert_eq!(stage.notices[0].kind, "pull_failed");
     assert_eq!(
         stage.notices[0].message,
         "example: pull failed: the service is unreachable"
@@ -165,8 +164,7 @@ fn a_notice_kind_this_pane_has_not_heard_of_still_reaches_the_screen() {
     let document = r#"{"staged":[],"unstaged":[],"conflicts":[],"unpushed":[],
       "notices":[{"kind":"invented_tomorrow","remote":"example","why":"something happened"}]}"#;
     let notice = stage(document).expect("it parsed").notices.remove(0);
-    assert_eq!(notice.kind, "invented_tomorrow");
-    assert!(notice.message.contains("something happened"), "{notice:?}");
+    assert_eq!(notice.message, "invented_tomorrow: something happened");
 }
 
 #[test]
