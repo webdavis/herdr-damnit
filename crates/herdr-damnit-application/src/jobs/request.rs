@@ -56,7 +56,10 @@ impl Request {
     }
 
     pub(super) fn supersedes(&self, older: &Self) -> bool {
-        self.is_read() && std::mem::discriminant(self) == std::mem::discriminant(older)
+        match (self, older) {
+            (Self::Show(newer), Self::Show(older)) => newer == older,
+            _ => self.is_read() && std::mem::discriminant(self) == std::mem::discriminant(older),
+        }
     }
 
     fn is_read(&self) -> bool {

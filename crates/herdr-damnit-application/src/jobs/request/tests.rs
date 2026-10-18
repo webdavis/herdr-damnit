@@ -40,7 +40,8 @@ fn a_write_and_a_sync_ask_for_a_reread_and_a_read_does_not() {
 fn a_read_supersedes_an_older_read_of_its_own_kind_and_nothing_else() {
     let open = Request::List("!done".to_string());
     assert!(Request::List("done".to_string()).supersedes(&open));
-    assert!(Request::Show(oid("2")).supersedes(&Request::Show(oid("1"))));
+    assert!(Request::Show(oid("1")).supersedes(&Request::Show(oid("1"))));
+    assert!(!Request::Show(oid("2")).supersedes(&Request::Show(oid("1"))));
     assert!(!Request::Status.supersedes(&open));
     assert!(!Request::Write(argv::stage_all()).supersedes(&Request::Write(argv::stage_all())));
     assert!(!Request::Version.supersedes(&Request::Version));
