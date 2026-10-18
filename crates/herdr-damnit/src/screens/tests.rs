@@ -1,6 +1,7 @@
 mod detail;
 mod done;
 mod list;
+mod palette;
 mod status;
 
 use std::time::Instant;
