@@ -94,10 +94,7 @@ fn a_write_once_done_was_opened_refreshes_done_too_and_reads_nothing_twice() {
 fn the_done_screen_draws_the_date_first_newest_first_with_the_uncommitted_ones_on_top() {
     let mut harness = harness_with(ascii_config());
     harness.app.screen = Screen::Done;
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadDone,
-        herdr_damnit_application::argv::list("done"),
-    );
+    harness.app.submit(herdr_damnit_application::Request::Done);
     harness.answer(
         0,
         0,
@@ -107,10 +104,7 @@ fn the_done_screen_draws_the_date_first_newest_first_with_the_uncommitted_ones_o
           {"oid":"ccc","kind":"task","subject":"just now","task":{"done":true,"priority":4}}]}"#,
         "",
     );
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadLog,
-        herdr_damnit_application::argv::log(),
-    );
+    harness.app.submit(herdr_damnit_application::Request::Log);
     harness.answer(
         1,
         0,

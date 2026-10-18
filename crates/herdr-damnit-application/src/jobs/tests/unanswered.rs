@@ -2,7 +2,7 @@ use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 
 use crate::argv;
-use crate::jobs::{JobKind, Jobs, SyncKind};
+use crate::jobs::{Jobs, Request, SyncKind};
 use crate::{DamRunner, RunningJob, SpawnError};
 
 use super::TestClock;
@@ -12,8 +12,8 @@ fn cancelling_reaches_the_exclusive_job_before_any_read_that_started_earlier() {
     let runner = RecordsCancelledIndex::new();
     let cancelled = Arc::clone(&runner.cancelled);
     let mut jobs = Jobs::new(Box::new(runner), Box::new(TestClock));
-    jobs.submit(JobKind::ReadList, argv::list("!done"));
-    jobs.submit(JobKind::Exclusive(SyncKind::Push), argv::push());
+    jobs.submit(Request::List("!done".to_string()));
+    jobs.submit(Request::Sync(SyncKind::Push, argv::push()));
 
     assert!(jobs.cancel_current());
     assert_eq!(*cancelled.lock().expect("the record"), vec![1]);
@@ -22,7 +22,7 @@ fn cancelling_reaches_the_exclusive_job_before_any_read_that_started_earlier() {
 #[test]
 fn a_job_whose_thread_died_without_answering_leaves_the_table_rather_than_blocking_later_ones() {
     let mut jobs = Jobs::new(Box::new(RecordsCancelledIndex::new()), Box::new(TestClock));
-    jobs.submit(JobKind::Exclusive(SyncKind::Push), argv::push());
+    jobs.submit(Request::Sync(SyncKind::Push, argv::push()));
 
     assert!(jobs.drain().is_empty());
     assert_eq!(jobs.in_flight(), 0);
@@ -34,8 +34,8 @@ fn with_no_exclusive_job_the_cancel_reaches_the_oldest_read() {
     let runner = RecordsCancelledIndex::new();
     let cancelled = Arc::clone(&runner.cancelled);
     let mut jobs = Jobs::new(Box::new(runner), Box::new(TestClock));
-    jobs.submit(JobKind::ReadList, argv::list("!done"));
-    jobs.submit(JobKind::ReadStatus, argv::status());
+    jobs.submit(Request::List("!done".to_string()));
+    jobs.submit(Request::Status);
 
     assert!(jobs.cancel_current());
     assert_eq!(*cancelled.lock().expect("the record"), vec![0]);
@@ -52,8 +52,8 @@ fn a_read_superseded_by_a_newer_one_of_its_kind_is_cancelled_rather_than_left_ru
     let runner = RecordsCancelledIndex::new();
     let cancelled = Arc::clone(&runner.cancelled);
     let mut jobs = Jobs::new(Box::new(runner), Box::new(TestClock));
-    jobs.submit(JobKind::ReadList, argv::list("!done"));
-    jobs.submit(JobKind::ReadList, argv::list("done"));
+    jobs.submit(Request::List("!done".to_string()));
+    jobs.submit(Request::List("done".to_string()));
 
     assert_eq!(*cancelled.lock().expect("the record"), vec![0]);
     assert_eq!(jobs.in_flight(), 1);

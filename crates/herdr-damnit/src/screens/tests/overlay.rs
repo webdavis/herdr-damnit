@@ -85,10 +85,9 @@ fn a_box_that_would_cover_the_cursor_sits_at_the_top_of_the_body() {
 #[test]
 fn the_commit_box_leaves_the_staged_rows_in_sight() {
     let mut harness = loaded();
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
+    harness
+        .app
+        .submit(herdr_damnit_application::Request::Status);
     harness.answer(3, 0, STAGED, "");
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Char('c'));

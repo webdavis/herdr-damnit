@@ -1,9 +1,9 @@
-use herdr_damnit_application::{JobKind, argv};
+use herdr_damnit_application::Request;
 
 use crate::app::App;
 
 pub fn start(app: &mut App) {
-    app.submit(JobKind::Version, argv::version());
+    app.submit(Request::Version);
 }
 
 #[cfg(test)]

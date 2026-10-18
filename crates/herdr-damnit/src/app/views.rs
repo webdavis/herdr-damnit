@@ -1,8 +1,7 @@
 use std::time::{Duration, Instant};
 
 use herdr_damnit_adapters::state;
-use herdr_damnit_application::{JobKind, argv};
-use herdr_damnit_domain::DONE_QUERY;
+use herdr_damnit_application::Request;
 
 use super::{After, App, Screen};
 use crate::overlay::{Overlay, Picker, PickerEntry};
@@ -45,7 +44,7 @@ impl App {
             return After::Stay;
         }
         self.read_list();
-        self.submit(JobKind::ReadStatus, argv::status());
+        self.submit(Request::Status);
         if self.done_opened {
             self.read_done();
         }
@@ -55,13 +54,13 @@ impl App {
     fn read_list(&mut self) {
         if self.handshake_accepted {
             let query = self.views.current().query.clone();
-            self.submit(JobKind::ReadList, argv::list(&query));
+            self.submit(Request::List(query));
         }
     }
 
     fn read_done(&mut self) {
-        self.submit(JobKind::ReadDone, argv::list(DONE_QUERY));
-        self.submit(JobKind::ReadLog, argv::log());
+        self.submit(Request::Done);
+        self.submit(Request::Log);
     }
 
     pub(super) fn take_view_request(&mut self) {

@@ -1,4 +1,4 @@
-use herdr_damnit_application::{JobKind, SyncKind, argv};
+use herdr_damnit_application::{Request, SyncKind, argv};
 use herdr_damnit_domain::Oid;
 
 use super::{After, App};
@@ -51,19 +51,19 @@ impl App {
     pub(super) fn take_line(&mut self, line: LineBox) -> After {
         let text = line.text.trim().to_string();
         let when = (!text.is_empty()).then_some(text.as_str());
-        let (kind, argv) = match &line.purpose {
+        let request = match &line.purpose {
             LinePurpose::Commit if text.is_empty() => {
                 return self.refuse_blank(line, "a commit needs a message.");
             }
             LinePurpose::New(_) if text.is_empty() => {
                 return self.refuse_blank(line, "a new task needs a subject.");
             }
-            LinePurpose::Commit => (JobKind::Exclusive(SyncKind::Commit), argv::commit(&text)),
-            LinePurpose::New(path) => (JobKind::Write, argv::create(&text, path)),
-            LinePurpose::Due(oid) => (JobKind::Write, argv::set_due(oid, when)),
-            LinePurpose::Deadline(oid) => (JobKind::Write, argv::set_deadline(oid, when)),
+            LinePurpose::Commit => Request::Sync(SyncKind::Commit, argv::commit(&text)),
+            LinePurpose::New(path) => Request::Write(argv::create(&text, path)),
+            LinePurpose::Due(oid) => Request::Write(argv::set_due(oid, when)),
+            LinePurpose::Deadline(oid) => Request::Write(argv::set_deadline(oid, when)),
         };
-        if let Some(id) = self.submit(kind, argv) {
+        if let Some(id) = self.submit(request) {
             self.awaiting = Some((id, line));
         }
         After::Stay

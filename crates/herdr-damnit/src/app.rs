@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use herdr_damnit_adapters::Config;
-use herdr_damnit_application::{Clock, Herdr, JobId, JobKind, Jobs, Submitted, Workspace};
+use herdr_damnit_application::{Clock, Herdr, JobId, Jobs, Request, Submitted, Workspace};
 use herdr_damnit_domain::{Cursor, Date, Failure, Object, Oid, Stage, Views, message};
 
 const BUSY_POLL_WINDOW: Duration = Duration::from_millis(50);
@@ -117,8 +117,8 @@ impl App {
         }
     }
 
-    pub fn submit(&mut self, kind: JobKind, argv: Vec<String>) -> Option<JobId> {
-        match self.jobs.submit(kind, argv) {
+    pub fn submit(&mut self, request: Request) -> Option<JobId> {
+        match self.jobs.submit(request) {
             Submitted::Started(id) => return Some(id),
             Submitted::Refused(said) | Submitted::Failed(said) => self.message = said,
             Submitted::NotInstalled => self.refusal = Some(message(&Failure::NotInstalled)),

@@ -177,10 +177,7 @@ fn a_held_store_does_not_bring_the_box_back_so_r_reaches_the_retry() {
 #[test]
 fn a_refused_commit_brings_the_box_back_with_its_message() {
     let mut harness = loaded();
-    harness.app.submit(
-        JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
+    harness.app.submit(Request::Status);
     harness.answer(
         3,
         0,

@@ -30,10 +30,7 @@ fn j_and_k_move_the_cursor_and_stop_at_either_end() {
 #[test]
 fn the_status_screen_has_its_own_cursor_and_enter_reads_the_row_under_it() {
     let mut harness = loaded();
-    harness.app.submit(
-        JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
+    harness.app.submit(Request::Status);
     harness.answer(3, 0, TWO_CHANGES, "");
     harness.press(KeyCode::Tab);
     harness.press(KeyCode::Char('j'));

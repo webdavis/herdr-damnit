@@ -22,10 +22,9 @@ j/k move  space stage  q close"
 #[test]
 fn an_empty_list_says_so_rather_than_drawing_nothing() {
     let mut harness = harness_with(ascii_config());
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadList,
-        herdr_damnit_application::argv::list("!done"),
-    );
+    harness
+        .app
+        .submit(herdr_damnit_application::Request::List("!done".to_string()));
     harness.answer(0, 0, r#"{"objects":[]}"#, "");
 
     assert!(
@@ -37,24 +36,22 @@ fn an_empty_list_says_so_rather_than_drawing_nothing() {
 
 #[test]
 fn every_mark_at_once_still_fits_one_line_and_cuts_the_subject() {
-    let mut harness = harness_with(ascii_config());
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
+    let mut harness = loaded();
+    harness
+        .app
+        .submit(herdr_damnit_application::Request::Status);
     harness.answer(
-        0,
+        3,
         0,
         r#"{"staged":[{"oid":"1a2b3c4","op":"update","subject":"x","fields":["subject"]}],
           "unstaged":[],"conflicts":[],"notices":[],"unpushed":[]}"#,
         "",
     );
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadList,
-        herdr_damnit_application::argv::list("!done"),
-    );
+    harness
+        .app
+        .submit(herdr_damnit_application::Request::List("!done".to_string()));
     harness.answer(
-        1,
+        4,
         0,
         r#"{"objects":[{"oid":"1a2b3c4","kind":"task",
           "subject":"a subject long enough to need cutting","path":"p",
@@ -76,10 +73,10 @@ fn every_mark_at_once_still_fits_one_line_and_cuts_the_subject() {
 #[test]
 fn the_header_carries_the_spinner_and_the_elapsed_time_mid_push() {
     let mut harness = loaded();
-    harness.app.submit(
-        herdr_damnit_application::JobKind::Exclusive(herdr_damnit_application::SyncKind::Push),
+    harness.app.submit(herdr_damnit_application::Request::Sync(
+        herdr_damnit_application::SyncKind::Push,
         herdr_damnit_application::argv::push(),
-    );
+    ));
 
     let drawn = render_to_text(&harness.app, 32, 3);
     let header = drawn.lines().next().expect("a header");
@@ -156,17 +153,15 @@ const THREE_STAGED: &str = r#"{"staged":[
 
 #[test]
 fn the_list_header_counts_without_sigils_and_leaves_out_zeros() {
-    let mut harness = harness_with(ascii_config());
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadStatus,
-        herdr_damnit_application::argv::status(),
-    );
-    harness.answer(0, 0, THREE_STAGED, "");
-    harness.app.submit(
-        herdr_damnit_application::JobKind::ReadList,
-        herdr_damnit_application::argv::list("!done"),
-    );
-    harness.answer(1, 0, FIVE_OPEN, "");
+    let mut harness = loaded();
+    harness
+        .app
+        .submit(herdr_damnit_application::Request::Status);
+    harness.answer(3, 0, THREE_STAGED, "");
+    harness
+        .app
+        .submit(herdr_damnit_application::Request::List("!done".to_string()));
+    harness.answer(4, 0, FIVE_OPEN, "");
 
     assert_eq!(counts(&harness.app), "5 open  3 staged");
 }

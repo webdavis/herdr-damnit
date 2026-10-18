@@ -1,5 +1,5 @@
 use crossterm::event::KeyCode;
-use herdr_damnit_application::{JobKind, argv};
+use herdr_damnit_application::Request;
 
 use super::*;
 use crate::app::tests::{harness, harness_with_missing_dam};
@@ -75,7 +75,7 @@ fn a_newer_dam_warns_once_rather_than_once_per_read() {
     assert!(warned.contains("newer than this pane knows"), "{warned}");
 
     harness.app.message.clear();
-    harness.app.submit(JobKind::ReadStatus, argv::status());
+    harness.app.submit(Request::Status);
     harness.answer(3, 0, CLEAN, "");
 
     assert_eq!(
