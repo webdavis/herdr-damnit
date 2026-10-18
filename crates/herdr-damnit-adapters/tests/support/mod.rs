@@ -6,6 +6,12 @@ use std::path::{Path, PathBuf};
 )]
 pub mod fake_env;
 
+#[allow(
+    dead_code,
+    reason = "each test binary compiles its own copy of this module and only the cancel tests read the fake's log"
+)]
+pub mod fake_log;
+
 pub struct Scratch {
     dir: PathBuf,
 }
