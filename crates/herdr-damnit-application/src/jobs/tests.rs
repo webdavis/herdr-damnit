@@ -50,7 +50,6 @@ fn ok(stdout: &str) -> Finished {
         code: Some(0),
         stdout: stdout.to_string(),
         stderr: String::new(),
-        elapsed: Duration::from_millis(9),
     }
 }
 

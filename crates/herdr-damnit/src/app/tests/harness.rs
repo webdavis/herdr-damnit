@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent};
 use herdr_damnit_adapters::Config;
@@ -84,7 +84,6 @@ impl Harness {
             code: Some(code),
             stdout: stdout.to_string(),
             stderr: stderr.to_string(),
-            elapsed: Duration::from_millis(9),
         });
         self.app.tick(Instant::now());
     }
