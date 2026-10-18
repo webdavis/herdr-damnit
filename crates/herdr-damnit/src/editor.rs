@@ -4,8 +4,6 @@ use herdr_damnit_domain::{Failure, message};
 
 use crate::app::App;
 
-/// Runs `dam edit <oid> -e` on the pane's own terminal, then re-reads whatever it exited with,
-/// since someone who quit the editor in a hurry may still have saved.
 pub fn run_and_reread(app: &mut App, argv: &[String]) {
     let dam = app.config().dam.clone();
     if let Some((binary, leading)) = dam.split_first() {
