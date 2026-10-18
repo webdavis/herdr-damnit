@@ -5,6 +5,7 @@ mod legend;
 mod list;
 mod overlay;
 mod palette;
+mod refusal;
 mod status;
 
 use std::time::Instant;

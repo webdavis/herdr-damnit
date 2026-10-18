@@ -58,9 +58,9 @@ fn a_dam_below_the_floor_draws_the_refusal_and_makes_no_further_call() {
 
     assert_eq!(harness.lines(), vec!["--version".to_string()]);
     assert!(harness.app.refusal.is_some());
-    let drawn = crate::screens::render_to_text(&harness.app, 32, 6);
+    let drawn = crate::screens::render_to_text(&harness.app, 80, 6);
     assert!(
-        unwrapped(&drawn).contains("is older than the 0.2 this pane needs"),
+        drawn.contains("is older than the 0.2 this pane needs"),
         "{drawn}"
     );
 }

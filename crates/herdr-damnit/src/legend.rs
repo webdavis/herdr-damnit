@@ -12,6 +12,7 @@ pub enum Mode {
     LineBox,
     NoteBox,
     Confirm(char),
+    Refusal,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -64,6 +65,8 @@ const NOTE_BOX: [Entry; 3] = [
     CANCEL,
 ];
 
+const REFUSAL: [Entry; 2] = [CLOSE, always("R", "retry")];
+
 const GAP: &str = "  ";
 
 pub fn fitted(mode: Mode, width: usize) -> String {
@@ -86,6 +89,7 @@ fn entries(mode: Mode) -> Vec<Entry> {
         Mode::Picker => PICKER.to_vec(),
         Mode::LineBox => LINE_BOX.to_vec(),
         Mode::NoteBox => NOTE_BOX.to_vec(),
+        Mode::Refusal => REFUSAL.to_vec(),
         Mode::Confirm(key) => vec![
             Entry {
                 key: Cow::Owned(key.to_string()),
