@@ -38,8 +38,8 @@ struct WireTask {
     due: Option<String>,
     #[serde(default)]
     deadline: Option<String>,
-    #[serde(default)]
-    event: Option<String>,
+    #[serde(default, alias = "event")]
+    attached: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -94,7 +94,7 @@ pub(super) fn into_object(wire: WireObject) -> Object {
             priority: Priority::new(task.priority).unwrap_or_default(),
             due: task.due.as_deref().and_then(parse_date),
             deadline: task.deadline.as_deref().and_then(parse_date),
-            attached_event: task.event.map(Oid::new),
+            attached_event: task.attached.map(Oid::new),
         }),
         event: wire.event.map(|event| EventFields {
             start: event.start,
