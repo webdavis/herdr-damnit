@@ -87,6 +87,21 @@ fn a_priority_outside_one_to_four_falls_back_to_the_default_rather_than_refusing
 }
 
 #[test]
+fn a_task_names_its_event_attached_and_an_older_dam_names_it_event() {
+    for key in ["attached", "event"] {
+        let document = format!(
+            r#"{{"oid":"1","kind":"task","subject":"a",
+              "task":{{"done":false,"priority":4,"{key}":"e1"}}}}"#
+        );
+        let task = object(&document).expect("it parsed").task.expect("a task");
+        assert_eq!(
+            task.attached_event.as_ref().map(|oid| oid.as_str()),
+            Some("e1")
+        );
+    }
+}
+
+#[test]
 fn something_that_is_not_json_is_an_error_rather_than_an_empty_model() {
     assert!(objects("not json").is_err());
     assert!(
